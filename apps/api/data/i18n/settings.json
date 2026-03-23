@@ -1,0 +1,30 @@
+{
+  "en": {
+    "sourceLocale": "en",
+    "tone": "neutral",
+    "fallbackMode": "copy",
+    "useGlossary": true,
+    "glossary": {}
+  },
+  "es": {
+    "sourceLocale": "en",
+    "tone": "neutral",
+    "fallbackMode": "copy",
+    "useGlossary": true,
+    "glossary": {}
+  },
+  "fr": {
+    "sourceLocale": "en",
+    "tone": "neutral",
+    "fallbackMode": "copy",
+    "useGlossary": true,
+    "glossary": {}
+  },
+  "pt": {
+    "sourceLocale": "en",
+    "tone": "neutral",
+    "fallbackMode": "copy",
+    "useGlossary": true,
+    "glossary": {}
+  }
+}

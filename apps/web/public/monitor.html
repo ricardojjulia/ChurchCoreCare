@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Self Monitoring · Faith Counseling</title>
+    <meta
+      name="description"
+      content="Self monitoring dashboard for web and API health, usage, and telemetry vitals."
+    />
+    <link rel="stylesheet" href="/styles.css" />
+    <script type="module" src="/monitor.js"></script>
+  </head>
+  <body class="content-page">
+    <a class="skip-link" href="#mainContent">Skip to main content</a>
+    <main id="mainContent" class="content-shell">
+      <header class="content-header">
+        <div>
+          <h1 class="content-title">Self Monitoring</h1>
+          <p class="content-subtitle">Live vitals, usage, and health metrics from the web and API services.</p>
+        </div>
+        <div class="topbar-actions">
+          <a class="action-btn" href="/index.html">Back to App</a>
+          <button type="button" class="action-btn primary" id="refreshButton">Refresh Metrics</button>
+        </div>
+      </header>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Service Health</h2>
+          <span id="overallStatus" class="status-pill" data-state="ok">Loading…</span>
+        </div>
+        <div class="key-value-grid">
+          <div class="key-value-item">
+            <p class="key-value-label">Web Health</p>
+            <p class="key-value-value" id="webHealth">--</p>
+          </div>
+          <div class="key-value-item">
+            <p class="key-value-label">API Health</p>
+            <p class="key-value-value" id="apiHealth">--</p>
+          </div>
+          <div class="key-value-item">
+            <p class="key-value-label">Web Last Updated</p>
+            <p class="key-value-value" id="webUpdated">--</p>
+          </div>
+          <div class="key-value-item">
+            <p class="key-value-label">API Timestamp</p>
+            <p class="key-value-value" id="apiUpdated">--</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="content-grid">
+        <article class="panel">
+          <div class="panel-head">
+            <h2>Web Usage Summary</h2>
+          </div>
+          <div class="key-value-grid">
+            <div class="key-value-item">
+              <p class="key-value-label">Requests</p>
+              <p class="key-value-value" id="webRequests">--</p>
+            </div>
+            <div class="key-value-item">
+              <p class="key-value-label">Errors</p>
+              <p class="key-value-value" id="webErrors">--</p>
+            </div>
+            <div class="key-value-item">
+              <p class="key-value-label">Avg Duration (ms)</p>
+              <p class="key-value-value" id="webDuration">--</p>
+            </div>
+            <div class="key-value-item">
+              <p class="key-value-label">Last Route</p>
+              <p class="key-value-value" id="webRoute">--</p>
+            </div>
+          </div>
+        </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <h2>API Usage Summary</h2>
+          </div>
+          <div class="key-value-grid">
+            <div class="key-value-item">
+              <p class="key-value-label">Requests</p>
+              <p class="key-value-value" id="apiRequests">--</p>
+            </div>
+            <div class="key-value-item">
+              <p class="key-value-label">Errors</p>
+              <p class="key-value-value" id="apiErrors">--</p>
+            </div>
+            <div class="key-value-item">
+              <p class="key-value-label">Avg Duration (ms)</p>
+              <p class="key-value-value" id="apiDuration">--</p>
+            </div>
+            <div class="key-value-item">
+              <p class="key-value-label">Exported via OTEL</p>
+              <p class="key-value-value" id="apiOtel">--</p>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Vitals Ingestion</h2>
+        </div>
+        <p class="helper-text" id="vitalsStatus">Waiting to record vitals…</p>
+      </section>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,5235 @@
+import http from 'node:http';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import {
+  appointmentTypes,
+  appointmentStatuses,
+  caseStatuses,
+  consentStates,
+  consentTypes,
+  clientStatuses,
+  createAuditEvent,
+  createConsentRecord,
+  createDocumentAssignmentRecord,
+  createDocumentTemplateRecord,
+  createInventoryAssignmentRecord,
+  createInventoryDefinitionRecord,
+  createIntakePacketRecord,
+  createLocationRecord,
+  createProgressNoteRecord,
+  createPracticeRecord,
+  createStaffRecord,
+  createTreatmentPlanRecord,
+  documentAssignmentStatuses,
+  documentAudienceTypes,
+  documentTemplateTypes,
+  inventoryAssignmentStatuses,
+  inventoryCategories,
+  inventoryScoringMethods,
+  intakeStatuses,
+  licenseTypes,
+  progressNoteTypes,
+  practiceTypes,
+  staffRoles,
+  supervisionStatuses,
+  treatmentPlanStatuses,
+} from '../../../packages/domain/src/index.js';
+import { createServiceTelemetry, startNodeTelemetry } from '../../../packages/telemetry/src/index.js';
+import { createI18nStore } from './lib/i18n-store.js';
+import { HttpError, readJsonBody, writeJson } from './lib/http.js';
+import { translateMessages } from './lib/translate.js';
+import { handleCors, checkRateLimit, enforceRbac, enforceTenantScope } from './lib/security.js';
+
+const port = Number(process.env.PORT || 3001);
+const currentFilePath = fileURLToPath(import.meta.url);
+const currentDirPath = path.dirname(currentFilePath);
+const openApiSpecPath = path.resolve(currentDirPath, '../../../docs/api/openapi.yaml');
+const openApiSpecYaml = await readFile(openApiSpecPath, 'utf8');
+
+await startNodeTelemetry({ serviceName: 'faith-api' });
+const telemetry = createServiceTelemetry('faith-api');
+const i18nStore = await createI18nStore();
+
+const clients = [
+  { id: 'c-001', tenantId: 'system', firstName: 'Sarah', lastName: 'Kim', status: 'active', faithBackground: 'Evangelical' },
+  { id: 'c-002', tenantId: 'system', firstName: 'David', lastName: 'Miller', status: 'active', faithBackground: 'Baptist' },
+  { id: 'c-003', tenantId: 'system', firstName: 'Emily', lastName: 'Reyes', status: 'waitlist', faithBackground: 'Catholic' },
+  { id: 'c-004', tenantId: 'system', firstName: 'Michael', lastName: 'Owens', status: 'inactive', faithBackground: 'Non-denominational' },
+  { id: 'c-005', tenantId: 'system', firstName: 'Olivia', lastName: 'Scott', status: 'discharged', faithBackground: 'Methodist' },
+];
+
+const clientLifecycles = {
+  'c-001': {
+    tenantId: 'system',
+    clientId: 'c-001',
+    caseStatus: 'active',
+    referralSource: 'Church referral',
+    emergencyContact: {
+      name: 'Daniel Kim',
+      relationship: 'Spouse',
+      phone: '555-1010',
+      authorized: true,
+    },
+    dischargeRecord: null,
+    updatedAt: new Date().toISOString(),
+  },
+  'c-003': {
+    tenantId: 'system',
+    clientId: 'c-003',
+    caseStatus: 'waitlist',
+    referralSource: 'Primary care referral',
+    emergencyContact: {
+      name: 'Ana Reyes',
+      relationship: 'Parent',
+      phone: '555-2020',
+      authorized: true,
+    },
+    dischargeRecord: null,
+    updatedAt: new Date().toISOString(),
+  },
+};
+
+const consentRecords = [
+  { ...createConsentRecord({
+    id: 'cons-001',
+    tenantId: 'system',
+    clientId: 'c-001',
+    consentType: 'informed_consent',
+    signatureState: 'signed',
+    version: 'v2',
+    effectiveFrom: new Date().toISOString(),
+    effectiveTo: null,
+  }) },
+];
+
+const intakePackets = [
+  { ...createIntakePacketRecord({
+    id: 'ip-001',
+    tenantId: 'system',
+    clientId: 'c-001',
+    status: 'completed',
+    assignedForms: ['Demographics', 'Clinical History', 'Faith Preferences'],
+    submittedAt: new Date().toISOString(),
+  }) },
+  { ...createIntakePacketRecord({
+    id: 'ip-002',
+    tenantId: 'system',
+    clientId: 'c-003',
+    status: 'assigned',
+    assignedForms: ['Demographics', 'Consent Packet'],
+    submittedAt: null,
+  }) },
+];
+
+const treatmentPlans = [
+  { ...createTreatmentPlanRecord({
+    id: 'tp-001',
+    tenantId: 'system',
+    clientId: 'c-001',
+    status: 'active',
+    goals: ['Reduce panic episodes', 'Improve sleep consistency'],
+    interventions: ['CBT thought records', 'Breath prayer routine'],
+    reviewCadence: 'monthly',
+    reviewedAt: new Date().toISOString(),
+  }) },
+];
+
+const progressNotes = [
+  { ...createProgressNoteRecord({
+    id: 'pn-001',
+    tenantId: 'system',
+    clientId: 'c-001',
+    noteType: 'progress_note',
+    summary: 'Client reported fewer panic symptoms this week and completed assigned journal prompts.',
+    interventions: ['Review coping plan', 'Scripture reflection'],
+    locked: false,
+    signedBy: null,
+    signedAt: null,
+  }) },
+];
+
+const documentTemplates = [
+  { ...createDocumentTemplateRecord({
+    id: 'dt-001',
+    tenantId: 'system',
+    title: 'Informed Consent Intake Packet',
+    templateType: 'consent_form',
+    audience: 'client',
+    templateKey: 'informed_consent_intake',
+    versionNumber: 2,
+    contentBlocks: ['Client rights summary', 'HIPAA privacy acknowledgment', 'Signature section'],
+  }) },
+  { ...createDocumentTemplateRecord({
+    id: 'dt-002',
+    tenantId: 'system',
+    title: 'Faith-Integrated Progress Note',
+    templateType: 'clinical_template',
+    audience: 'staff',
+    templateKey: 'faith_progress_note',
+    versionNumber: 1,
+    contentBlocks: ['Session summary', 'Clinical interventions', 'Spiritual integration notes'],
+  }) },
+];
+
+const documentAssignments = [
+  { ...createDocumentAssignmentRecord({
+    id: 'da-001',
+    tenantId: 'system',
+    templateId: 'dt-001',
+    assigneeType: 'client',
+    assigneeId: 'c-001',
+    status: 'signed',
+    requiresSignature: true,
+    dueAt: null,
+    completedAt: new Date().toISOString(),
+    accessHistory: [
+      { action: 'viewed', at: new Date().toISOString(), actorRole: 'client' },
+      { action: 'signed', at: new Date().toISOString(), actorRole: 'client' },
+    ],
+  }) },
+];
+
+const inventoryDefinitions = [
+  { ...createInventoryDefinitionRecord({
+    id: 'inv-001',
+    tenantId: 'system',
+    name: 'GAD-7 Anxiety Inventory',
+    category: 'standard_counseling',
+    scoringMethod: 'sum',
+    versionNumber: 1,
+    questionSchema: [
+      { key: 'q1', prompt: 'Feeling nervous, anxious, or on edge', min: 0, max: 3 },
+      { key: 'q2', prompt: 'Not being able to stop or control worrying', min: 0, max: 3 },
+    ],
+  }) },
+  { ...createInventoryDefinitionRecord({
+    id: 'inv-002',
+    tenantId: 'system',
+    name: 'Spiritual Formation Check-In',
+    category: 'spiritual_assessment',
+    scoringMethod: 'average',
+    versionNumber: 1,
+    questionSchema: [
+      { key: 'q1', prompt: 'Sense of spiritual support this week', min: 1, max: 5 },
+      { key: 'q2', prompt: 'Consistency in prayer or devotional rhythm', min: 1, max: 5 },
+    ],
+  }) },
+];
+
+const inventoryAssignments = [
+  { ...createInventoryAssignmentRecord({
+    id: 'ia-001',
+    tenantId: 'system',
+    inventoryId: 'inv-001',
+    clientId: 'c-001',
+    status: 'completed',
+    responses: [
+      { key: 'q1', value: 2 },
+      { key: 'q2', value: 1 },
+    ],
+    score: 3,
+    scoredAt: new Date().toISOString(),
+    completedAt: new Date().toISOString(),
+  }) },
+];
+
+const appointments = [
+  { id: 'a-001', tenantId: 'system', clientId: 'c-001', clientName: 'Sarah Kim', counselorName: 'Rachel Jordan', startsAt: atToday(9, 0), endsAt: atToday(9, 50), status: 'scheduled', appointmentType: 'individual_therapy', locationName: 'Cedar Room', remoteSession: false },
+  { id: 'a-002', tenantId: 'system', clientId: 'c-002', clientName: 'David Miller', counselorName: 'Michael Park', startsAt: atToday(10, 30), endsAt: atToday(11, 20), status: 'scheduled', appointmentType: 'couples_therapy', locationName: 'Remote Session', remoteSession: true },
+  { id: 'a-003', tenantId: 'system', clientId: 'c-003', clientName: 'Emily Reyes', counselorName: 'Hannah Torres', startsAt: atToday(13, 0), endsAt: atToday(13, 50), status: 'checked_in', appointmentType: 'intake_assessment', locationName: 'Willow Room', remoteSession: false },
+  { id: 'a-004', tenantId: 'system', clientId: 'c-001', clientName: 'Sarah Kim', counselorName: 'Rachel Jordan', startsAt: atToday(15, 15), endsAt: atToday(16, 0), status: 'scheduled', appointmentType: 'family_therapy', locationName: 'Remote Session', remoteSession: true },
+];
+
+const practices = [
+  { ...createPracticeRecord({
+    id: 'p-001',
+    tenantId: 'system',
+    name: 'Faith Counseling Collective',
+    type: 'group',
+    timezone: 'America/Chicago',
+    faithTradition: 'Christian',
+    contactEmail: 'admin@faithcounseling.local',
+    contactPhone: '555-0100',
+  }) },
+];
+
+const locations = [
+  { ...createLocationRecord({
+    id: 'l-001',
+    tenantId: 'system',
+    practiceId: 'p-001',
+    name: 'Cedar Office',
+    address: '101 Cedar Ave',
+    capacity: 6,
+    remoteEnabled: true,
+  }) },
+  { ...createLocationRecord({
+    id: 'l-002',
+    tenantId: 'system',
+    practiceId: 'p-001',
+    name: 'Willow Office',
+    address: '22 Willow St',
+    capacity: 4,
+    remoteEnabled: true,
+  }) },
+];
+
+const staffMembers = [
+  { ...createStaffRecord({
+    id: 's-001',
+    tenantId: 'system',
+    firstName: 'Rachel',
+    lastName: 'Jordan',
+    role: 'counselor',
+    licenseType: 'lmft',
+    licenseNumber: 'LMFT-4455',
+    supervisionStatus: 'not_required',
+    supervisingStaffId: null,
+    locationIds: ['l-001'],
+    bio: 'Integrative counseling with Christian care approach.',
+  }) },
+  { ...createStaffRecord({
+    id: 's-002',
+    tenantId: 'system',
+    firstName: 'Hannah',
+    lastName: 'Torres',
+    role: 'intern',
+    licenseType: 'pastoral_counselor',
+    licenseNumber: '',
+    supervisionStatus: 'active',
+    supervisingStaffId: 's-001',
+    locationIds: ['l-002'],
+    bio: 'Supervised intern focused on young adult counseling.',
+  }) },
+];
+
+const availabilityTemplates = {
+  's-001': [
+    { day: 'monday', start: '09:00', end: '16:00' },
+    { day: 'wednesday', start: '09:00', end: '16:00' },
+  ],
+  's-002': [
+    { day: 'tuesday', start: '10:00', end: '15:00' },
+  ],
+};
+
+const reminderStatuses = Object.freeze(['pending', 'sent', 'failed', 'cancelled']);
+
+const reminderRecords = [
+  {
+    id: 'rem-001',
+    tenantId: 'system',
+    appointmentId: 'a-001',
+    clientId: 'c-001',
+    reminderType: 'appointment',
+    deliveryChannel: 'email',
+    reminderAt: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+    status: 'pending',
+    sentAt: null,
+  },
+  {
+    id: 'rem-002',
+    tenantId: 'system',
+    appointmentId: 'a-002',
+    clientId: 'c-002',
+    reminderType: 'appointment',
+    deliveryChannel: 'sms',
+    reminderAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    status: 'sent',
+    sentAt: new Date(Date.now() - 55 * 60 * 1000).toISOString(),
+  },
+];
+
+const waitlistMetadataByClientId = {
+  'c-003': {
+    priorityRank: 1,
+    requestedService: 'Individual counseling',
+    preferredSessionType: 'in_person',
+    notes: 'Prefers afternoon sessions due to school schedule.',
+    updatedAt: new Date().toISOString(),
+  },
+};
+
+const serviceCodeStatuses = Object.freeze(['active', 'inactive']);
+const invoiceStatuses = Object.freeze(['draft', 'issued', 'partially_paid', 'paid', 'void']);
+const paymentMethods = Object.freeze(['card', 'cash', 'check', 'ach', 'other']);
+const claimStatuses = Object.freeze(['not_submitted', 'queued', 'submitted', 'accepted', 'denied', 'paid']);
+const portalAccountStatuses = Object.freeze(['invited', 'active', 'locked']);
+const portalMessageThreadStatuses = Object.freeze(['open', 'closed']);
+const portalAppointmentRequestStatuses = Object.freeze(['requested', 'approved', 'declined', 'scheduled']);
+const portalResourceTypes = Object.freeze(['document', 'education', 'devotional', 'form']);
+const faithIntegrationLevels = Object.freeze(['explicit', 'balanced', 'light']);
+const faithResourceTypes = Object.freeze(['scripture', 'devotional', 'prayer', 'worksheet']);
+const faithCoordinationStatuses = Object.freeze(['proposed', 'active', 'paused', 'closed']);
+const faithInventoryCadences = Object.freeze(['weekly', 'biweekly', 'monthly', 'as_needed']);
+const platformProvisioningStatuses = Object.freeze(['queued', 'in_progress', 'completed', 'failed']);
+const platformImpersonationStatuses = Object.freeze(['active', 'ended']);
+const platformExportTypes = Object.freeze(['clinical_records', 'billing', 'documents', 'audit_log']);
+const platformExportStatuses = Object.freeze(['queued', 'processing', 'completed', 'failed']);
+const retentionSchedules = Object.freeze(['7_years', '10_years', 'indefinite']);
+
+const serviceCodes = [
+  {
+    id: 'svc-001',
+    tenantId: 'system',
+    code: '90837',
+    name: 'Individual Psychotherapy 60 min',
+    category: 'therapy',
+    defaultDurationMinutes: 60,
+    status: 'active',
+  },
+  {
+    id: 'svc-002',
+    tenantId: 'system',
+    code: '90847',
+    name: 'Family Psychotherapy with Client',
+    category: 'therapy',
+    defaultDurationMinutes: 60,
+    status: 'active',
+  },
+];
+
+const feeSchedules = [
+  {
+    id: 'fee-001',
+    tenantId: 'system',
+    name: 'Standard Self-Pay',
+    status: 'active',
+    currency: 'USD',
+    lines: [
+      { serviceCodeId: 'svc-001', amount: 150 },
+      { serviceCodeId: 'svc-002', amount: 185 },
+    ],
+    updatedAt: new Date().toISOString(),
+  },
+];
+
+const invoices = [
+  {
+    id: 'inv-001',
+    tenantId: 'system',
+    clientId: 'c-001',
+    appointmentId: 'a-001',
+    issuedAt: new Date(Date.now() - 21 * 24 * 60 * 60 * 1000).toISOString(),
+    dueAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+    status: 'partially_paid',
+    lineItems: [
+      {
+        serviceCodeId: 'svc-001',
+        code: '90837',
+        description: 'Individual Psychotherapy 60 min',
+        quantity: 1,
+        unitAmount: 150,
+        serviceDate: new Date(Date.now() - 21 * 24 * 60 * 60 * 1000).toISOString(),
+      },
+    ],
+    insurance: {
+      payerName: 'BlueCross Placeholder',
+      policyNumber: 'POL-1001',
+      memberId: 'M-2001',
+      groupNumber: 'GRP-09',
+    },
+    claimStatus: 'submitted',
+    subtotal: 150,
+    adjustments: 0,
+    total: 150,
+    amountPaid: 75,
+    balance: 75,
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'inv-002',
+    tenantId: 'system',
+    clientId: 'c-002',
+    appointmentId: 'a-002',
+    issuedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    dueAt: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
+    status: 'issued',
+    lineItems: [
+      {
+        serviceCodeId: 'svc-001',
+        code: '90837',
+        description: 'Individual Psychotherapy 60 min',
+        quantity: 1,
+        unitAmount: 150,
+        serviceDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+      },
+    ],
+    insurance: {
+      payerName: '',
+      policyNumber: '',
+      memberId: '',
+      groupNumber: '',
+    },
+    claimStatus: 'not_submitted',
+    subtotal: 150,
+    adjustments: 0,
+    total: 150,
+    amountPaid: 0,
+    balance: 150,
+    updatedAt: new Date().toISOString(),
+  },
+];
+
+const payments = [
+  {
+    id: 'pay-001',
+    tenantId: 'system',
+    invoiceId: 'inv-001',
+    clientId: 'c-001',
+    amount: 75,
+    method: 'card',
+    receivedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+    reference: 'AUTH-7751',
+    notes: 'Partial payment captured at checkout.',
+  },
+];
+
+const superbills = [
+  {
+    id: 'sb-001',
+    tenantId: 'system',
+    invoiceId: 'inv-001',
+    clientId: 'c-001',
+    generatedAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
+    diagnosisCodes: ['F41.1'],
+    serviceLines: [
+      {
+        serviceCodeId: 'svc-001',
+        code: '90837',
+        amount: 150,
+        serviceDate: new Date(Date.now() - 21 * 24 * 60 * 60 * 1000).toISOString(),
+      },
+    ],
+  },
+];
+
+const claimPlaceholders = [
+  {
+    id: 'clm-001',
+    tenantId: 'system',
+    invoiceId: 'inv-001',
+    status: 'submitted',
+    externalReference: 'CH-PLACEHOLDER-1001',
+    submittedAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString(),
+    updatedAt: new Date().toISOString(),
+    notes: 'Clearinghouse integration point placeholder record.',
+  },
+];
+
+const portalAccounts = [
+  {
+    id: 'pa-001',
+    tenantId: 'system',
+    clientId: 'c-001',
+    status: 'active',
+    email: 'sarah.kim@example.test',
+    mfaEnabled: false,
+    lastLoginAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    invitedAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 'pa-002',
+    tenantId: 'system',
+    clientId: 'c-002',
+    status: 'invited',
+    email: 'david.miller@example.test',
+    mfaEnabled: false,
+    lastLoginAt: null,
+    invitedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+];
+
+const portalResources = [
+  {
+    id: 'pr-001',
+    tenantId: 'system',
+    clientId: 'c-001',
+    title: 'Breath Prayer Starter Guide',
+    resourceType: 'devotional',
+    content: 'A short guided breath prayer routine to practice between sessions.',
+    publishedAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
+    publishedByRole: 'counselor',
+  },
+];
+
+const portalMessageThreads = [
+  {
+    id: 'pt-001',
+    tenantId: 'system',
+    clientId: 'c-001',
+    subject: 'Follow-up question after session',
+    status: 'open',
+    createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+    updatedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+];
+
+const portalMessages = [
+  {
+    id: 'pm-001',
+    tenantId: 'system',
+    threadId: 'pt-001',
+    clientId: 'c-001',
+    senderRole: 'client',
+    senderId: 'c-001',
+    body: 'Can you resend the journaling prompt from this week?',
+    sentAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: 'pm-002',
+    tenantId: 'system',
+    threadId: 'pt-001',
+    clientId: 'c-001',
+    senderRole: 'counselor',
+    senderId: 's-001',
+    body: 'Absolutely. I posted it to your portal resources as well.',
+    sentAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+];
+
+const portalAppointmentRequests = [
+  {
+    id: 'par-001',
+    tenantId: 'system',
+    clientId: 'c-001',
+    preferredStartAt: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString(),
+    preferredEndAt: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000 + 50 * 60 * 1000).toISOString(),
+    mode: 'remote',
+    status: 'requested',
+    notes: 'Prefer evening if available.',
+    createdAt: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
+    updatedAt: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
+  },
+];
+
+const christianNoteTemplates = [
+  {
+    id: 'fnt-001',
+    tenantId: 'system',
+    name: 'Faith-Integrated Progress Note',
+    focusArea: 'anxiety',
+    integrationLevel: 'balanced',
+    sections: ['Clinical summary', 'Spiritual themes', 'Homework and prayer rhythm'],
+    createdAt: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+];
+
+const faithTreatmentGoalTemplates = [
+  {
+    id: 'ftg-001',
+    tenantId: 'system',
+    title: 'Strengthen identity and hope',
+    integrationLevel: 'balanced',
+    scriptures: ['Romans 15:13', 'Psalm 139'],
+    milestones: ['Daily gratitude reflection', 'Weekly scripture meditation plan'],
+    createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+];
+
+const consentLanguageVariants = [
+  {
+    id: 'fcv-001',
+    tenantId: 'system',
+    title: 'Faith-Integrated Counseling Consent',
+    audience: 'client',
+    integrationLevel: 'explicit',
+    body: 'Counseling may include scripture reflection and prayer when requested by the client.',
+    createdAt: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+];
+
+const faithResourceLibrary = [
+  {
+    id: 'frl-001',
+    tenantId: 'system',
+    title: 'Lament and Hope Reflection',
+    resourceType: 'devotional',
+    scriptureReference: 'Psalm 42',
+    content: 'A guided reflection for naming grief while anchoring in hope.',
+    createdAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+];
+
+const spiritualFormationInventories = [
+  {
+    id: 'sfi-001',
+    tenantId: 'system',
+    name: 'Discipleship Rhythm Check-In',
+    cadence: 'weekly',
+    prompts: ['Prayer consistency', 'Scripture engagement', 'Community connection'],
+    createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+];
+
+const churchReferralCoordinations = [
+  {
+    id: 'crc-001',
+    tenantId: 'system',
+    clientId: 'c-001',
+    churchName: 'Grace Community Church',
+    contactName: 'Pastor Lee',
+    contactMethod: 'pastor.lee@example.test',
+    status: 'active',
+    consentToCoordinate: true,
+    notes: 'Coordinate monthly care updates with client consent on file.',
+    updatedAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+];
+
+const faithLanguagePreferences = [
+  {
+    id: 'flp-001',
+    tenantId: 'system',
+    practiceId: 'p-001',
+    integrationLevel: 'balanced',
+    explicitFaithLanguage: true,
+    includePrayerLanguage: true,
+    includeScriptureReferences: true,
+    preferredTerminology: 'Pastoral and clinically respectful',
+    updatedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+];
+
+const tenantProvisioningRequests = [
+  {
+    id: 'tpr-001',
+    tenantId: 'system',
+    requestedTenantId: 'newhope',
+    requestedPracticeName: 'New Hope Counseling',
+    ownerEmail: 'owner@newhope.test',
+    status: 'completed',
+    requestedAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
+    completedAt: new Date(Date.now() - 13 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+];
+
+const supportImpersonationSessions = [
+  {
+    id: 'sis-001',
+    tenantId: 'system',
+    targetTenantId: 'system',
+    targetRole: 'practice_admin',
+    requestedBy: 'platform-admin-01',
+    reason: 'Investigate access issue on document assignments.',
+    status: 'ended',
+    startedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    endedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000 + 45 * 60 * 1000).toISOString(),
+  },
+];
+
+const dataExportJobs = [
+  {
+    id: 'dex-001',
+    tenantId: 'system',
+    exportType: 'clinical_records',
+    status: 'completed',
+    requestedByRole: 'practice_admin',
+    requestedAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
+    completedAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000 + 15 * 60 * 1000).toISOString(),
+    format: 'json',
+  },
+];
+
+const retentionPolicies = [
+  {
+    id: 'rtp-001',
+    tenantId: 'system',
+    clinicalRecordsSchedule: '10_years',
+    billingSchedule: '7_years',
+    auditLogSchedule: 'indefinite',
+    includeDocumentVersions: true,
+    legalHoldEnabled: false,
+    updatedAt: new Date(Date.now() - 11 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+];
+
+const server = http.createServer(async (request, response) => {
+  const requestUrl = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
+  const route = resolveRoute(requestUrl.pathname);
+  const requestScope = telemetry.beginRequest({
+    method: request.method ?? 'GET',
+    route,
+  });
+
+  try {
+    // CORS — must come before rate-limit so preflight gets through cleanly
+    if (handleCors(request, response)) return;
+
+    // Rate limiting
+    if (checkRateLimit(request, response)) return;
+
+    // RBAC
+    if (enforceRbac(request, response, route)) return;
+
+    if (requestUrl.pathname === '/health' && request.method === 'GET') {
+      writeJson(response, 200, { status: 'ok', service: 'api', timestamp: new Date().toISOString() });
+      return;
+    }
+
+    if (requestUrl.pathname === '/openapi.yaml' && request.method === 'GET') {
+      response.writeHead(200, { 'content-type': 'application/yaml; charset=utf-8' });
+      response.end(openApiSpecYaml);
+      return;
+    }
+
+    if ((requestUrl.pathname === '/docs' || requestUrl.pathname === '/docs/') && request.method === 'GET') {
+      response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      response.end(renderSwaggerUiHtml('/openapi.yaml'));
+      return;
+    }
+
+    if (requestUrl.pathname === '/bootstrap-metadata' && request.method === 'GET') {
+      const bootstrapEvent = createAuditEvent({
+        tenantId: 'system',
+        action: 'api.bootstrap.read',
+        targetType: 'system',
+        targetId: 'bootstrap-metadata',
+        occurredAt: new Date().toISOString(),
+      });
+
+      writeJson(response, 200, { roles: staffRoles, appointmentStatuses, appointmentTypes, clientStatuses, bootstrapEvent });
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/clients') {
+      await handleClientsCollection(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname.endsWith('/lifecycle') && requestUrl.pathname.startsWith('/v1/clients/')) {
+      await handleClientLifecycle(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname.endsWith('/consents') && requestUrl.pathname.startsWith('/v1/clients/')) {
+      await handleClientConsents(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname.endsWith('/intake-packets') && requestUrl.pathname.startsWith('/v1/clients/')) {
+      await handleClientIntakePackets(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname.endsWith('/treatment-plan') && requestUrl.pathname.startsWith('/v1/clients/')) {
+      await handleClientTreatmentPlan(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname.endsWith('/progress-notes') && requestUrl.pathname.startsWith('/v1/clients/')) {
+      await handleClientProgressNotes(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname.startsWith('/v1/clients/')) {
+      await handleClientById(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/document-templates') {
+      await handleDocumentTemplates(request, response);
+      return;
+    }
+
+    if (requestUrl.pathname.startsWith('/v1/document-templates/')) {
+      await handleDocumentTemplateById(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/document-assignments') {
+      await handleDocumentAssignments(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/inventory-definitions') {
+      await handleInventoryDefinitions(request, response);
+      return;
+    }
+
+    if (requestUrl.pathname.startsWith('/v1/inventory-definitions/')) {
+      await handleInventoryDefinitionById(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/inventory-assignments') {
+      await handleInventoryAssignments(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/appointment-types') {
+      await handleAppointmentTypes(request, response);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/appointments') {
+      await handleAppointmentsCollection(request, response);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/scheduling/calendar') {
+      await handleSchedulingCalendar(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/reminders') {
+      await handleReminders(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/waitlist') {
+      await handleWaitlist(request, response);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/operations/summary') {
+      await handleOperationsSummary(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/billing/service-codes') {
+      await handleServiceCodes(request, response);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/billing/fee-schedules') {
+      await handleFeeSchedules(request, response);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/billing/invoices') {
+      await handleInvoices(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/billing/payments') {
+      await handlePayments(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/billing/superbills') {
+      await handleSuperbills(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/billing/claims') {
+      await handleClaimPlaceholders(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/billing/reports/aging') {
+      await handleAgingReport(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/portal/overview') {
+      await handlePortalOverview(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/portal/accounts') {
+      await handlePortalAccounts(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/portal/intake-packets') {
+      await handlePortalIntakePackets(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/portal/documents') {
+      await handlePortalDocuments(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/portal/appointment-requests') {
+      await handlePortalAppointmentRequests(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/portal/messages') {
+      await handlePortalMessages(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/portal/resources') {
+      await handlePortalResources(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/faith/overview') {
+      await handleFaithOverview(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/faith/note-templates') {
+      await handleFaithNoteTemplates(request, response);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/faith/treatment-goals') {
+      await handleFaithTreatmentGoals(request, response);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/faith/consent-variants') {
+      await handleFaithConsentVariants(request, response);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/faith/resources') {
+      await handleFaithResources(request, response);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/faith/inventories') {
+      await handleFaithInventories(request, response);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/faith/referral-coordination') {
+      await handleFaithReferralCoordination(request, response);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/faith/language-preferences') {
+      await handleFaithLanguagePreferences(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/reporting/overview') {
+      await handleReportingOverview(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/platform/overview') {
+      await handlePlatformOverview(request, response);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/platform/tenant-provisioning') {
+      await handleTenantProvisioning(request, response);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/platform/impersonation-sessions') {
+      await handleSupportImpersonationSessions(request, response);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/platform/data-exports') {
+      await handleDataExportJobs(request, response);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/platform/retention-policies') {
+      await handleRetentionPolicies(request, response);
+      return;
+    }
+
+    if (requestUrl.pathname.startsWith('/v1/appointments/')) {
+      await handleAppointmentById(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/practices') {
+      await handlePracticesCollection(request, response);
+      return;
+    }
+
+    if (requestUrl.pathname.startsWith('/v1/practices/')) {
+      await handlePracticeById(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/locations') {
+      await handleLocationsCollection(request, response);
+      return;
+    }
+
+    if (requestUrl.pathname.startsWith('/v1/locations/')) {
+      await handleLocationById(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/staff') {
+      await handleStaffCollection(request, response);
+      return;
+    }
+
+    if (requestUrl.pathname.endsWith('/availability') && requestUrl.pathname.startsWith('/v1/staff/')) {
+      await handleStaffAvailability(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname.startsWith('/v1/staff/')) {
+      await handleStaffById(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/i18n/locales') {
+      await handleLocales(request, response);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/i18n/catalog') {
+      if (request.method !== 'GET') {
+        writeJson(response, 405, { error: 'Method not allowed' });
+        return;
+      }
+
+      writeJson(response, 200, i18nStore.getCatalog(requestUrl.searchParams.get('locale') ?? 'en'));
+      return;
+    }
+
+    if (requestUrl.pathname.startsWith('/v1/i18n/catalog/')) {
+      await handleCatalogByLocale(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname.startsWith('/v1/i18n/settings/')) {
+      await handleTranslationSettingsByLocale(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/i18n/translate') {
+      await handleAutoTranslate(request, response);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/telemetry/vitals') {
+      await handleFrontendVitals(request, response);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/telemetry/summary' && request.method === 'GET') {
+      writeJson(response, 200, {
+        service: 'api',
+        exportedViaOtel: Boolean(process.env.OTEL_EXPORTER_OTLP_ENDPOINT || process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT),
+        summary: telemetry.getSummary(),
+      });
+      return;
+    }
+
+    writeJson(response, 404, { error: 'Not found' });
+  } catch (error) {
+    const statusCode = error instanceof HttpError ? error.statusCode : 500;
+    writeJson(response, statusCode, { error: error.message || 'Unexpected server error' });
+  } finally {
+    requestScope.end(response.statusCode || 200);
+  }
+});
+
+server.listen(port, () => {
+  console.log(`Faith Counseling API listening on port ${port}`);
+});
+
+async function handleClientsCollection(request, response, requestUrl) {
+  if (request.method === 'GET') {
+    const statusFilter = requestUrl.searchParams.get('status');
+    const items = statusFilter ? clients.filter((client) => client.status === statusFilter) : clients;
+
+    // PHI audit — record reads of the client list
+    emitAudit(request, 'client.list.read', 'client', 'collection');
+
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const firstName = sanitizeStr(payload.firstName);
+  const lastName = sanitizeStr(payload.lastName);
+  const status = normalizeClientStatus(payload.status);
+
+  if (!firstName || !lastName) {
+    writeJson(response, 400, { error: 'firstName and lastName are required' });
+    return;
+  }
+
+  if (!status) {
+    writeJson(response, 400, { error: 'status must be valid' });
+    return;
+  }
+
+  const nextClient = {
+    id: createId('c', clients),
+    tenantId: 'system',
+    firstName,
+    lastName,
+    status,
+    faithBackground: sanitizeStr(payload.faithBackground, 500) ?? 'Undeclared',
+  };
+
+  clients.push(nextClient);
+  telemetry.recordMutation('client.create');
+  emitAudit(request, 'client.create', 'client', nextClient.id);
+  writeJson(response, 201, { item: nextClient });
+}
+
+async function handleClientById(request, response, requestUrl) {
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const clientId = requestUrl.pathname.replace('/v1/clients/', '');
+  const client = clients.find((item) => item.id === clientId);
+  if (!client) {
+    writeJson(response, 404, { error: 'Client not found' });
+    return;
+  }
+
+  // Tenant-scope: caller must belong to the same tenant as this client
+  if (enforceTenantScope(request, response, client.tenantId)) return;
+
+  const payload = await readJsonBody(request);
+  const status = payload.status ? normalizeClientStatus(payload.status) : client.status;
+  if (payload.status && !status) {
+    writeJson(response, 400, { error: 'status must be valid' });
+    return;
+  }
+
+  if (typeof payload.firstName === 'string' && payload.firstName.trim()) client.firstName = sanitizeStr(payload.firstName) ?? client.firstName;
+  if (typeof payload.lastName === 'string' && payload.lastName.trim()) client.lastName = sanitizeStr(payload.lastName) ?? client.lastName;
+  if (typeof payload.faithBackground === 'string' && payload.faithBackground.trim()) client.faithBackground = sanitizeStr(payload.faithBackground, 500) ?? client.faithBackground;
+  client.status = status;
+
+  const fullName = `${client.firstName} ${client.lastName}`;
+  appointments.forEach((appointment) => {
+    if (appointment.clientId === client.id) {
+      appointment.clientName = fullName;
+    }
+  });
+
+  telemetry.recordMutation('client.update');
+  emitAudit(request, 'client.update', 'client', client.id);
+  writeJson(response, 200, { item: client });
+}
+
+async function handleClientLifecycle(request, response, requestUrl) {
+  const clientId = extractClientIdForSegment(requestUrl.pathname, 'lifecycle');
+  const client = clients.find((item) => item.id === clientId);
+  if (!client) {
+    writeJson(response, 404, { error: 'Client not found' });
+    return;
+  }
+
+  if (enforceTenantScope(request, response, client.tenantId)) return;
+
+  const lifecycle = getOrCreateLifecycle(client);
+
+  if (request.method === 'GET') {
+    emitAudit(request, 'client.lifecycle.read', 'client', client.id);
+    writeJson(response, 200, { item: lifecycle });
+    return;
+  }
+
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  if (typeof payload.caseStatus === 'string') {
+    const nextCaseStatus = normalizeCaseStatus(payload.caseStatus);
+    if (!nextCaseStatus) {
+      writeJson(response, 400, { error: 'caseStatus must be valid' });
+      return;
+    }
+    lifecycle.caseStatus = nextCaseStatus;
+  }
+
+  if (typeof payload.referralSource === 'string') {
+    lifecycle.referralSource = sanitizeStr(payload.referralSource, 200) ?? '';
+  }
+
+  if (payload.emergencyContact && typeof payload.emergencyContact === 'object') {
+    lifecycle.emergencyContact = {
+      name: sanitizeStr(payload.emergencyContact.name, 200) ?? lifecycle.emergencyContact?.name ?? '',
+      relationship: sanitizeStr(payload.emergencyContact.relationship, 120) ?? lifecycle.emergencyContact?.relationship ?? '',
+      phone: sanitizeStr(payload.emergencyContact.phone, 80) ?? lifecycle.emergencyContact?.phone ?? '',
+      authorized: payload.emergencyContact.authorized !== undefined
+        ? Boolean(payload.emergencyContact.authorized)
+        : Boolean(lifecycle.emergencyContact?.authorized),
+    };
+  }
+
+  if (lifecycle.caseStatus === 'discharged') {
+    lifecycle.dischargeRecord = {
+      reason: sanitizeStr(payload.dischargeReason, 240) ?? lifecycle.dischargeRecord?.reason ?? 'Case closed',
+      summary: sanitizeStr(payload.dischargeSummary, 1000) ?? lifecycle.dischargeRecord?.summary ?? '',
+      dischargedAt: normalizeIsoDate(payload.dischargedAt) ?? lifecycle.dischargeRecord?.dischargedAt ?? new Date().toISOString(),
+    };
+  }
+
+  lifecycle.updatedAt = new Date().toISOString();
+
+  telemetry.recordMutation('client.lifecycle.update');
+  emitAudit(request, 'client.lifecycle.update', 'client', client.id);
+  writeJson(response, 200, { item: lifecycle });
+}
+
+async function handleClientConsents(request, response, requestUrl) {
+  const clientId = extractClientIdForSegment(requestUrl.pathname, 'consents');
+  const client = clients.find((item) => item.id === clientId);
+  if (!client) {
+    writeJson(response, 404, { error: 'Client not found' });
+    return;
+  }
+
+  if (enforceTenantScope(request, response, client.tenantId)) return;
+
+  if (request.method === 'GET') {
+    const items = consentRecords.filter((item) => item.clientId === clientId);
+    emitAudit(request, 'client.consent.read', 'client', client.id);
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method === 'POST') {
+    const payload = await readJsonBody(request);
+    const consentType = normalizeConsentType(payload.consentType);
+    const signatureState = normalizeConsentState(payload.signatureState ?? 'pending');
+    if (!consentType) {
+      writeJson(response, 400, { error: 'consentType must be valid' });
+      return;
+    }
+    if (!signatureState) {
+      writeJson(response, 400, { error: 'signatureState must be valid' });
+      return;
+    }
+
+    const item = { ...createConsentRecord({
+      id: createId('cons', consentRecords),
+      tenantId: client.tenantId,
+      clientId,
+      consentType,
+      signatureState,
+      version: sanitizeStr(payload.version, 20) ?? 'v1',
+      effectiveFrom: normalizeIsoDate(payload.effectiveFrom) ?? new Date().toISOString(),
+      effectiveTo: normalizeIsoDate(payload.effectiveTo),
+    }) };
+
+    consentRecords.push(item);
+    telemetry.recordMutation('client.consent.create');
+    emitAudit(request, 'client.consent.create', 'consent', item.id);
+    writeJson(response, 201, { item });
+    return;
+  }
+
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const consentId = sanitizeStr(payload.consentId, 50);
+  const item = consentRecords.find((record) => record.id === consentId && record.clientId === clientId);
+  if (!item) {
+    writeJson(response, 404, { error: 'Consent not found' });
+    return;
+  }
+
+  if (typeof payload.signatureState === 'string') {
+    const nextState = normalizeConsentState(payload.signatureState);
+    if (!nextState) {
+      writeJson(response, 400, { error: 'signatureState must be valid' });
+      return;
+    }
+    item.signatureState = nextState;
+  }
+
+  if (typeof payload.version === 'string') item.version = sanitizeStr(payload.version, 20) ?? item.version;
+  if (typeof payload.effectiveFrom === 'string') item.effectiveFrom = normalizeIsoDate(payload.effectiveFrom) ?? item.effectiveFrom;
+  if (typeof payload.effectiveTo === 'string') item.effectiveTo = normalizeIsoDate(payload.effectiveTo);
+
+  telemetry.recordMutation('client.consent.update');
+  emitAudit(request, 'client.consent.update', 'consent', item.id);
+  writeJson(response, 200, { item });
+}
+
+async function handleClientIntakePackets(request, response, requestUrl) {
+  const clientId = extractClientIdForSegment(requestUrl.pathname, 'intake-packets');
+  const client = clients.find((item) => item.id === clientId);
+  if (!client) {
+    writeJson(response, 404, { error: 'Client not found' });
+    return;
+  }
+
+  if (enforceTenantScope(request, response, client.tenantId)) return;
+
+  if (request.method === 'GET') {
+    const items = intakePackets.filter((item) => item.clientId === clientId);
+    emitAudit(request, 'client.intake.read', 'client', client.id);
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method === 'POST') {
+    const payload = await readJsonBody(request);
+    const status = normalizeIntakeStatus(payload.status ?? 'assigned');
+    if (!status) {
+      writeJson(response, 400, { error: 'status must be valid' });
+      return;
+    }
+    const assignedForms = Array.isArray(payload.assignedForms)
+      ? payload.assignedForms.map((form) => sanitizeStr(String(form), 160)).filter(Boolean)
+      : [];
+
+    const item = { ...createIntakePacketRecord({
+      id: createId('ip', intakePackets),
+      tenantId: client.tenantId,
+      clientId,
+      status,
+      assignedForms,
+      submittedAt: normalizeIsoDate(payload.submittedAt),
+    }) };
+
+    intakePackets.push(item);
+    telemetry.recordMutation('client.intake.create');
+    emitAudit(request, 'client.intake.create', 'intake_packet', item.id);
+    writeJson(response, 201, { item });
+    return;
+  }
+
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const packetId = sanitizeStr(payload.packetId, 50);
+  const item = intakePackets.find((record) => record.id === packetId && record.clientId === clientId);
+  if (!item) {
+    writeJson(response, 404, { error: 'Intake packet not found' });
+    return;
+  }
+
+  if (typeof payload.status === 'string') {
+    const nextStatus = normalizeIntakeStatus(payload.status);
+    if (!nextStatus) {
+      writeJson(response, 400, { error: 'status must be valid' });
+      return;
+    }
+    item.status = nextStatus;
+  }
+
+  if (Array.isArray(payload.assignedForms)) {
+    item.assignedForms = payload.assignedForms.map((form) => sanitizeStr(String(form), 160)).filter(Boolean);
+  }
+
+  if (typeof payload.submittedAt === 'string') {
+    item.submittedAt = normalizeIsoDate(payload.submittedAt) ?? item.submittedAt;
+  }
+
+  telemetry.recordMutation('client.intake.update');
+  emitAudit(request, 'client.intake.update', 'intake_packet', item.id);
+  writeJson(response, 200, { item });
+}
+
+async function handleClientTreatmentPlan(request, response, requestUrl) {
+  const clientId = extractClientIdForSegment(requestUrl.pathname, 'treatment-plan');
+  const client = clients.find((item) => item.id === clientId);
+  if (!client) {
+    writeJson(response, 404, { error: 'Client not found' });
+    return;
+  }
+
+  if (enforceTenantScope(request, response, client.tenantId)) return;
+
+  let plan = treatmentPlans.find((item) => item.clientId === clientId);
+
+  if (request.method === 'GET') {
+    emitAudit(request, 'chart.treatment_plan.read', 'client', client.id);
+    writeJson(response, 200, { item: plan ?? null });
+    return;
+  }
+
+  if (request.method !== 'PUT') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const status = normalizeTreatmentPlanStatus(payload.status ?? 'draft');
+  if (!status) {
+    writeJson(response, 400, { error: 'status must be valid' });
+    return;
+  }
+
+  const goals = Array.isArray(payload.goals)
+    ? payload.goals.map((goal) => sanitizeStr(String(goal), 300)).filter(Boolean)
+    : [];
+  const interventions = Array.isArray(payload.interventions)
+    ? payload.interventions.map((entry) => sanitizeStr(String(entry), 300)).filter(Boolean)
+    : [];
+
+  if (!plan) {
+    plan = { ...createTreatmentPlanRecord({
+      id: createId('tp', treatmentPlans),
+      tenantId: client.tenantId,
+      clientId,
+      status,
+      goals,
+      interventions,
+      reviewCadence: sanitizeStr(payload.reviewCadence, 60) ?? 'monthly',
+      reviewedAt: normalizeIsoDate(payload.reviewedAt) ?? null,
+    }) };
+    treatmentPlans.push(plan);
+  } else {
+    plan.status = status;
+    plan.goals = goals;
+    plan.interventions = interventions;
+    plan.reviewCadence = sanitizeStr(payload.reviewCadence, 60) ?? plan.reviewCadence;
+    plan.reviewedAt = normalizeIsoDate(payload.reviewedAt) ?? plan.reviewedAt;
+  }
+
+  telemetry.recordMutation('chart.treatment_plan.upsert');
+  emitAudit(request, 'chart.treatment_plan.upsert', 'treatment_plan', plan.id);
+  writeJson(response, 200, { item: plan });
+}
+
+async function handleClientProgressNotes(request, response, requestUrl) {
+  const clientId = extractClientIdForSegment(requestUrl.pathname, 'progress-notes');
+  const client = clients.find((item) => item.id === clientId);
+  if (!client) {
+    writeJson(response, 404, { error: 'Client not found' });
+    return;
+  }
+
+  if (enforceTenantScope(request, response, client.tenantId)) return;
+
+  if (request.method === 'GET') {
+    const items = progressNotes.filter((item) => item.clientId === clientId);
+    emitAudit(request, 'chart.progress_note.read', 'client', client.id);
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const noteType = normalizeProgressNoteType(payload.noteType ?? 'progress_note');
+  if (!noteType) {
+    writeJson(response, 400, { error: 'noteType must be valid' });
+    return;
+  }
+  const summary = sanitizeStr(payload.summary, 3000);
+  if (!summary) {
+    writeJson(response, 400, { error: 'summary is required' });
+    return;
+  }
+  const interventions = Array.isArray(payload.interventions)
+    ? payload.interventions.map((entry) => sanitizeStr(String(entry), 300)).filter(Boolean)
+    : [];
+
+  const item = { ...createProgressNoteRecord({
+    id: createId('pn', progressNotes),
+    tenantId: client.tenantId,
+    clientId,
+    noteType,
+    summary,
+    interventions,
+    locked: Boolean(payload.locked),
+    signedBy: Boolean(payload.locked) ? sanitizeStr(payload.signedBy, 120) ?? callerRole(request) : null,
+    signedAt: Boolean(payload.locked) ? new Date().toISOString() : null,
+  }) };
+
+  progressNotes.push(item);
+  telemetry.recordMutation('chart.progress_note.create');
+  emitAudit(request, 'chart.progress_note.create', 'progress_note', item.id);
+  writeJson(response, 201, { item });
+}
+
+async function handleDocumentTemplates(request, response) {
+  if (request.method === 'GET') {
+    writeJson(response, 200, { items: filterByTenant(documentTemplates, request) });
+    return;
+  }
+
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (requirePracticeAdmin(request, response)) return;
+
+  const payload = await readJsonBody(request);
+  const title = sanitizeStr(payload.title, 200);
+  if (!title) {
+    writeJson(response, 400, { error: 'title is required' });
+    return;
+  }
+
+  const templateType = normalizeDocumentTemplateType(payload.templateType ?? 'clinical_template');
+  const audience = normalizeDocumentAudienceType(payload.audience ?? 'client');
+  if (!templateType) {
+    writeJson(response, 400, { error: 'templateType must be valid' });
+    return;
+  }
+  if (!audience) {
+    writeJson(response, 400, { error: 'audience must be valid' });
+    return;
+  }
+
+  const contentBlocks = Array.isArray(payload.contentBlocks)
+    ? payload.contentBlocks.map((entry) => sanitizeStr(String(entry), 500)).filter(Boolean)
+    : [];
+
+  const item = { ...createDocumentTemplateRecord({
+    id: createId('dt', documentTemplates),
+    tenantId: callerTenant(request),
+    title,
+    templateType,
+    audience,
+    templateKey: sanitizeStr(payload.templateKey, 120),
+    versionNumber: Number.isFinite(Number(payload.versionNumber)) ? Number(payload.versionNumber) : 1,
+    contentBlocks,
+  }) };
+
+  documentTemplates.push(item);
+  telemetry.recordMutation('documents.template.create');
+  emitAudit(request, 'documents.template.create', 'document_template', item.id);
+  writeJson(response, 201, { item });
+}
+
+async function handleDocumentTemplateById(request, response, requestUrl) {
+  const templateId = requestUrl.pathname.replace('/v1/document-templates/', '');
+  const item = documentTemplates.find((record) => record.id === templateId);
+  if (!item) {
+    writeJson(response, 404, { error: 'Document template not found' });
+    return;
+  }
+
+  if (enforceTenantScope(request, response, item.tenantId)) return;
+
+  if (request.method === 'GET') {
+    emitAudit(request, 'documents.template.read', 'document_template', item.id);
+    writeJson(response, 200, { item });
+    return;
+  }
+
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (requirePracticeAdmin(request, response)) return;
+
+  const payload = await readJsonBody(request);
+  if (typeof payload.title === 'string') item.title = sanitizeStr(payload.title, 200) ?? item.title;
+  if (typeof payload.templateType === 'string') {
+    const templateType = normalizeDocumentTemplateType(payload.templateType);
+    if (!templateType) {
+      writeJson(response, 400, { error: 'templateType must be valid' });
+      return;
+    }
+    item.templateType = templateType;
+  }
+  if (typeof payload.audience === 'string') {
+    const audience = normalizeDocumentAudienceType(payload.audience);
+    if (!audience) {
+      writeJson(response, 400, { error: 'audience must be valid' });
+      return;
+    }
+    item.audience = audience;
+  }
+  if (Array.isArray(payload.contentBlocks)) {
+    item.contentBlocks = payload.contentBlocks.map((entry) => sanitizeStr(String(entry), 500)).filter(Boolean);
+  }
+  if (payload.versionNumber !== undefined) {
+    const versionNumber = Number(payload.versionNumber);
+    if (!Number.isFinite(versionNumber) || versionNumber < 1) {
+      writeJson(response, 400, { error: 'versionNumber must be a positive number' });
+      return;
+    }
+    item.versionNumber = versionNumber;
+  }
+
+  telemetry.recordMutation('documents.template.update');
+  emitAudit(request, 'documents.template.update', 'document_template', item.id);
+  writeJson(response, 200, { item });
+}
+
+async function handleDocumentAssignments(request, response, requestUrl) {
+  if (request.method === 'GET') {
+    const clientId = sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50);
+    const assigneeId = sanitizeStr(requestUrl.searchParams.get('assigneeId') ?? '', 50);
+    const templateId = sanitizeStr(requestUrl.searchParams.get('templateId') ?? '', 50);
+    let items = filterByTenant(documentAssignments, request);
+    if (clientId) items = items.filter((item) => item.assigneeType === 'client' && item.assigneeId === clientId);
+    if (assigneeId) items = items.filter((item) => item.assigneeId === assigneeId);
+    if (templateId) items = items.filter((item) => item.templateId === templateId);
+    emitAudit(request, 'documents.assignment.read', 'document_assignment', 'collection');
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method === 'POST') {
+    const payload = await readJsonBody(request);
+    const templateId = sanitizeStr(payload.templateId, 50);
+    const template = documentTemplates.find((record) => record.id === templateId);
+    if (!template) {
+      writeJson(response, 400, { error: 'Valid templateId is required' });
+      return;
+    }
+
+    if (enforceTenantScope(request, response, template.tenantId)) return;
+
+    const assigneeType = normalizeDocumentAudienceType(payload.assigneeType ?? 'client');
+    if (!assigneeType) {
+      writeJson(response, 400, { error: 'assigneeType must be valid' });
+      return;
+    }
+
+    const assigneeId = sanitizeStr(payload.assigneeId, 50);
+    if (!assigneeId) {
+      writeJson(response, 400, { error: 'assigneeId is required' });
+      return;
+    }
+
+    if (assigneeType === 'client' && !clients.some((client) => client.id === assigneeId)) {
+      writeJson(response, 400, { error: 'assigneeId must reference an existing client' });
+      return;
+    }
+    if (assigneeType === 'staff' && !staffMembers.some((staff) => staff.id === assigneeId)) {
+      writeJson(response, 400, { error: 'assigneeId must reference an existing staff member' });
+      return;
+    }
+
+    const status = normalizeDocumentAssignmentStatus(payload.status ?? 'assigned');
+    if (!status) {
+      writeJson(response, 400, { error: 'status must be valid' });
+      return;
+    }
+
+    const item = { ...createDocumentAssignmentRecord({
+      id: createId('da', documentAssignments),
+      tenantId: template.tenantId,
+      templateId,
+      assigneeType,
+      assigneeId,
+      status,
+      requiresSignature: payload.requiresSignature ?? template.templateType === 'consent_form',
+      dueAt: normalizeIsoDate(payload.dueAt),
+      completedAt: normalizeIsoDate(payload.completedAt),
+      accessHistory: [
+        { action: 'assigned', at: new Date().toISOString(), actorRole: callerRole(request) || 'unknown' },
+      ],
+    }) };
+
+    documentAssignments.push(item);
+    telemetry.recordMutation('documents.assignment.create');
+    emitAudit(request, 'documents.assignment.create', 'document_assignment', item.id);
+    writeJson(response, 201, { item });
+    return;
+  }
+
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const assignmentId = sanitizeStr(payload.assignmentId, 50);
+  const item = documentAssignments.find((record) => record.id === assignmentId);
+  if (!item) {
+    writeJson(response, 404, { error: 'Document assignment not found' });
+    return;
+  }
+
+  if (enforceTenantScope(request, response, item.tenantId)) return;
+
+  if (typeof payload.status === 'string') {
+    const status = normalizeDocumentAssignmentStatus(payload.status);
+    if (!status) {
+      writeJson(response, 400, { error: 'status must be valid' });
+      return;
+    }
+    item.status = status;
+    if (status === 'completed' || status === 'signed') {
+      item.completedAt = new Date().toISOString();
+    }
+  }
+
+  if (typeof payload.requiresSignature === 'boolean') item.requiresSignature = payload.requiresSignature;
+  if (typeof payload.dueAt === 'string') item.dueAt = normalizeIsoDate(payload.dueAt) ?? item.dueAt;
+
+  item.accessHistory = [
+    ...item.accessHistory,
+    {
+      action: 'updated',
+      at: new Date().toISOString(),
+      actorRole: callerRole(request) || 'unknown',
+    },
+  ];
+
+  telemetry.recordMutation('documents.assignment.update');
+  emitAudit(request, 'documents.assignment.update', 'document_assignment', item.id);
+  writeJson(response, 200, { item });
+}
+
+async function handleInventoryDefinitions(request, response) {
+  if (request.method === 'GET') {
+    writeJson(response, 200, { items: filterByTenant(inventoryDefinitions, request) });
+    return;
+  }
+
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (requirePracticeAdmin(request, response)) return;
+
+  const payload = await readJsonBody(request);
+  const name = sanitizeStr(payload.name, 200);
+  if (!name) {
+    writeJson(response, 400, { error: 'name is required' });
+    return;
+  }
+
+  const category = normalizeInventoryCategory(payload.category ?? 'custom');
+  const scoringMethod = normalizeInventoryScoringMethod(payload.scoringMethod ?? 'sum');
+  if (!category) {
+    writeJson(response, 400, { error: 'category must be valid' });
+    return;
+  }
+  if (!scoringMethod) {
+    writeJson(response, 400, { error: 'scoringMethod must be valid' });
+    return;
+  }
+
+  const questionSchema = Array.isArray(payload.questionSchema)
+    ? payload.questionSchema
+      .map((question) => ({
+        key: sanitizeStr(question.key, 80),
+        prompt: sanitizeStr(question.prompt, 300),
+        min: Number.isFinite(Number(question.min)) ? Number(question.min) : 0,
+        max: Number.isFinite(Number(question.max)) ? Number(question.max) : 3,
+      }))
+      .filter((question) => question.key && question.prompt)
+    : [];
+
+  const item = { ...createInventoryDefinitionRecord({
+    id: createId('inv', inventoryDefinitions),
+    tenantId: callerTenant(request),
+    name,
+    category,
+    scoringMethod,
+    versionNumber: Number.isFinite(Number(payload.versionNumber)) ? Number(payload.versionNumber) : 1,
+    questionSchema,
+  }) };
+
+  inventoryDefinitions.push(item);
+  telemetry.recordMutation('inventory.definition.create');
+  emitAudit(request, 'inventory.definition.create', 'inventory_definition', item.id);
+  writeJson(response, 201, { item });
+}
+
+async function handleInventoryDefinitionById(request, response, requestUrl) {
+  const inventoryId = requestUrl.pathname.replace('/v1/inventory-definitions/', '');
+  const item = inventoryDefinitions.find((record) => record.id === inventoryId);
+  if (!item) {
+    writeJson(response, 404, { error: 'Inventory definition not found' });
+    return;
+  }
+
+  if (enforceTenantScope(request, response, item.tenantId)) return;
+
+  if (request.method === 'GET') {
+    emitAudit(request, 'inventory.definition.read', 'inventory_definition', item.id);
+    writeJson(response, 200, { item });
+    return;
+  }
+
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (requirePracticeAdmin(request, response)) return;
+
+  const payload = await readJsonBody(request);
+  if (typeof payload.name === 'string') item.name = sanitizeStr(payload.name, 200) ?? item.name;
+  if (typeof payload.category === 'string') {
+    const category = normalizeInventoryCategory(payload.category);
+    if (!category) {
+      writeJson(response, 400, { error: 'category must be valid' });
+      return;
+    }
+    item.category = category;
+  }
+  if (typeof payload.scoringMethod === 'string') {
+    const scoringMethod = normalizeInventoryScoringMethod(payload.scoringMethod);
+    if (!scoringMethod) {
+      writeJson(response, 400, { error: 'scoringMethod must be valid' });
+      return;
+    }
+    item.scoringMethod = scoringMethod;
+  }
+  if (Array.isArray(payload.questionSchema)) {
+    item.questionSchema = payload.questionSchema
+      .map((question) => ({
+        key: sanitizeStr(question.key, 80),
+        prompt: sanitizeStr(question.prompt, 300),
+        min: Number.isFinite(Number(question.min)) ? Number(question.min) : 0,
+        max: Number.isFinite(Number(question.max)) ? Number(question.max) : 3,
+      }))
+      .filter((question) => question.key && question.prompt);
+  }
+
+  telemetry.recordMutation('inventory.definition.update');
+  emitAudit(request, 'inventory.definition.update', 'inventory_definition', item.id);
+  writeJson(response, 200, { item });
+}
+
+async function handleInventoryAssignments(request, response, requestUrl) {
+  if (request.method === 'GET') {
+    const clientId = sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50);
+    const inventoryId = sanitizeStr(requestUrl.searchParams.get('inventoryId') ?? '', 50);
+    let items = filterByTenant(inventoryAssignments, request);
+    if (clientId) items = items.filter((item) => item.clientId === clientId);
+    if (inventoryId) items = items.filter((item) => item.inventoryId === inventoryId);
+    emitAudit(request, 'inventory.assignment.read', 'inventory_assignment', 'collection');
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method === 'POST') {
+    const payload = await readJsonBody(request);
+    const inventoryId = sanitizeStr(payload.inventoryId, 50);
+    const definition = inventoryDefinitions.find((record) => record.id === inventoryId);
+    if (!definition) {
+      writeJson(response, 400, { error: 'Valid inventoryId is required' });
+      return;
+    }
+
+    if (enforceTenantScope(request, response, definition.tenantId)) return;
+
+    const clientId = sanitizeStr(payload.clientId, 50);
+    const client = clients.find((record) => record.id === clientId);
+    if (!client) {
+      writeJson(response, 400, { error: 'Valid clientId is required' });
+      return;
+    }
+
+    const status = normalizeInventoryAssignmentStatus(payload.status ?? 'assigned');
+    if (!status) {
+      writeJson(response, 400, { error: 'status must be valid' });
+      return;
+    }
+
+    const responses = Array.isArray(payload.responses)
+      ? payload.responses
+        .map((entry) => ({
+          key: sanitizeStr(entry.key, 80),
+          value: Number(entry.value),
+        }))
+        .filter((entry) => entry.key && Number.isFinite(entry.value))
+      : [];
+
+    const score = computeInventoryScore(definition.scoringMethod, responses);
+    const item = { ...createInventoryAssignmentRecord({
+      id: createId('ia', inventoryAssignments),
+      tenantId: definition.tenantId,
+      inventoryId,
+      clientId,
+      status,
+      responses,
+      score,
+      scoredAt: score === null ? null : new Date().toISOString(),
+      completedAt: status === 'completed' || status === 'reviewed' ? new Date().toISOString() : null,
+    }) };
+
+    inventoryAssignments.push(item);
+    telemetry.recordMutation('inventory.assignment.create');
+    emitAudit(request, 'inventory.assignment.create', 'inventory_assignment', item.id);
+    writeJson(response, 201, { item });
+    return;
+  }
+
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const assignmentId = sanitizeStr(payload.assignmentId, 50);
+  const item = inventoryAssignments.find((record) => record.id === assignmentId);
+  if (!item) {
+    writeJson(response, 404, { error: 'Inventory assignment not found' });
+    return;
+  }
+
+  if (enforceTenantScope(request, response, item.tenantId)) return;
+
+  const definition = inventoryDefinitions.find((record) => record.id === item.inventoryId);
+  if (!definition) {
+    writeJson(response, 500, { error: 'Inventory definition missing for assignment' });
+    return;
+  }
+
+  if (typeof payload.status === 'string') {
+    const status = normalizeInventoryAssignmentStatus(payload.status);
+    if (!status) {
+      writeJson(response, 400, { error: 'status must be valid' });
+      return;
+    }
+    item.status = status;
+    if (status === 'completed' || status === 'reviewed') {
+      item.completedAt = new Date().toISOString();
+    }
+  }
+
+  if (Array.isArray(payload.responses)) {
+    item.responses = payload.responses
+      .map((entry) => ({
+        key: sanitizeStr(entry.key, 80),
+        value: Number(entry.value),
+      }))
+      .filter((entry) => entry.key && Number.isFinite(entry.value));
+  }
+
+  item.score = computeInventoryScore(definition.scoringMethod, item.responses);
+  item.scoredAt = item.score === null ? null : new Date().toISOString();
+
+  telemetry.recordMutation('inventory.assignment.update');
+  emitAudit(request, 'inventory.assignment.update', 'inventory_assignment', item.id);
+  writeJson(response, 200, { item });
+}
+
+async function handleAppointmentsCollection(request, response) {
+  if (request.method === 'GET') {
+    const items = [...appointments].sort((left, right) => left.startsAt.localeCompare(right.startsAt));
+    emitAudit(request, 'appointment.list.read', 'appointment', 'collection');
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const client = clients.find((item) => item.id === (payload.clientId ?? '').trim());
+  if (!client) {
+    writeJson(response, 400, { error: 'Valid clientId is required' });
+    return;
+  }
+
+  const startsAt = normalizeIsoDate(payload.startsAt);
+  const endsAt = normalizeIsoDate(payload.endsAt);
+  const status = normalizeAppointmentStatus(payload.status ?? 'scheduled');
+  const appointmentType = normalizeAppointmentType(payload.appointmentType ?? 'individual_therapy');
+  const timezone = normalizeTimezone(payload.timezone ?? practices[0]?.timezone ?? 'America/New_York');
+
+  if (!startsAt || !endsAt) {
+    writeJson(response, 400, { error: 'startsAt and endsAt must be valid ISO dates' });
+    return;
+  }
+
+  if (!status) {
+    writeJson(response, 400, { error: 'status must be valid' });
+    return;
+  }
+
+  if (!appointmentType) {
+    writeJson(response, 400, { error: 'appointmentType must be valid' });
+    return;
+  }
+
+  if (!timezone) {
+    writeJson(response, 400, { error: 'timezone must be a valid IANA timezone identifier' });
+    return;
+  }
+
+  const counselorName = sanitizeStr(payload.counselorName, 200) ?? 'Unassigned Counselor';
+  const locationName = sanitizeStr(payload.locationName, 200) ?? 'Main Office';
+  const remoteSession = Boolean(payload.remoteSession);
+  const conflicts = detectAppointmentConflicts({
+    startsAt,
+    endsAt,
+    counselorName,
+    locationName,
+    remoteSession,
+  });
+  if (conflicts.length) {
+    writeJson(response, 409, {
+      error: 'Scheduling conflict detected',
+      conflicts,
+    });
+    return;
+  }
+
+  const appointment = {
+    id: createId('a', appointments),
+    tenantId: 'system',
+    clientId: client.id,
+    clientName: `${client.firstName} ${client.lastName}`,
+    counselorName,
+    startsAt,
+    endsAt,
+    status,
+    appointmentType,
+    locationName,
+    remoteSession,
+    timezone,
+  };
+
+  appointments.push(appointment);
+  telemetry.recordMutation('appointment.create');
+  emitAudit(request, 'appointment.create', 'appointment', appointment.id);
+  writeJson(response, 201, { item: appointment });
+}
+
+async function handleAppointmentById(request, response, requestUrl) {
+  const appointmentId = requestUrl.pathname.replace('/v1/appointments/', '');
+  const appointment = appointments.find((item) => item.id === appointmentId);
+  if (!appointment) {
+    writeJson(response, 404, { error: 'Appointment not found' });
+    return;
+  }
+
+  // Tenant-scope: caller must belong to the same tenant as this appointment
+  if (enforceTenantScope(request, response, appointment.tenantId)) return;
+
+  if (request.method === 'DELETE') {
+    const index = appointments.findIndex((item) => item.id === appointmentId);
+    appointments.splice(index, 1);
+    telemetry.recordMutation('appointment.delete');
+    emitAudit(request, 'appointment.delete', 'appointment', appointmentId);
+    writeJson(response, 200, { deleted: true, id: appointmentId });
+    return;
+  }
+
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+
+  if (typeof payload.status === 'string') {
+    const status = normalizeAppointmentStatus(payload.status);
+    if (!status) {
+      writeJson(response, 400, { error: 'status must be valid' });
+      return;
+    }
+    appointment.status = status;
+  }
+
+  if (typeof payload.appointmentType === 'string') {
+    const appointmentType = normalizeAppointmentType(payload.appointmentType);
+    if (!appointmentType) {
+      writeJson(response, 400, { error: 'appointmentType must be valid' });
+      return;
+    }
+    appointment.appointmentType = appointmentType;
+  }
+
+  if (typeof payload.counselorName === 'string' && payload.counselorName.trim()) appointment.counselorName = sanitizeStr(payload.counselorName, 200) ?? appointment.counselorName;
+  if (typeof payload.locationName === 'string' && payload.locationName.trim()) appointment.locationName = sanitizeStr(payload.locationName, 200) ?? appointment.locationName;
+  if (typeof payload.remoteSession === 'boolean') appointment.remoteSession = payload.remoteSession;
+  if (typeof payload.timezone === 'string') {
+    const timezone = normalizeTimezone(payload.timezone);
+    if (!timezone) {
+      writeJson(response, 400, { error: 'timezone must be a valid IANA timezone identifier' });
+      return;
+    }
+    appointment.timezone = timezone;
+  }
+
+  if (typeof payload.startsAt === 'string') {
+    const startsAt = normalizeIsoDate(payload.startsAt);
+    if (!startsAt) {
+      writeJson(response, 400, { error: 'startsAt must be a valid ISO date' });
+      return;
+    }
+    appointment.startsAt = startsAt;
+  }
+
+  if (typeof payload.endsAt === 'string') {
+    const endsAt = normalizeIsoDate(payload.endsAt);
+    if (!endsAt) {
+      writeJson(response, 400, { error: 'endsAt must be a valid ISO date' });
+      return;
+    }
+    appointment.endsAt = endsAt;
+  }
+
+  const conflicts = detectAppointmentConflicts({
+    startsAt: appointment.startsAt,
+    endsAt: appointment.endsAt,
+    counselorName: appointment.counselorName,
+    locationName: appointment.locationName,
+    remoteSession: appointment.remoteSession,
+    excludeAppointmentId: appointment.id,
+  });
+  if (conflicts.length) {
+    writeJson(response, 409, {
+      error: 'Scheduling conflict detected',
+      conflicts,
+    });
+    return;
+  }
+
+  telemetry.recordMutation('appointment.update');
+  emitAudit(request, 'appointment.update', 'appointment', appointment.id);
+  writeJson(response, 200, { item: appointment });
+}
+
+async function handleAppointmentTypes(request, response) {
+  if (request.method !== 'GET') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  emitAudit(request, 'appointment.type.read', 'appointment_type', 'collection');
+  writeJson(response, 200, {
+    items: appointmentTypes.map((code) => ({
+      code,
+      label: code.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()),
+    })),
+  });
+}
+
+async function handleSchedulingCalendar(request, response, requestUrl) {
+  if (request.method !== 'GET') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const timezone = normalizeTimezone(requestUrl.searchParams.get('timezone') ?? practices[0]?.timezone ?? 'America/New_York');
+  if (!timezone) {
+    writeJson(response, 400, { error: 'timezone must be a valid IANA timezone identifier' });
+    return;
+  }
+
+  const day = sanitizeStr(requestUrl.searchParams.get('day') ?? '', 20) || dateKeyInTimezone(new Date().toISOString(), timezone);
+  const counselorFilter = sanitizeStr(requestUrl.searchParams.get('counselorName') ?? '', 200);
+  const locationFilter = sanitizeStr(requestUrl.searchParams.get('locationName') ?? '', 200);
+
+  const items = filterByTenant(appointments, request)
+    .filter((appointment) => dateKeyInTimezone(appointment.startsAt, timezone) === day)
+    .filter((appointment) => !counselorFilter || appointment.counselorName === counselorFilter)
+    .filter((appointment) => !locationFilter || appointment.locationName === locationFilter)
+    .sort((left, right) => left.startsAt.localeCompare(right.startsAt));
+
+  const counselorCalendars = Object.entries(groupBy(items, (item) => item.counselorName)).map(([counselorName, entries]) => ({
+    counselorName,
+    appointments: entries,
+  }));
+
+  const locationCalendars = Object.entries(groupBy(items, (item) => item.locationName)).map(([locationName, entries]) => ({
+    locationName,
+    appointments: entries,
+  }));
+
+  const availability = staffMembers.map((staff) => ({
+    staffId: staff.id,
+    counselorName: `${staff.firstName} ${staff.lastName}`,
+    template: availabilityTemplates[staff.id] ?? [],
+  }));
+
+  emitAudit(request, 'scheduling.calendar.read', 'appointment', 'collection');
+  writeJson(response, 200, {
+    timezone,
+    day,
+    counselorCalendars,
+    locationCalendars,
+    availability,
+  });
+}
+
+async function handleReminders(request, response, requestUrl) {
+  if (request.method === 'GET') {
+    const statusFilter = sanitizeStr(requestUrl.searchParams.get('status') ?? '', 30);
+    const appointmentIdFilter = sanitizeStr(requestUrl.searchParams.get('appointmentId') ?? '', 50);
+    let items = filterByTenant(reminderRecords, request);
+    if (statusFilter) items = items.filter((record) => record.status === statusFilter);
+    if (appointmentIdFilter) items = items.filter((record) => record.appointmentId === appointmentIdFilter);
+    emitAudit(request, 'reminder.read', 'reminder', 'collection');
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method === 'POST') {
+    const payload = await readJsonBody(request);
+    const appointmentId = sanitizeStr(payload.appointmentId, 50);
+    const appointment = appointments.find((item) => item.id === appointmentId);
+    if (!appointment) {
+      writeJson(response, 400, { error: 'Valid appointmentId is required' });
+      return;
+    }
+
+    if (enforceTenantScope(request, response, appointment.tenantId)) return;
+
+    const status = normalizeReminderStatus(payload.status ?? 'pending');
+    if (!status) {
+      writeJson(response, 400, { error: 'status must be valid' });
+      return;
+    }
+
+    const item = {
+      id: createId('rem', reminderRecords),
+      tenantId: appointment.tenantId,
+      appointmentId,
+      clientId: appointment.clientId,
+      reminderType: sanitizeStr(payload.reminderType, 80) ?? 'appointment',
+      deliveryChannel: sanitizeStr(payload.deliveryChannel, 40) ?? 'email',
+      reminderAt: normalizeIsoDate(payload.reminderAt) ?? appointment.startsAt,
+      status,
+      sentAt: status === 'sent' ? new Date().toISOString() : null,
+    };
+
+    reminderRecords.push(item);
+    telemetry.recordMutation('reminder.create');
+    emitAudit(request, 'reminder.create', 'reminder', item.id);
+    writeJson(response, 201, { item });
+    return;
+  }
+
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const reminderId = sanitizeStr(payload.reminderId, 50);
+  const item = reminderRecords.find((record) => record.id === reminderId);
+  if (!item) {
+    writeJson(response, 404, { error: 'Reminder not found' });
+    return;
+  }
+
+  if (enforceTenantScope(request, response, item.tenantId)) return;
+
+  if (typeof payload.status === 'string') {
+    const status = normalizeReminderStatus(payload.status);
+    if (!status) {
+      writeJson(response, 400, { error: 'status must be valid' });
+      return;
+    }
+    item.status = status;
+    item.sentAt = status === 'sent' ? new Date().toISOString() : null;
+  }
+  if (typeof payload.reminderAt === 'string') {
+    item.reminderAt = normalizeIsoDate(payload.reminderAt) ?? item.reminderAt;
+  }
+
+  telemetry.recordMutation('reminder.update');
+  emitAudit(request, 'reminder.update', 'reminder', item.id);
+  writeJson(response, 200, { item });
+}
+
+async function handleWaitlist(request, response) {
+  if (request.method === 'GET') {
+    const items = clients
+      .filter((client) => client.status === 'waitlist')
+      .map((client) => {
+        const lifecycle = clientLifecycles[client.id] ?? null;
+        const metadata = waitlistMetadataByClientId[client.id] ?? {
+          priorityRank: 99,
+          requestedService: 'General counseling',
+          preferredSessionType: 'either',
+          notes: '',
+          updatedAt: new Date().toISOString(),
+        };
+        return {
+          clientId: client.id,
+          clientName: `${client.firstName} ${client.lastName}`,
+          priorityRank: metadata.priorityRank,
+          requestedService: metadata.requestedService,
+          preferredSessionType: metadata.preferredSessionType,
+          notes: metadata.notes,
+          referralSource: lifecycle?.referralSource ?? '',
+          updatedAt: metadata.updatedAt,
+        };
+      })
+      .sort((left, right) => left.priorityRank - right.priorityRank);
+
+    emitAudit(request, 'waitlist.read', 'client', 'collection');
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const clientId = sanitizeStr(payload.clientId, 50);
+  const client = clients.find((item) => item.id === clientId && item.status === 'waitlist');
+  if (!client) {
+    writeJson(response, 404, { error: 'Waitlist client not found' });
+    return;
+  }
+
+  waitlistMetadataByClientId[clientId] = {
+    priorityRank: Number.isFinite(Number(payload.priorityRank)) ? Number(payload.priorityRank) : waitlistMetadataByClientId[clientId]?.priorityRank ?? 99,
+    requestedService: sanitizeStr(payload.requestedService, 160) ?? waitlistMetadataByClientId[clientId]?.requestedService ?? 'General counseling',
+    preferredSessionType: sanitizeStr(payload.preferredSessionType, 40) ?? waitlistMetadataByClientId[clientId]?.preferredSessionType ?? 'either',
+    notes: sanitizeStr(payload.notes, 500) ?? waitlistMetadataByClientId[clientId]?.notes ?? '',
+    updatedAt: new Date().toISOString(),
+  };
+
+  telemetry.recordMutation('waitlist.update');
+  emitAudit(request, 'waitlist.update', 'client', clientId);
+  writeJson(response, 200, {
+    item: {
+      clientId,
+      ...waitlistMetadataByClientId[clientId],
+    },
+  });
+}
+
+async function handleOperationsSummary(request, response, requestUrl) {
+  if (request.method !== 'GET') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const timezone = normalizeTimezone(requestUrl.searchParams.get('timezone') ?? practices[0]?.timezone ?? 'America/New_York');
+  if (!timezone) {
+    writeJson(response, 400, { error: 'timezone must be a valid IANA timezone identifier' });
+    return;
+  }
+
+  const summary = buildOperationsSummary(request, timezone);
+  emitAudit(request, 'operations.summary.read', 'system', 'operations-summary');
+  writeJson(response, 200, { summary });
+}
+
+async function handleServiceCodes(request, response) {
+  if (request.method === 'GET') {
+    emitAudit(request, 'billing.service_code.read', 'billing_service_code', 'collection');
+    writeJson(response, 200, { items: filterByTenant(serviceCodes, request) });
+    return;
+  }
+
+  if (request.method === 'POST') {
+    const payload = await readJsonBody(request);
+    const code = sanitizeStr(payload.code, 30);
+    const name = sanitizeStr(payload.name, 160);
+    if (!code || !name) {
+      writeJson(response, 400, { error: 'code and name are required' });
+      return;
+    }
+
+    const status = normalizeServiceCodeStatus(payload.status ?? 'active');
+    if (!status) {
+      writeJson(response, 400, { error: 'status must be valid' });
+      return;
+    }
+
+    const item = {
+      id: createId('svc', serviceCodes),
+      tenantId: callerTenant(request),
+      code,
+      name,
+      category: sanitizeStr(payload.category, 80) ?? 'therapy',
+      defaultDurationMinutes: Number.isFinite(Number(payload.defaultDurationMinutes)) ? Number(payload.defaultDurationMinutes) : 60,
+      status,
+    };
+
+    serviceCodes.push(item);
+    telemetry.recordMutation('billing.service_code.create');
+    emitAudit(request, 'billing.service_code.create', 'billing_service_code', item.id);
+    writeJson(response, 201, { item });
+    return;
+  }
+
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const serviceCodeId = sanitizeStr(payload.serviceCodeId, 50);
+  const item = serviceCodes.find((record) => record.id === serviceCodeId);
+  if (!item) {
+    writeJson(response, 404, { error: 'Service code not found' });
+    return;
+  }
+
+  if (enforceTenantScope(request, response, item.tenantId)) return;
+
+  if (typeof payload.code === 'string') item.code = sanitizeStr(payload.code, 30) ?? item.code;
+  if (typeof payload.name === 'string') item.name = sanitizeStr(payload.name, 160) ?? item.name;
+  if (typeof payload.category === 'string') item.category = sanitizeStr(payload.category, 80) ?? item.category;
+  if (payload.defaultDurationMinutes !== undefined) {
+    const duration = Number(payload.defaultDurationMinutes);
+    if (!Number.isFinite(duration) || duration < 15 || duration > 240) {
+      writeJson(response, 400, { error: 'defaultDurationMinutes must be between 15 and 240' });
+      return;
+    }
+    item.defaultDurationMinutes = duration;
+  }
+  if (typeof payload.status === 'string') {
+    const status = normalizeServiceCodeStatus(payload.status);
+    if (!status) {
+      writeJson(response, 400, { error: 'status must be valid' });
+      return;
+    }
+    item.status = status;
+  }
+
+  telemetry.recordMutation('billing.service_code.update');
+  emitAudit(request, 'billing.service_code.update', 'billing_service_code', item.id);
+  writeJson(response, 200, { item });
+}
+
+async function handleFeeSchedules(request, response) {
+  if (request.method === 'GET') {
+    emitAudit(request, 'billing.fee_schedule.read', 'billing_fee_schedule', 'collection');
+    writeJson(response, 200, { items: filterByTenant(feeSchedules, request) });
+    return;
+  }
+
+  if (request.method === 'POST') {
+    const payload = await readJsonBody(request);
+    const name = sanitizeStr(payload.name, 160);
+    if (!name) {
+      writeJson(response, 400, { error: 'name is required' });
+      return;
+    }
+
+    const lines = normalizeFeeScheduleLines(payload.lines);
+    if (!lines.length) {
+      writeJson(response, 400, { error: 'At least one fee schedule line is required' });
+      return;
+    }
+
+    const item = {
+      id: createId('fee', feeSchedules),
+      tenantId: callerTenant(request),
+      name,
+      status: normalizeServiceCodeStatus(payload.status ?? 'active') ?? 'active',
+      currency: sanitizeStr(payload.currency, 8) ?? 'USD',
+      lines,
+      updatedAt: new Date().toISOString(),
+    };
+
+    feeSchedules.push(item);
+    telemetry.recordMutation('billing.fee_schedule.create');
+    emitAudit(request, 'billing.fee_schedule.create', 'billing_fee_schedule', item.id);
+    writeJson(response, 201, { item });
+    return;
+  }
+
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const feeScheduleId = sanitizeStr(payload.feeScheduleId, 50);
+  const item = feeSchedules.find((record) => record.id === feeScheduleId);
+  if (!item) {
+    writeJson(response, 404, { error: 'Fee schedule not found' });
+    return;
+  }
+
+  if (enforceTenantScope(request, response, item.tenantId)) return;
+
+  if (typeof payload.name === 'string') item.name = sanitizeStr(payload.name, 160) ?? item.name;
+  if (typeof payload.status === 'string') {
+    const status = normalizeServiceCodeStatus(payload.status);
+    if (!status) {
+      writeJson(response, 400, { error: 'status must be valid' });
+      return;
+    }
+    item.status = status;
+  }
+  if (typeof payload.currency === 'string') item.currency = sanitizeStr(payload.currency, 8) ?? item.currency;
+  if (Array.isArray(payload.lines)) {
+    const lines = normalizeFeeScheduleLines(payload.lines);
+    if (!lines.length) {
+      writeJson(response, 400, { error: 'At least one valid fee schedule line is required' });
+      return;
+    }
+    item.lines = lines;
+  }
+  item.updatedAt = new Date().toISOString();
+
+  telemetry.recordMutation('billing.fee_schedule.update');
+  emitAudit(request, 'billing.fee_schedule.update', 'billing_fee_schedule', item.id);
+  writeJson(response, 200, { item });
+}
+
+async function handleInvoices(request, response, requestUrl) {
+  if (request.method === 'GET') {
+    const clientIdFilter = sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50);
+    const statusFilter = sanitizeStr(requestUrl.searchParams.get('status') ?? '', 30);
+    let items = filterByTenant(invoices, request);
+    if (clientIdFilter) items = items.filter((invoice) => invoice.clientId === clientIdFilter);
+    if (statusFilter) items = items.filter((invoice) => invoice.status === statusFilter);
+    emitAudit(request, 'billing.invoice.read', 'billing_invoice', 'collection');
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method === 'POST') {
+    const payload = await readJsonBody(request);
+    const clientId = sanitizeStr(payload.clientId, 50);
+    const client = clients.find((item) => item.id === clientId);
+    if (!client) {
+      writeJson(response, 400, { error: 'Valid clientId is required' });
+      return;
+    }
+
+    const lineItems = normalizeInvoiceLineItems(payload.lineItems, payload.feeScheduleId);
+    if (!lineItems.length) {
+      writeJson(response, 400, { error: 'At least one line item is required' });
+      return;
+    }
+
+    const status = normalizeInvoiceStatus(payload.status ?? 'issued');
+    if (!status) {
+      writeJson(response, 400, { error: 'status must be valid' });
+      return;
+    }
+
+    const totals = computeInvoiceTotals(lineItems, payload.adjustments, 0);
+    const item = {
+      id: createId('inv', invoices),
+      tenantId: callerTenant(request),
+      clientId,
+      appointmentId: sanitizeStr(payload.appointmentId, 50),
+      issuedAt: normalizeIsoDate(payload.issuedAt) ?? new Date().toISOString(),
+      dueAt: normalizeIsoDate(payload.dueAt) ?? new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+      status,
+      lineItems,
+      insurance: {
+        payerName: sanitizeStr(payload.insurance?.payerName, 160) ?? '',
+        policyNumber: sanitizeStr(payload.insurance?.policyNumber, 120) ?? '',
+        memberId: sanitizeStr(payload.insurance?.memberId, 120) ?? '',
+        groupNumber: sanitizeStr(payload.insurance?.groupNumber, 120) ?? '',
+      },
+      claimStatus: normalizeClaimStatus(payload.claimStatus ?? 'not_submitted') ?? 'not_submitted',
+      subtotal: totals.subtotal,
+      adjustments: totals.adjustments,
+      total: totals.total,
+      amountPaid: 0,
+      balance: totals.balance,
+      updatedAt: new Date().toISOString(),
+    };
+
+    invoices.push(item);
+    telemetry.recordMutation('billing.invoice.create');
+    emitAudit(request, 'billing.invoice.create', 'billing_invoice', item.id);
+    writeJson(response, 201, { item });
+    return;
+  }
+
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const invoiceId = sanitizeStr(payload.invoiceId, 50);
+  const item = invoices.find((invoice) => invoice.id === invoiceId);
+  if (!item) {
+    writeJson(response, 404, { error: 'Invoice not found' });
+    return;
+  }
+
+  if (enforceTenantScope(request, response, item.tenantId)) return;
+
+  if (typeof payload.status === 'string') {
+    const status = normalizeInvoiceStatus(payload.status);
+    if (!status) {
+      writeJson(response, 400, { error: 'status must be valid' });
+      return;
+    }
+    item.status = status;
+  }
+  if (typeof payload.dueAt === 'string') item.dueAt = normalizeIsoDate(payload.dueAt) ?? item.dueAt;
+  if (typeof payload.issuedAt === 'string') item.issuedAt = normalizeIsoDate(payload.issuedAt) ?? item.issuedAt;
+  if (Array.isArray(payload.lineItems)) {
+    const lines = normalizeInvoiceLineItems(payload.lineItems);
+    if (!lines.length) {
+      writeJson(response, 400, { error: 'At least one valid line item is required' });
+      return;
+    }
+    item.lineItems = lines;
+  }
+  if (payload.adjustments !== undefined) item.adjustments = normalizeCurrency(payload.adjustments);
+  if (payload.insurance && typeof payload.insurance === 'object') {
+    item.insurance = {
+      payerName: sanitizeStr(payload.insurance.payerName, 160) ?? item.insurance?.payerName ?? '',
+      policyNumber: sanitizeStr(payload.insurance.policyNumber, 120) ?? item.insurance?.policyNumber ?? '',
+      memberId: sanitizeStr(payload.insurance.memberId, 120) ?? item.insurance?.memberId ?? '',
+      groupNumber: sanitizeStr(payload.insurance.groupNumber, 120) ?? item.insurance?.groupNumber ?? '',
+    };
+  }
+  if (typeof payload.claimStatus === 'string') {
+    const claimStatus = normalizeClaimStatus(payload.claimStatus);
+    if (!claimStatus) {
+      writeJson(response, 400, { error: 'claimStatus must be valid' });
+      return;
+    }
+    item.claimStatus = claimStatus;
+  }
+
+  const totals = computeInvoiceTotals(item.lineItems, item.adjustments, item.amountPaid);
+  item.subtotal = totals.subtotal;
+  item.total = totals.total;
+  item.balance = totals.balance;
+  item.updatedAt = new Date().toISOString();
+
+  telemetry.recordMutation('billing.invoice.update');
+  emitAudit(request, 'billing.invoice.update', 'billing_invoice', item.id);
+  writeJson(response, 200, { item });
+}
+
+async function handlePayments(request, response, requestUrl) {
+  if (request.method === 'GET') {
+    const invoiceIdFilter = sanitizeStr(requestUrl.searchParams.get('invoiceId') ?? '', 50);
+    let items = filterByTenant(payments, request);
+    if (invoiceIdFilter) items = items.filter((payment) => payment.invoiceId === invoiceIdFilter);
+    emitAudit(request, 'billing.payment.read', 'billing_payment', 'collection');
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const invoiceId = sanitizeStr(payload.invoiceId, 50);
+  const invoice = invoices.find((item) => item.id === invoiceId);
+  if (!invoice) {
+    writeJson(response, 400, { error: 'Valid invoiceId is required' });
+    return;
+  }
+
+  if (enforceTenantScope(request, response, invoice.tenantId)) return;
+
+  const amount = normalizeCurrency(payload.amount);
+  if (amount <= 0) {
+    writeJson(response, 400, { error: 'amount must be a positive currency value' });
+    return;
+  }
+
+  const method = normalizePaymentMethod(payload.method ?? 'other');
+  if (!method) {
+    writeJson(response, 400, { error: 'method must be valid' });
+    return;
+  }
+
+  const payment = {
+    id: createId('pay', payments),
+    tenantId: invoice.tenantId,
+    invoiceId,
+    clientId: invoice.clientId,
+    amount,
+    method,
+    receivedAt: normalizeIsoDate(payload.receivedAt) ?? new Date().toISOString(),
+    reference: sanitizeStr(payload.reference, 120) ?? '',
+    notes: sanitizeStr(payload.notes, 500) ?? '',
+  };
+
+  payments.push(payment);
+  invoice.amountPaid = normalizeCurrency((invoice.amountPaid ?? 0) + amount);
+  const totals = computeInvoiceTotals(invoice.lineItems, invoice.adjustments, invoice.amountPaid);
+  invoice.subtotal = totals.subtotal;
+  invoice.total = totals.total;
+  invoice.balance = totals.balance;
+  if (invoice.balance <= 0) {
+    invoice.status = 'paid';
+  } else if (invoice.amountPaid > 0 && invoice.status !== 'void') {
+    invoice.status = 'partially_paid';
+  }
+  invoice.updatedAt = new Date().toISOString();
+
+  telemetry.recordMutation('billing.payment.create');
+  emitAudit(request, 'billing.payment.create', 'billing_payment', payment.id);
+  writeJson(response, 201, { item: payment, invoice });
+}
+
+async function handleSuperbills(request, response, requestUrl) {
+  if (request.method === 'GET') {
+    const clientIdFilter = sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50);
+    let items = filterByTenant(superbills, request);
+    if (clientIdFilter) items = items.filter((superbill) => superbill.clientId === clientIdFilter);
+    emitAudit(request, 'billing.superbill.read', 'billing_superbill', 'collection');
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const invoiceId = sanitizeStr(payload.invoiceId, 50);
+  const invoice = invoices.find((item) => item.id === invoiceId);
+  if (!invoice) {
+    writeJson(response, 400, { error: 'Valid invoiceId is required' });
+    return;
+  }
+
+  if (enforceTenantScope(request, response, invoice.tenantId)) return;
+
+  const item = {
+    id: createId('sb', superbills),
+    tenantId: invoice.tenantId,
+    invoiceId,
+    clientId: invoice.clientId,
+    generatedAt: new Date().toISOString(),
+    diagnosisCodes: Array.isArray(payload.diagnosisCodes)
+      ? payload.diagnosisCodes.map((code) => sanitizeStr(String(code), 30)).filter(Boolean)
+      : [],
+    serviceLines: invoice.lineItems.map((line) => ({
+      serviceCodeId: line.serviceCodeId,
+      code: line.code,
+      amount: line.quantity * line.unitAmount,
+      serviceDate: line.serviceDate,
+    })),
+  };
+
+  superbills.push(item);
+  telemetry.recordMutation('billing.superbill.create');
+  emitAudit(request, 'billing.superbill.create', 'billing_superbill', item.id);
+  writeJson(response, 201, { item });
+}
+
+async function handleClaimPlaceholders(request, response, requestUrl) {
+  if (request.method === 'GET') {
+    const statusFilter = sanitizeStr(requestUrl.searchParams.get('status') ?? '', 40);
+    let items = filterByTenant(claimPlaceholders, request);
+    if (statusFilter) items = items.filter((claim) => claim.status === statusFilter);
+    emitAudit(request, 'billing.claim.read', 'billing_claim', 'collection');
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method === 'POST') {
+    const payload = await readJsonBody(request);
+    const invoiceId = sanitizeStr(payload.invoiceId, 50);
+    const invoice = invoices.find((item) => item.id === invoiceId);
+    if (!invoice) {
+      writeJson(response, 400, { error: 'Valid invoiceId is required' });
+      return;
+    }
+
+    if (enforceTenantScope(request, response, invoice.tenantId)) return;
+
+    const status = normalizeClaimStatus(payload.status ?? 'queued');
+    if (!status) {
+      writeJson(response, 400, { error: 'status must be valid' });
+      return;
+    }
+
+    const item = {
+      id: createId('clm', claimPlaceholders),
+      tenantId: invoice.tenantId,
+      invoiceId,
+      status,
+      externalReference: sanitizeStr(payload.externalReference, 120) ?? '',
+      submittedAt: status === 'queued' || status === 'submitted' ? new Date().toISOString() : null,
+      updatedAt: new Date().toISOString(),
+      notes: sanitizeStr(payload.notes, 500) ?? '',
+    };
+
+    claimPlaceholders.push(item);
+    invoice.claimStatus = status;
+    invoice.updatedAt = new Date().toISOString();
+
+    telemetry.recordMutation('billing.claim.create');
+    emitAudit(request, 'billing.claim.create', 'billing_claim', item.id);
+    writeJson(response, 201, { item, invoice });
+    return;
+  }
+
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const claimId = sanitizeStr(payload.claimId, 50);
+  const item = claimPlaceholders.find((claim) => claim.id === claimId);
+  if (!item) {
+    writeJson(response, 404, { error: 'Claim placeholder not found' });
+    return;
+  }
+
+  if (enforceTenantScope(request, response, item.tenantId)) return;
+
+  if (typeof payload.status === 'string') {
+    const status = normalizeClaimStatus(payload.status);
+    if (!status) {
+      writeJson(response, 400, { error: 'status must be valid' });
+      return;
+    }
+    item.status = status;
+  }
+  if (typeof payload.externalReference === 'string') item.externalReference = sanitizeStr(payload.externalReference, 120) ?? item.externalReference;
+  if (typeof payload.notes === 'string') item.notes = sanitizeStr(payload.notes, 500) ?? item.notes;
+  item.updatedAt = new Date().toISOString();
+
+  const invoice = invoices.find((inv) => inv.id === item.invoiceId);
+  if (invoice) {
+    invoice.claimStatus = item.status;
+    invoice.updatedAt = new Date().toISOString();
+  }
+
+  telemetry.recordMutation('billing.claim.update');
+  emitAudit(request, 'billing.claim.update', 'billing_claim', item.id);
+  writeJson(response, 200, { item, invoice: invoice ?? null });
+}
+
+async function handleAgingReport(request, response, requestUrl) {
+  if (request.method !== 'GET') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const asOf = normalizeIsoDate(requestUrl.searchParams.get('asOf') ?? new Date().toISOString()) ?? new Date().toISOString();
+  const report = buildAgingReport(filterByTenant(invoices, request), asOf);
+  emitAudit(request, 'billing.report.aging.read', 'billing_report', 'aging');
+  writeJson(response, 200, { asOf, report });
+}
+
+async function handlePortalOverview(request, response, requestUrl) {
+  if (request.method !== 'GET') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const client = resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50));
+  if (!client) return;
+
+  const account = portalAccounts.find((item) => item.clientId === client.id && item.tenantId === client.tenantId) ?? null;
+  const forms = intakePackets.filter((item) => item.clientId === client.id && item.tenantId === client.tenantId);
+  const documents = documentAssignments
+    .filter((item) => item.tenantId === client.tenantId)
+    .filter((item) => item.assigneeType === 'client' && item.assigneeId === client.id)
+    .map((item) => ({
+      ...item,
+      templateTitle: documentTemplates.find((template) => template.id === item.templateId)?.title ?? 'Document',
+    }));
+  const balanceItems = invoices.filter((item) => item.clientId === client.id && item.tenantId === client.tenantId);
+  const resources = portalResources.filter((item) => item.tenantId === client.tenantId && item.clientId === client.id);
+  const messageThreads = portalMessageThreads
+    .filter((item) => item.tenantId === client.tenantId && item.clientId === client.id)
+    .map((thread) => ({
+      ...thread,
+      unreadForClient: 0,
+      messageCount: portalMessages.filter((message) => message.threadId === thread.id).length,
+    }));
+  const appointmentRequests = portalAppointmentRequests.filter((item) => item.tenantId === client.tenantId && item.clientId === client.id);
+
+  emitAudit(request, 'portal.overview.read', 'portal', client.id);
+  writeJson(response, 200, {
+    client: {
+      id: client.id,
+      firstName: client.firstName,
+      lastName: client.lastName,
+      status: client.status,
+    },
+    account,
+    forms,
+    documents,
+    balances: {
+      total: normalizeCurrency(balanceItems.reduce((sum, item) => sum + normalizeCurrency(item.total), 0)),
+      paid: normalizeCurrency(balanceItems.reduce((sum, item) => sum + normalizeCurrency(item.amountPaid), 0)),
+      outstanding: normalizeCurrency(balanceItems.reduce((sum, item) => sum + normalizeCurrency(item.balance), 0)),
+      items: balanceItems,
+    },
+    resources,
+    messageThreads,
+    appointmentRequests,
+  });
+}
+
+async function handlePortalAccounts(request, response, requestUrl) {
+  if (request.method === 'GET') {
+    const client = resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50));
+    if (!client) return;
+    const item = portalAccounts.find((account) => account.clientId === client.id && account.tenantId === client.tenantId) ?? null;
+    emitAudit(request, 'portal.account.read', 'portal_account', client.id);
+    writeJson(response, 200, { item });
+    return;
+  }
+
+  if (request.method !== 'POST' && request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (requirePracticeAdmin(request, response)) return;
+
+  const payload = await readJsonBody(request);
+  const clientId = sanitizeStr(payload.clientId, 50);
+  const client = clients.find((item) => item.id === clientId);
+  if (!client) {
+    writeJson(response, 400, { error: 'Valid clientId is required' });
+    return;
+  }
+  if (enforceTenantScope(request, response, client.tenantId)) return;
+
+  if (request.method === 'POST') {
+    if (portalAccounts.some((item) => item.clientId === client.id && item.tenantId === client.tenantId)) {
+      writeJson(response, 409, { error: 'Portal account already exists for client' });
+      return;
+    }
+
+    const status = normalizePortalAccountStatus(payload.status ?? 'invited');
+    if (!status) {
+      writeJson(response, 400, { error: 'status must be valid' });
+      return;
+    }
+
+    const item = {
+      id: createId('pa', portalAccounts),
+      tenantId: client.tenantId,
+      clientId: client.id,
+      status,
+      email: sanitizeStr(payload.email, 200) ?? '',
+      mfaEnabled: Boolean(payload.mfaEnabled),
+      lastLoginAt: null,
+      invitedAt: new Date().toISOString(),
+    };
+
+    portalAccounts.push(item);
+    telemetry.recordMutation('portal.account.create');
+    emitAudit(request, 'portal.account.create', 'portal_account', item.id);
+    writeJson(response, 201, { item });
+    return;
+  }
+
+  const accountId = sanitizeStr(payload.accountId, 50);
+  const item = portalAccounts.find((account) => account.id === accountId);
+  if (!item) {
+    writeJson(response, 404, { error: 'Portal account not found' });
+    return;
+  }
+  if (enforceTenantScope(request, response, item.tenantId)) return;
+
+  if (typeof payload.status === 'string') {
+    const status = normalizePortalAccountStatus(payload.status);
+    if (!status) {
+      writeJson(response, 400, { error: 'status must be valid' });
+      return;
+    }
+    item.status = status;
+  }
+  if (typeof payload.email === 'string') item.email = sanitizeStr(payload.email, 200) ?? item.email;
+  if (payload.mfaEnabled !== undefined) item.mfaEnabled = Boolean(payload.mfaEnabled);
+
+  telemetry.recordMutation('portal.account.update');
+  emitAudit(request, 'portal.account.update', 'portal_account', item.id);
+  writeJson(response, 200, { item });
+}
+
+async function handlePortalIntakePackets(request, response, requestUrl) {
+  const client = resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50));
+  if (!client) return;
+
+  if (request.method === 'GET') {
+    const items = intakePackets.filter((item) => item.tenantId === client.tenantId && item.clientId === client.id);
+    emitAudit(request, 'portal.intake.read', 'intake_packet', client.id);
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method !== 'POST' && request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const assignedForms = Array.isArray(payload.assignedForms)
+    ? payload.assignedForms.map((entry) => sanitizeStr(String(entry), 200)).filter(Boolean)
+    : [];
+
+  if (request.method === 'POST') {
+    const status = intakeStatuses.includes(payload.status) ? payload.status : 'in_progress';
+    const item = {
+      ...createIntakePacketRecord({
+        id: createId('ip', intakePackets),
+        tenantId: client.tenantId,
+        clientId: client.id,
+        status,
+        assignedForms,
+        submittedAt: status === 'completed' || status === 'reviewed' ? new Date().toISOString() : null,
+      }),
+    };
+    intakePackets.push(item);
+    telemetry.recordMutation('portal.intake.submit');
+    emitAudit(request, 'portal.intake.submit', 'intake_packet', item.id);
+    writeJson(response, 201, { item });
+    return;
+  }
+
+  const intakePacketId = sanitizeStr(payload.intakePacketId, 50);
+  const item = intakePackets.find((packet) => packet.id === intakePacketId);
+  if (!item) {
+    writeJson(response, 404, { error: 'Intake packet not found' });
+    return;
+  }
+  if (enforceTenantScope(request, response, item.tenantId)) return;
+  if (item.clientId !== client.id) {
+    writeJson(response, 403, { error: 'Access to this resource is not permitted' });
+    return;
+  }
+
+  if (typeof payload.status === 'string' && intakeStatuses.includes(payload.status)) {
+    item.status = payload.status;
+  }
+  if (assignedForms.length) item.assignedForms = assignedForms;
+  if (item.status === 'completed' || item.status === 'reviewed') {
+    item.submittedAt = new Date().toISOString();
+  }
+
+  telemetry.recordMutation('portal.intake.update');
+  emitAudit(request, 'portal.intake.update', 'intake_packet', item.id);
+  writeJson(response, 200, { item });
+}
+
+async function handlePortalDocuments(request, response, requestUrl) {
+  const client = resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50));
+  if (!client) return;
+
+  if (request.method === 'GET') {
+    const items = documentAssignments
+      .filter((item) => item.tenantId === client.tenantId)
+      .filter((item) => item.assigneeType === 'client' && item.assigneeId === client.id)
+      .map((item) => ({
+        ...item,
+        templateTitle: documentTemplates.find((template) => template.id === item.templateId)?.title ?? 'Document',
+      }));
+    emitAudit(request, 'portal.document.read', 'document_assignment', client.id);
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const assignmentId = sanitizeStr(payload.assignmentId, 50);
+  const item = documentAssignments.find((record) => record.id === assignmentId);
+  if (!item) {
+    writeJson(response, 404, { error: 'Document assignment not found' });
+    return;
+  }
+  if (enforceTenantScope(request, response, item.tenantId)) return;
+  if (item.assigneeType !== 'client' || item.assigneeId !== client.id) {
+    writeJson(response, 403, { error: 'Access to this resource is not permitted' });
+    return;
+  }
+
+  const nextStatus = normalizeDocumentAssignmentStatus(payload.status ?? 'signed');
+  if (!nextStatus) {
+    writeJson(response, 400, { error: 'status must be valid' });
+    return;
+  }
+
+  item.status = nextStatus;
+  if (nextStatus === 'signed' || nextStatus === 'completed') {
+    item.completedAt = new Date().toISOString();
+  }
+  item.accessHistory = [
+    ...(Array.isArray(item.accessHistory) ? item.accessHistory : []),
+    {
+      action: nextStatus === 'signed' ? 'signed' : 'completed',
+      at: new Date().toISOString(),
+      actorRole: callerRole(request) || 'client',
+    },
+  ];
+
+  telemetry.recordMutation('portal.document.update');
+  emitAudit(request, 'portal.document.update', 'document_assignment', item.id);
+  writeJson(response, 200, { item });
+}
+
+async function handlePortalAppointmentRequests(request, response, requestUrl) {
+  const client = resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50));
+  if (!client) return;
+
+  if (request.method === 'GET') {
+    const items = portalAppointmentRequests
+      .filter((item) => item.tenantId === client.tenantId && item.clientId === client.id)
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+    emitAudit(request, 'portal.appointment_request.read', 'portal_appointment_request', client.id);
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method !== 'POST' && request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  if (request.method === 'POST') {
+    const preferredStartAt = normalizeIsoDate(payload.preferredStartAt);
+    const preferredEndAt = normalizeIsoDate(payload.preferredEndAt);
+    if (!preferredStartAt || !preferredEndAt) {
+      writeJson(response, 400, { error: 'preferredStartAt and preferredEndAt must be valid ISO dates' });
+      return;
+    }
+
+    const status = normalizePortalAppointmentRequestStatus(payload.status ?? 'requested');
+    if (!status) {
+      writeJson(response, 400, { error: 'status must be valid' });
+      return;
+    }
+
+    const item = {
+      id: createId('par', portalAppointmentRequests),
+      tenantId: client.tenantId,
+      clientId: client.id,
+      preferredStartAt,
+      preferredEndAt,
+      mode: payload.mode === 'in_person' ? 'in_person' : 'remote',
+      status,
+      notes: sanitizeStr(payload.notes, 500) ?? '',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    portalAppointmentRequests.push(item);
+    telemetry.recordMutation('portal.appointment_request.create');
+    emitAudit(request, 'portal.appointment_request.create', 'portal_appointment_request', item.id);
+    writeJson(response, 201, { item });
+    return;
+  }
+
+  const requestId = sanitizeStr(payload.requestId, 50);
+  const item = portalAppointmentRequests.find((entry) => entry.id === requestId);
+  if (!item) {
+    writeJson(response, 404, { error: 'Appointment request not found' });
+    return;
+  }
+  if (enforceTenantScope(request, response, item.tenantId)) return;
+  if (item.clientId !== client.id && callerRole(request) === 'client') {
+    writeJson(response, 403, { error: 'Access to this resource is not permitted' });
+    return;
+  }
+
+  const status = normalizePortalAppointmentRequestStatus(payload.status);
+  if (!status) {
+    writeJson(response, 400, { error: 'status must be valid' });
+    return;
+  }
+
+  item.status = status;
+  item.updatedAt = new Date().toISOString();
+  if (typeof payload.notes === 'string') item.notes = sanitizeStr(payload.notes, 500) ?? item.notes;
+
+  telemetry.recordMutation('portal.appointment_request.update');
+  emitAudit(request, 'portal.appointment_request.update', 'portal_appointment_request', item.id);
+  writeJson(response, 200, { item });
+}
+
+async function handlePortalMessages(request, response, requestUrl) {
+  const client = resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50));
+  if (!client) return;
+
+  if (request.method === 'GET') {
+    const threadId = sanitizeStr(requestUrl.searchParams.get('threadId') ?? '', 50);
+    let threads = portalMessageThreads.filter((thread) => thread.tenantId === client.tenantId && thread.clientId === client.id);
+    if (threadId) {
+      threads = threads.filter((thread) => thread.id === threadId);
+    }
+    const items = threads.map((thread) => ({
+      ...thread,
+      messages: portalMessages
+        .filter((message) => message.threadId === thread.id)
+        .sort((left, right) => left.sentAt.localeCompare(right.sentAt)),
+    }));
+    emitAudit(request, 'portal.message.read', 'portal_message_thread', client.id);
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const body = sanitizeStr(payload.body, 2000);
+  if (!body) {
+    writeJson(response, 400, { error: 'body is required' });
+    return;
+  }
+
+  let thread;
+  const threadId = sanitizeStr(payload.threadId, 50);
+  if (threadId) {
+    thread = portalMessageThreads.find((item) => item.id === threadId);
+    if (!thread) {
+      writeJson(response, 404, { error: 'Message thread not found' });
+      return;
+    }
+    if (enforceTenantScope(request, response, thread.tenantId)) return;
+    if (thread.clientId !== client.id) {
+      writeJson(response, 403, { error: 'Access to this resource is not permitted' });
+      return;
+    }
+  } else {
+    const subject = sanitizeStr(payload.subject, 200);
+    if (!subject) {
+      writeJson(response, 400, { error: 'subject is required when creating a new thread' });
+      return;
+    }
+    thread = {
+      id: createId('pt', portalMessageThreads),
+      tenantId: client.tenantId,
+      clientId: client.id,
+      subject,
+      status: 'open',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    portalMessageThreads.push(thread);
+  }
+
+  const senderRole = callerRole(request) === 'client' ? 'client' : callerRole(request) || 'staff';
+  const message = {
+    id: createId('pm', portalMessages),
+    tenantId: client.tenantId,
+    threadId: thread.id,
+    clientId: client.id,
+    senderRole,
+    senderId: sanitizeStr(request.headers['x-actor-id'] || '', 120) ?? `${senderRole}-${client.id}`,
+    body,
+    sentAt: new Date().toISOString(),
+  };
+
+  portalMessages.push(message);
+  thread.updatedAt = message.sentAt;
+
+  telemetry.recordMutation('portal.message.create');
+  emitAudit(request, 'portal.message.create', 'portal_message_thread', thread.id);
+  writeJson(response, 201, { thread, message });
+}
+
+async function handlePortalResources(request, response, requestUrl) {
+  const client = resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50));
+  if (!client) return;
+
+  if (request.method === 'GET') {
+    const items = portalResources
+      .filter((item) => item.tenantId === client.tenantId && item.clientId === client.id)
+      .sort((left, right) => right.publishedAt.localeCompare(left.publishedAt));
+    emitAudit(request, 'portal.resource.read', 'portal_resource', client.id);
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (callerRole(request) === 'client') {
+    writeJson(response, 403, { error: 'Insufficient permissions' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const title = sanitizeStr(payload.title, 200);
+  const content = sanitizeStr(payload.content, 2000);
+  if (!title || !content) {
+    writeJson(response, 400, { error: 'title and content are required' });
+    return;
+  }
+
+  const resourceType = normalizePortalResourceType(payload.resourceType ?? 'education');
+  if (!resourceType) {
+    writeJson(response, 400, { error: 'resourceType must be valid' });
+    return;
+  }
+
+  const item = {
+    id: createId('pr', portalResources),
+    tenantId: client.tenantId,
+    clientId: client.id,
+    title,
+    resourceType,
+    content,
+    publishedAt: new Date().toISOString(),
+    publishedByRole: callerRole(request) || 'staff',
+  };
+
+  portalResources.push(item);
+  telemetry.recordMutation('portal.resource.create');
+  emitAudit(request, 'portal.resource.create', 'portal_resource', item.id);
+  writeJson(response, 201, { item });
+}
+
+async function handleFaithOverview(request, response, requestUrl) {
+  if (request.method !== 'GET') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (callerRole(request) === 'client') {
+    writeJson(response, 403, { error: 'Insufficient permissions' });
+    return;
+  }
+
+  const tenantId = callerTenant(request);
+  const practiceId = sanitizeStr(requestUrl.searchParams.get('practiceId') ?? '', 50);
+  const noteTemplates = christianNoteTemplates.filter((item) => item.tenantId === tenantId);
+  const treatmentGoals = faithTreatmentGoalTemplates.filter((item) => item.tenantId === tenantId);
+  const consentVariants = consentLanguageVariants.filter((item) => item.tenantId === tenantId);
+  const resources = faithResourceLibrary.filter((item) => item.tenantId === tenantId);
+  const inventories = spiritualFormationInventories.filter((item) => item.tenantId === tenantId);
+  const referralCoordinations = churchReferralCoordinations.filter((item) => item.tenantId === tenantId);
+  const languagePreference = (practiceId
+    ? faithLanguagePreferences.find((item) => item.tenantId === tenantId && item.practiceId === practiceId)
+    : faithLanguagePreferences.find((item) => item.tenantId === tenantId)) ?? null;
+
+  emitAudit(request, 'faith.overview.read', 'faith_workflow', practiceId || tenantId);
+  writeJson(response, 200, {
+    noteTemplates,
+    treatmentGoals,
+    consentVariants,
+    resources,
+    inventories,
+    referralCoordinations,
+    languagePreference,
+    summary: {
+      noteTemplates: noteTemplates.length,
+      treatmentGoals: treatmentGoals.length,
+      consentVariants: consentVariants.length,
+      resources: resources.length,
+      inventories: inventories.length,
+      referralCoordinations: referralCoordinations.length,
+    },
+  });
+}
+
+async function handleFaithNoteTemplates(request, response) {
+  if (request.method === 'GET') {
+    writeJson(response, 200, { items: filterByTenant(christianNoteTemplates, request) });
+    return;
+  }
+
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (callerRole(request) === 'client') {
+    writeJson(response, 403, { error: 'Insufficient permissions' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const name = sanitizeStr(payload.name, 200);
+  const focusArea = sanitizeStr(payload.focusArea, 120) ?? 'general';
+  const integrationLevel = normalizeFaithIntegrationLevel(payload.integrationLevel ?? 'balanced');
+  const sections = Array.isArray(payload.sections)
+    ? payload.sections.map((entry) => sanitizeStr(String(entry), 220)).filter(Boolean)
+    : [];
+
+  if (!name || !integrationLevel || !sections.length) {
+    writeJson(response, 400, { error: 'name, integrationLevel, and at least one section are required' });
+    return;
+  }
+
+  const item = {
+    id: createId('fnt', christianNoteTemplates),
+    tenantId: callerTenant(request),
+    name,
+    focusArea,
+    integrationLevel,
+    sections,
+    createdAt: new Date().toISOString(),
+  };
+
+  christianNoteTemplates.push(item);
+  telemetry.recordMutation('faith.note_template.create');
+  emitAudit(request, 'faith.note_template.create', 'faith_note_template', item.id);
+  writeJson(response, 201, { item });
+}
+
+async function handleFaithTreatmentGoals(request, response) {
+  if (request.method === 'GET') {
+    writeJson(response, 200, { items: filterByTenant(faithTreatmentGoalTemplates, request) });
+    return;
+  }
+
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (callerRole(request) === 'client') {
+    writeJson(response, 403, { error: 'Insufficient permissions' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const title = sanitizeStr(payload.title, 200);
+  const integrationLevel = normalizeFaithIntegrationLevel(payload.integrationLevel ?? 'balanced');
+  const scriptures = Array.isArray(payload.scriptures)
+    ? payload.scriptures.map((entry) => sanitizeStr(String(entry), 120)).filter(Boolean)
+    : [];
+  const milestones = Array.isArray(payload.milestones)
+    ? payload.milestones.map((entry) => sanitizeStr(String(entry), 220)).filter(Boolean)
+    : [];
+
+  if (!title || !integrationLevel || !milestones.length) {
+    writeJson(response, 400, { error: 'title, integrationLevel, and at least one milestone are required' });
+    return;
+  }
+
+  const item = {
+    id: createId('ftg', faithTreatmentGoalTemplates),
+    tenantId: callerTenant(request),
+    title,
+    integrationLevel,
+    scriptures,
+    milestones,
+    createdAt: new Date().toISOString(),
+  };
+
+  faithTreatmentGoalTemplates.push(item);
+  telemetry.recordMutation('faith.treatment_goal.create');
+  emitAudit(request, 'faith.treatment_goal.create', 'faith_treatment_goal', item.id);
+  writeJson(response, 201, { item });
+}
+
+async function handleFaithConsentVariants(request, response) {
+  if (request.method === 'GET') {
+    writeJson(response, 200, { items: filterByTenant(consentLanguageVariants, request) });
+    return;
+  }
+
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (callerRole(request) === 'client') {
+    writeJson(response, 403, { error: 'Insufficient permissions' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const title = sanitizeStr(payload.title, 200);
+  const body = sanitizeStr(payload.body, 3000);
+  const integrationLevel = normalizeFaithIntegrationLevel(payload.integrationLevel ?? 'balanced');
+  const audienceRaw = sanitizeStr(payload.audience, 20) ?? 'client';
+  const audience = ['client', 'staff', 'both'].includes(audienceRaw) ? audienceRaw : null;
+
+  if (!title || !body || !integrationLevel || !audience) {
+    writeJson(response, 400, { error: 'title, body, integrationLevel, and valid audience are required' });
+    return;
+  }
+
+  const item = {
+    id: createId('fcv', consentLanguageVariants),
+    tenantId: callerTenant(request),
+    title,
+    body,
+    audience,
+    integrationLevel,
+    createdAt: new Date().toISOString(),
+  };
+
+  consentLanguageVariants.push(item);
+  telemetry.recordMutation('faith.consent_variant.create');
+  emitAudit(request, 'faith.consent_variant.create', 'faith_consent_variant', item.id);
+  writeJson(response, 201, { item });
+}
+
+async function handleFaithResources(request, response) {
+  if (request.method === 'GET') {
+    writeJson(response, 200, { items: filterByTenant(faithResourceLibrary, request) });
+    return;
+  }
+
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (callerRole(request) === 'client') {
+    writeJson(response, 403, { error: 'Insufficient permissions' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const title = sanitizeStr(payload.title, 200);
+  const content = sanitizeStr(payload.content, 3000);
+  const scriptureReference = sanitizeStr(payload.scriptureReference, 120) ?? '';
+  const resourceType = normalizeFaithResourceType(payload.resourceType ?? 'devotional');
+  if (!title || !content || !resourceType) {
+    writeJson(response, 400, { error: 'title, content, and valid resourceType are required' });
+    return;
+  }
+
+  const item = {
+    id: createId('frl', faithResourceLibrary),
+    tenantId: callerTenant(request),
+    title,
+    resourceType,
+    scriptureReference,
+    content,
+    createdAt: new Date().toISOString(),
+  };
+
+  faithResourceLibrary.push(item);
+  telemetry.recordMutation('faith.resource.create');
+  emitAudit(request, 'faith.resource.create', 'faith_resource', item.id);
+  writeJson(response, 201, { item });
+}
+
+async function handleFaithInventories(request, response) {
+  if (request.method === 'GET') {
+    writeJson(response, 200, { items: filterByTenant(spiritualFormationInventories, request) });
+    return;
+  }
+
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (callerRole(request) === 'client') {
+    writeJson(response, 403, { error: 'Insufficient permissions' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const name = sanitizeStr(payload.name, 200);
+  const cadence = normalizeFaithInventoryCadence(payload.cadence ?? 'weekly');
+  const prompts = Array.isArray(payload.prompts)
+    ? payload.prompts.map((entry) => sanitizeStr(String(entry), 220)).filter(Boolean)
+    : [];
+
+  if (!name || !cadence || !prompts.length) {
+    writeJson(response, 400, { error: 'name, cadence, and at least one prompt are required' });
+    return;
+  }
+
+  const item = {
+    id: createId('sfi', spiritualFormationInventories),
+    tenantId: callerTenant(request),
+    name,
+    cadence,
+    prompts,
+    createdAt: new Date().toISOString(),
+  };
+
+  spiritualFormationInventories.push(item);
+  telemetry.recordMutation('faith.inventory.create');
+  emitAudit(request, 'faith.inventory.create', 'faith_inventory', item.id);
+  writeJson(response, 201, { item });
+}
+
+async function handleFaithReferralCoordination(request, response) {
+  if (request.method === 'GET') {
+    writeJson(response, 200, { items: filterByTenant(churchReferralCoordinations, request) });
+    return;
+  }
+
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (callerRole(request) === 'client') {
+    writeJson(response, 403, { error: 'Insufficient permissions' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const clientId = sanitizeStr(payload.clientId, 50);
+  const churchName = sanitizeStr(payload.churchName, 200);
+  const status = normalizeFaithCoordinationStatus(payload.status ?? 'proposed');
+  const client = clients.find((item) => item.id === clientId);
+
+  if (!client || !churchName || !status) {
+    writeJson(response, 400, { error: 'valid clientId, churchName, and status are required' });
+    return;
+  }
+  if (enforceTenantScope(request, response, client.tenantId)) return;
+
+  const item = {
+    id: createId('crc', churchReferralCoordinations),
+    tenantId: client.tenantId,
+    clientId: client.id,
+    churchName,
+    contactName: sanitizeStr(payload.contactName, 160) ?? '',
+    contactMethod: sanitizeStr(payload.contactMethod, 200) ?? '',
+    status,
+    consentToCoordinate: Boolean(payload.consentToCoordinate),
+    notes: sanitizeStr(payload.notes, 600) ?? '',
+    updatedAt: new Date().toISOString(),
+  };
+
+  churchReferralCoordinations.push(item);
+  telemetry.recordMutation('faith.referral_coordination.create');
+  emitAudit(request, 'faith.referral_coordination.create', 'faith_referral_coordination', item.id);
+  writeJson(response, 201, { item });
+}
+
+async function handleFaithLanguagePreferences(request, response, requestUrl) {
+  if (request.method === 'GET') {
+    const practiceId = sanitizeStr(requestUrl.searchParams.get('practiceId') ?? '', 50);
+    const items = filterByTenant(faithLanguagePreferences, request);
+    const item = practiceId ? items.find((entry) => entry.practiceId === practiceId) ?? null : items[0] ?? null;
+    writeJson(response, 200, { item, items });
+    return;
+  }
+
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (requirePracticeAdmin(request, response)) return;
+
+  const payload = await readJsonBody(request);
+  const practiceId = sanitizeStr(payload.practiceId, 50);
+  const practice = practices.find((item) => item.id === practiceId);
+  if (!practice) {
+    writeJson(response, 400, { error: 'Valid practiceId is required' });
+    return;
+  }
+  if (enforceTenantScope(request, response, practice.tenantId)) return;
+
+  const integrationLevel = normalizeFaithIntegrationLevel(payload.integrationLevel ?? 'balanced');
+  if (!integrationLevel) {
+    writeJson(response, 400, { error: 'integrationLevel must be valid' });
+    return;
+  }
+
+  const existing = faithLanguagePreferences.find((item) => item.practiceId === practice.id && item.tenantId === practice.tenantId);
+  const item = existing ?? {
+    id: createId('flp', faithLanguagePreferences),
+    tenantId: practice.tenantId,
+    practiceId: practice.id,
+  };
+
+  item.integrationLevel = integrationLevel;
+  item.explicitFaithLanguage = payload.explicitFaithLanguage !== false;
+  item.includePrayerLanguage = payload.includePrayerLanguage !== false;
+  item.includeScriptureReferences = payload.includeScriptureReferences !== false;
+  item.preferredTerminology = sanitizeStr(payload.preferredTerminology, 220) ?? '';
+  item.updatedAt = new Date().toISOString();
+
+  if (!existing) faithLanguagePreferences.push(item);
+
+  telemetry.recordMutation('faith.language_preference.upsert');
+  emitAudit(request, 'faith.language_preference.upsert', 'faith_language_preference', item.id);
+  writeJson(response, 200, { item });
+}
+
+async function handleReportingOverview(request, response, requestUrl) {
+  if (request.method !== 'GET') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (callerRole(request) === 'client') {
+    writeJson(response, 403, { error: 'Insufficient permissions' });
+    return;
+  }
+
+  const daysRaw = Number(requestUrl.searchParams.get('days') ?? 30);
+  const days = Number.isFinite(daysRaw) && daysRaw >= 7 && daysRaw <= 365 ? Math.floor(daysRaw) : 30;
+  const summary = buildReportingOverview(request, days);
+
+  emitAudit(request, 'reporting.overview.read', 'reporting_overview', String(days));
+  writeJson(response, 200, { summary });
+}
+
+async function handlePlatformOverview(request, response) {
+  if (request.method !== 'GET') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (requirePracticeAdmin(request, response)) return;
+
+  const summary = buildPlatformOverview(request);
+  emitAudit(request, 'platform.overview.read', 'platform_overview', callerTenant(request));
+  writeJson(response, 200, { summary });
+}
+
+async function handleTenantProvisioning(request, response) {
+  if (request.method === 'GET') {
+    if (requirePlatformAdmin(request, response)) return;
+    const items = tenantProvisioningRequests
+      .slice()
+      .sort((left, right) => right.requestedAt.localeCompare(left.requestedAt));
+    emitAudit(request, 'platform.tenant_provisioning.read', 'tenant_provisioning_request', 'collection');
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (requirePlatformAdmin(request, response)) return;
+
+  const payload = await readJsonBody(request);
+  const requestedTenantId = sanitizeStr(payload.requestedTenantId, 60);
+  const requestedPracticeName = sanitizeStr(payload.requestedPracticeName, 200);
+  const ownerEmail = sanitizeStr(payload.ownerEmail, 200);
+  const status = normalizePlatformProvisioningStatus(payload.status ?? 'queued');
+
+  if (!requestedTenantId || !requestedPracticeName || !ownerEmail || !status) {
+    writeJson(response, 400, { error: 'requestedTenantId, requestedPracticeName, ownerEmail, and valid status are required' });
+    return;
+  }
+
+  const item = {
+    id: createId('tpr', tenantProvisioningRequests),
+    tenantId: callerTenant(request),
+    requestedTenantId,
+    requestedPracticeName,
+    ownerEmail,
+    status,
+    requestedAt: new Date().toISOString(),
+    completedAt: status === 'completed' ? new Date().toISOString() : null,
+  };
+
+  tenantProvisioningRequests.push(item);
+  telemetry.recordMutation('platform.tenant_provisioning.create');
+  emitAudit(request, 'platform.tenant_provisioning.create', 'tenant_provisioning_request', item.id);
+  writeJson(response, 201, { item });
+}
+
+async function handleSupportImpersonationSessions(request, response) {
+  if (request.method === 'GET') {
+    if (requirePlatformAdmin(request, response)) return;
+    const items = supportImpersonationSessions
+      .slice()
+      .sort((left, right) => right.startedAt.localeCompare(left.startedAt));
+    emitAudit(request, 'platform.impersonation.read', 'support_impersonation_session', 'collection');
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method !== 'POST' && request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (requirePlatformAdmin(request, response)) return;
+
+  const payload = await readJsonBody(request);
+
+  if (request.method === 'POST') {
+    const targetTenantId = sanitizeStr(payload.targetTenantId, 60);
+    const targetRole = normalizeStaffRole(payload.targetRole ?? 'practice_admin');
+    const reason = sanitizeStr(payload.reason, 600);
+
+    if (!targetTenantId || !targetRole || !reason || reason.length < 10) {
+      writeJson(response, 400, { error: 'targetTenantId, targetRole, and a detailed reason are required' });
+      return;
+    }
+
+    const item = {
+      id: createId('sis', supportImpersonationSessions),
+      tenantId: callerTenant(request),
+      targetTenantId,
+      targetRole,
+      requestedBy: sanitizeStr(request.headers['x-actor-id'] || '', 120) ?? 'platform-admin',
+      reason,
+      status: 'active',
+      startedAt: new Date().toISOString(),
+      endedAt: null,
+    };
+
+    supportImpersonationSessions.push(item);
+    telemetry.recordMutation('platform.impersonation.start');
+    emitAudit(request, 'platform.impersonation.start', 'support_impersonation_session', item.id);
+    writeJson(response, 201, { item });
+    return;
+  }
+
+  const sessionId = sanitizeStr(payload.sessionId, 50);
+  const status = normalizePlatformImpersonationStatus(payload.status ?? 'ended');
+  const item = supportImpersonationSessions.find((entry) => entry.id === sessionId);
+
+  if (!item) {
+    writeJson(response, 404, { error: 'Impersonation session not found' });
+    return;
+  }
+  if (!status || status !== 'ended') {
+    writeJson(response, 400, { error: 'status must be ended' });
+    return;
+  }
+
+  item.status = 'ended';
+  item.endedAt = new Date().toISOString();
+
+  telemetry.recordMutation('platform.impersonation.end');
+  emitAudit(request, 'platform.impersonation.end', 'support_impersonation_session', item.id);
+  writeJson(response, 200, { item });
+}
+
+async function handleDataExportJobs(request, response) {
+  if (request.method === 'GET') {
+    const items = filterByTenant(dataExportJobs, request)
+      .slice()
+      .sort((left, right) => right.requestedAt.localeCompare(left.requestedAt));
+    emitAudit(request, 'platform.data_export.read', 'data_export_job', 'collection');
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (requirePracticeAdmin(request, response)) return;
+
+  const payload = await readJsonBody(request);
+  const exportType = normalizePlatformExportType(payload.exportType ?? 'clinical_records');
+  const status = normalizePlatformExportStatus(payload.status ?? 'queued');
+  const format = sanitizeStr(payload.format, 20) ?? 'json';
+
+  if (!exportType || !status) {
+    writeJson(response, 400, { error: 'exportType and status must be valid' });
+    return;
+  }
+
+  const item = {
+    id: createId('dex', dataExportJobs),
+    tenantId: callerTenant(request),
+    exportType,
+    status,
+    requestedByRole: callerRole(request) || 'unknown',
+    requestedAt: new Date().toISOString(),
+    completedAt: status === 'completed' ? new Date().toISOString() : null,
+    format,
+  };
+
+  dataExportJobs.push(item);
+  telemetry.recordMutation('platform.data_export.create');
+  emitAudit(request, 'platform.data_export.create', 'data_export_job', item.id);
+  writeJson(response, 201, { item });
+}
+
+async function handleRetentionPolicies(request, response) {
+  if (request.method === 'GET') {
+    const items = filterByTenant(retentionPolicies, request);
+    writeJson(response, 200, { item: items[0] ?? null, items });
+    return;
+  }
+
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (requirePracticeAdmin(request, response)) return;
+
+  const payload = await readJsonBody(request);
+  const clinicalRecordsSchedule = normalizeRetentionSchedule(payload.clinicalRecordsSchedule ?? '10_years');
+  const billingSchedule = normalizeRetentionSchedule(payload.billingSchedule ?? '7_years');
+  const auditLogSchedule = normalizeRetentionSchedule(payload.auditLogSchedule ?? 'indefinite');
+
+  if (!clinicalRecordsSchedule || !billingSchedule || !auditLogSchedule) {
+    writeJson(response, 400, { error: 'Retention schedules must be valid values' });
+    return;
+  }
+
+  const tenantId = callerTenant(request);
+  const existing = retentionPolicies.find((item) => item.tenantId === tenantId);
+  const item = existing ?? {
+    id: createId('rtp', retentionPolicies),
+    tenantId,
+  };
+
+  item.clinicalRecordsSchedule = clinicalRecordsSchedule;
+  item.billingSchedule = billingSchedule;
+  item.auditLogSchedule = auditLogSchedule;
+  item.includeDocumentVersions = payload.includeDocumentVersions !== false;
+  item.legalHoldEnabled = Boolean(payload.legalHoldEnabled);
+  item.updatedAt = new Date().toISOString();
+
+  if (!existing) retentionPolicies.push(item);
+
+  telemetry.recordMutation('platform.retention_policy.upsert');
+  emitAudit(request, 'platform.retention_policy.upsert', 'retention_policy', item.id);
+  writeJson(response, 200, { item });
+}
+
+async function handlePracticesCollection(request, response) {
+  if (request.method === 'GET') {
+    writeJson(response, 200, { items: filterByTenant(practices, request) });
+    return;
+  }
+
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (requirePracticeAdmin(request, response)) return;
+
+  const payload = await readJsonBody(request);
+  const name = sanitizeStr(payload.name);
+  if (!name) {
+    writeJson(response, 400, { error: 'name is required' });
+    return;
+  }
+
+  const type = normalizePracticeType(payload.type);
+  if (!type) {
+    writeJson(response, 400, { error: 'type must be valid' });
+    return;
+  }
+
+  const item = { ...createPracticeRecord({
+    id: createId('p', practices),
+    tenantId: callerTenant(request),
+    name,
+    type,
+    timezone: sanitizeStr(payload.timezone, 120) ?? 'America/New_York',
+    faithTradition: sanitizeStr(payload.faithTradition, 120) ?? 'Christian',
+    contactEmail: sanitizeStr(payload.contactEmail, 200) ?? '',
+    contactPhone: sanitizeStr(payload.contactPhone, 80) ?? '',
+  }) };
+
+  practices.push(item);
+  telemetry.recordMutation('practice.create');
+  emitAudit(request, 'practice.create', 'practice', item.id);
+  writeJson(response, 201, { item });
+}
+
+async function handlePracticeById(request, response, requestUrl) {
+  const practiceId = requestUrl.pathname.replace('/v1/practices/', '');
+  const item = practices.find((record) => record.id === practiceId);
+  if (!item) {
+    writeJson(response, 404, { error: 'Practice not found' });
+    return;
+  }
+
+  if (enforceTenantScope(request, response, item.tenantId)) return;
+
+  if (request.method === 'GET') {
+    emitAudit(request, 'practice.read', 'practice', item.id);
+    writeJson(response, 200, { item });
+    return;
+  }
+
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (requirePracticeAdmin(request, response)) return;
+
+  const payload = await readJsonBody(request);
+  const nextType = payload.type ? normalizePracticeType(payload.type) : item.type;
+  if (payload.type && !nextType) {
+    writeJson(response, 400, { error: 'type must be valid' });
+    return;
+  }
+
+  if (typeof payload.name === 'string') item.name = sanitizeStr(payload.name) ?? item.name;
+  if (typeof payload.timezone === 'string') item.timezone = sanitizeStr(payload.timezone, 120) ?? item.timezone;
+  if (typeof payload.faithTradition === 'string') item.faithTradition = sanitizeStr(payload.faithTradition, 120) ?? item.faithTradition;
+  if (typeof payload.contactEmail === 'string') item.contactEmail = sanitizeStr(payload.contactEmail, 200) ?? '';
+  if (typeof payload.contactPhone === 'string') item.contactPhone = sanitizeStr(payload.contactPhone, 80) ?? '';
+  item.type = nextType;
+
+  telemetry.recordMutation('practice.update');
+  emitAudit(request, 'practice.update', 'practice', item.id);
+  writeJson(response, 200, { item });
+}
+
+async function handleLocationsCollection(request, response) {
+  if (request.method === 'GET') {
+    writeJson(response, 200, { items: filterByTenant(locations, request) });
+    return;
+  }
+
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (requirePracticeAdmin(request, response)) return;
+
+  const payload = await readJsonBody(request);
+  const name = sanitizeStr(payload.name);
+  if (!name) {
+    writeJson(response, 400, { error: 'name is required' });
+    return;
+  }
+
+  const item = { ...createLocationRecord({
+    id: createId('l', locations),
+    tenantId: callerTenant(request),
+    practiceId: sanitizeStr(payload.practiceId, 50) || practices[0]?.id || 'p-001',
+    name,
+    address: sanitizeStr(payload.address, 240) ?? '',
+    capacity: Number.isFinite(Number(payload.capacity)) ? Number(payload.capacity) : 1,
+    remoteEnabled: Boolean(payload.remoteEnabled),
+  }) };
+
+  locations.push(item);
+  telemetry.recordMutation('location.create');
+  emitAudit(request, 'location.create', 'location', item.id);
+  writeJson(response, 201, { item });
+}
+
+async function handleLocationById(request, response, requestUrl) {
+  const locationId = requestUrl.pathname.replace('/v1/locations/', '');
+  const item = locations.find((record) => record.id === locationId);
+  if (!item) {
+    writeJson(response, 404, { error: 'Location not found' });
+    return;
+  }
+
+  if (enforceTenantScope(request, response, item.tenantId)) return;
+
+  if (request.method === 'GET') {
+    emitAudit(request, 'location.read', 'location', item.id);
+    writeJson(response, 200, { item });
+    return;
+  }
+
+  if (request.method === 'DELETE') {
+    if (requirePracticeAdmin(request, response)) return;
+    const index = locations.findIndex((record) => record.id === locationId);
+    locations.splice(index, 1);
+    telemetry.recordMutation('location.delete');
+    emitAudit(request, 'location.delete', 'location', locationId);
+    writeJson(response, 200, { deleted: true, id: locationId });
+    return;
+  }
+
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (requirePracticeAdmin(request, response)) return;
+
+  const payload = await readJsonBody(request);
+  if (typeof payload.name === 'string') item.name = sanitizeStr(payload.name) ?? item.name;
+  if (typeof payload.address === 'string') item.address = sanitizeStr(payload.address, 240) ?? '';
+  if (payload.capacity !== undefined) {
+    const capacity = Number(payload.capacity);
+    if (!Number.isFinite(capacity) || capacity < 1 || capacity > 1000) {
+      writeJson(response, 400, { error: 'capacity must be between 1 and 1000' });
+      return;
+    }
+    item.capacity = capacity;
+  }
+  if (typeof payload.remoteEnabled === 'boolean') item.remoteEnabled = payload.remoteEnabled;
+
+  telemetry.recordMutation('location.update');
+  emitAudit(request, 'location.update', 'location', item.id);
+  writeJson(response, 200, { item });
+}
+
+async function handleStaffCollection(request, response) {
+  if (request.method === 'GET') {
+    writeJson(response, 200, { items: filterByTenant(staffMembers, request) });
+    return;
+  }
+
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (requirePracticeAdmin(request, response)) return;
+
+  const payload = await readJsonBody(request);
+  const firstName = sanitizeStr(payload.firstName);
+  const lastName = sanitizeStr(payload.lastName);
+  const role = normalizeStaffRole(payload.role);
+  const licenseType = normalizeLicenseType(payload.licenseType ?? 'pastoral_counselor');
+  const supervisionStatus = normalizeSupervisionStatus(payload.supervisionStatus ?? 'not_required');
+  if (!firstName || !lastName) {
+    writeJson(response, 400, { error: 'firstName and lastName are required' });
+    return;
+  }
+  if (!role) {
+    writeJson(response, 400, { error: 'role must be valid' });
+    return;
+  }
+  if (!licenseType) {
+    writeJson(response, 400, { error: 'licenseType must be valid' });
+    return;
+  }
+  if (!supervisionStatus) {
+    writeJson(response, 400, { error: 'supervisionStatus must be valid' });
+    return;
+  }
+
+  const locationIds = Array.isArray(payload.locationIds)
+    ? payload.locationIds.map((value) => sanitizeStr(String(value), 50)).filter(Boolean)
+    : [];
+
+  const item = { ...createStaffRecord({
+    id: createId('s', staffMembers),
+    tenantId: callerTenant(request),
+    firstName,
+    lastName,
+    role,
+    licenseType,
+    licenseNumber: sanitizeStr(payload.licenseNumber, 80) ?? '',
+    supervisionStatus,
+    supervisingStaffId: sanitizeStr(payload.supervisingStaffId, 50),
+    locationIds,
+    bio: sanitizeStr(payload.bio, 500) ?? '',
+  }) };
+
+  staffMembers.push(item);
+  telemetry.recordMutation('staff.create');
+  emitAudit(request, 'staff.create', 'staff', item.id);
+  writeJson(response, 201, { item });
+}
+
+async function handleStaffById(request, response, requestUrl) {
+  const staffId = requestUrl.pathname.replace('/v1/staff/', '');
+  const item = staffMembers.find((record) => record.id === staffId);
+  if (!item) {
+    writeJson(response, 404, { error: 'Staff not found' });
+    return;
+  }
+
+  if (enforceTenantScope(request, response, item.tenantId)) return;
+
+  if (request.method === 'GET') {
+    emitAudit(request, 'staff.read', 'staff', item.id);
+    writeJson(response, 200, { item });
+    return;
+  }
+
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (requirePracticeAdmin(request, response)) return;
+
+  const payload = await readJsonBody(request);
+  if (typeof payload.firstName === 'string') item.firstName = sanitizeStr(payload.firstName) ?? item.firstName;
+  if (typeof payload.lastName === 'string') item.lastName = sanitizeStr(payload.lastName) ?? item.lastName;
+  if (typeof payload.role === 'string') {
+    const role = normalizeStaffRole(payload.role);
+    if (!role) {
+      writeJson(response, 400, { error: 'role must be valid' });
+      return;
+    }
+    item.role = role;
+  }
+  if (typeof payload.licenseType === 'string') {
+    const licenseType = normalizeLicenseType(payload.licenseType);
+    if (!licenseType) {
+      writeJson(response, 400, { error: 'licenseType must be valid' });
+      return;
+    }
+    item.licenseType = licenseType;
+  }
+  if (typeof payload.supervisionStatus === 'string') {
+    const supervisionStatus = normalizeSupervisionStatus(payload.supervisionStatus);
+    if (!supervisionStatus) {
+      writeJson(response, 400, { error: 'supervisionStatus must be valid' });
+      return;
+    }
+    item.supervisionStatus = supervisionStatus;
+  }
+
+  if (typeof payload.licenseNumber === 'string') item.licenseNumber = sanitizeStr(payload.licenseNumber, 80) ?? '';
+  if (typeof payload.supervisingStaffId === 'string') item.supervisingStaffId = sanitizeStr(payload.supervisingStaffId, 50);
+  if (typeof payload.bio === 'string') item.bio = sanitizeStr(payload.bio, 500) ?? '';
+  if (Array.isArray(payload.locationIds)) {
+    item.locationIds = payload.locationIds.map((value) => sanitizeStr(String(value), 50)).filter(Boolean);
+  }
+
+  telemetry.recordMutation('staff.update');
+  emitAudit(request, 'staff.update', 'staff', item.id);
+  writeJson(response, 200, { item });
+}
+
+async function handleStaffAvailability(request, response, requestUrl) {
+  const staffId = requestUrl.pathname.replace('/v1/staff/', '').replace('/availability', '');
+  const staff = staffMembers.find((record) => record.id === staffId);
+  if (!staff) {
+    writeJson(response, 404, { error: 'Staff not found' });
+    return;
+  }
+
+  if (enforceTenantScope(request, response, staff.tenantId)) return;
+
+  if (request.method === 'GET') {
+    emitAudit(request, 'staff.availability.read', 'staff', staffId);
+    writeJson(response, 200, { staffId, template: availabilityTemplates[staffId] ?? [] });
+    return;
+  }
+
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (requirePracticeAdmin(request, response)) return;
+
+  const payload = await readJsonBody(request);
+  const template = Array.isArray(payload.template) ? payload.template : [];
+  const normalizedTemplate = template
+    .map((entry) => ({
+      day: sanitizeStr(entry.day, 20)?.toLowerCase(),
+      start: sanitizeStr(entry.start, 10),
+      end: sanitizeStr(entry.end, 10),
+    }))
+    .filter((entry) => entry.day && entry.start && entry.end);
+
+  availabilityTemplates[staffId] = normalizedTemplate;
+  telemetry.recordMutation('staff.availability.save');
+  emitAudit(request, 'staff.availability.update', 'staff', staffId);
+  writeJson(response, 200, { staffId, template: normalizedTemplate });
+}
+
+async function handleLocales(request, response) {
+  if (request.method === 'GET') {
+    writeJson(response, 200, { items: i18nStore.listLocales() });
+    return;
+  }
+
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const locale = (payload.locale ?? '').trim().toLowerCase();
+  const label = (payload.label ?? '').trim();
+  if (!locale) {
+    writeJson(response, 400, { error: 'locale is required' });
+    return;
+  }
+
+  const catalog = await i18nStore.ensureLocale(locale, label);
+  telemetry.recordMutation('i18n.locale.create');
+  writeJson(response, 201, catalog);
+}
+
+async function handleCatalogByLocale(request, response, requestUrl) {
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const locale = requestUrl.pathname.replace('/v1/i18n/catalog/', '');
+  const payload = await readJsonBody(request);
+  const catalog = await i18nStore.saveCatalog(locale, payload.messages ?? {});
+  telemetry.recordMutation('i18n.catalog.save');
+  writeJson(response, 200, catalog);
+}
+
+async function handleAutoTranslate(request, response) {
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const locale = (payload.locale ?? '').trim().toLowerCase();
+  if (!locale) {
+    writeJson(response, 400, { error: 'locale is required' });
+    return;
+  }
+
+  const catalog = await i18nStore.autoTranslate(locale, translateMessages);
+  telemetry.recordMutation('i18n.catalog.auto_translate');
+  writeJson(response, 200, catalog);
+}
+
+async function handleTranslationSettingsByLocale(request, response, requestUrl) {
+  const locale = requestUrl.pathname.replace('/v1/i18n/settings/', '').trim().toLowerCase();
+  if (!locale) {
+    writeJson(response, 400, { error: 'locale is required' });
+    return;
+  }
+
+  if (request.method === 'GET') {
+    writeJson(response, 200, {
+      locale,
+      settings: i18nStore.getSettings(locale),
+    });
+    return;
+  }
+
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const settings = await i18nStore.saveSettings(locale, payload.settings ?? {});
+  telemetry.recordMutation('i18n.settings.save');
+  writeJson(response, 200, {
+    locale,
+    settings,
+  });
+}
+
+async function handleFrontendVitals(request, response) {
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  if (!payload.name || typeof payload.value !== 'number') {
+    writeJson(response, 400, { error: 'name and value are required' });
+    return;
+  }
+
+  telemetry.recordBrowserVital(payload);
+  writeJson(response, 202, { accepted: true });
+}
+
+function atToday(hours, minutes) {
+  const now = new Date();
+  const date = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes, 0, 0);
+  return date.toISOString();
+}
+
+function createId(prefix, collection) {
+  const maxNumeric = collection.reduce((max, item) => {
+    const numeric = Number(item.id.replace(`${prefix}-`, ''));
+    return Number.isNaN(numeric) ? max : Math.max(max, numeric);
+  }, 0);
+  return `${prefix}-${String(maxNumeric + 1).padStart(3, '0')}`;
+}
+
+function normalizeIsoDate(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function normalizeTimezone(value) {
+  if (typeof value !== 'string') return null;
+  const candidate = value.trim();
+  if (!candidate) return null;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: candidate }).format(new Date());
+    return candidate;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeClientStatus(value) {
+  return clientStatuses.includes(value) ? value : null;
+}
+
+function normalizeAppointmentStatus(value) {
+  const normalized = value === 'canceled' ? 'cancelled' : value;
+  return appointmentStatuses.includes(normalized) ? normalized : null;
+}
+
+function normalizeAppointmentType(value) {
+  return appointmentTypes.includes(value) ? value : null;
+}
+
+function normalizeConsentType(value) {
+  return consentTypes.includes(value) ? value : null;
+}
+
+function normalizeConsentState(value) {
+  return consentStates.includes(value) ? value : null;
+}
+
+function normalizeIntakeStatus(value) {
+  return intakeStatuses.includes(value) ? value : null;
+}
+
+function normalizeCaseStatus(value) {
+  return caseStatuses.includes(value) ? value : null;
+}
+
+function normalizeTreatmentPlanStatus(value) {
+  return treatmentPlanStatuses.includes(value) ? value : null;
+}
+
+function normalizeProgressNoteType(value) {
+  return progressNoteTypes.includes(value) ? value : null;
+}
+
+function normalizeDocumentTemplateType(value) {
+  return documentTemplateTypes.includes(value) ? value : null;
+}
+
+function normalizeDocumentAudienceType(value) {
+  return documentAudienceTypes.includes(value) ? value : null;
+}
+
+function normalizeDocumentAssignmentStatus(value) {
+  return documentAssignmentStatuses.includes(value) ? value : null;
+}
+
+function normalizeInventoryCategory(value) {
+  return inventoryCategories.includes(value) ? value : null;
+}
+
+function normalizeInventoryScoringMethod(value) {
+  return inventoryScoringMethods.includes(value) ? value : null;
+}
+
+function normalizeInventoryAssignmentStatus(value) {
+  return inventoryAssignmentStatuses.includes(value) ? value : null;
+}
+
+function normalizePracticeType(value) {
+  return practiceTypes.includes(value) ? value : null;
+}
+
+function normalizeLicenseType(value) {
+  return licenseTypes.includes(value) ? value : null;
+}
+
+function normalizeSupervisionStatus(value) {
+  return supervisionStatuses.includes(value) ? value : null;
+}
+
+function normalizeStaffRole(value) {
+  return staffRoles.includes(value) ? value : null;
+}
+
+function normalizeReminderStatus(value) {
+  return reminderStatuses.includes(value) ? value : null;
+}
+
+function normalizeServiceCodeStatus(value) {
+  return serviceCodeStatuses.includes(value) ? value : null;
+}
+
+function normalizeInvoiceStatus(value) {
+  return invoiceStatuses.includes(value) ? value : null;
+}
+
+function normalizePaymentMethod(value) {
+  return paymentMethods.includes(value) ? value : null;
+}
+
+function normalizeClaimStatus(value) {
+  return claimStatuses.includes(value) ? value : null;
+}
+
+function normalizePortalAccountStatus(value) {
+  return portalAccountStatuses.includes(value) ? value : null;
+}
+
+function normalizePortalMessageThreadStatus(value) {
+  return portalMessageThreadStatuses.includes(value) ? value : null;
+}
+
+function normalizePortalAppointmentRequestStatus(value) {
+  return portalAppointmentRequestStatuses.includes(value) ? value : null;
+}
+
+function normalizePortalResourceType(value) {
+  return portalResourceTypes.includes(value) ? value : null;
+}
+
+function normalizeFaithIntegrationLevel(value) {
+  return faithIntegrationLevels.includes(value) ? value : null;
+}
+
+function normalizeFaithResourceType(value) {
+  return faithResourceTypes.includes(value) ? value : null;
+}
+
+function normalizeFaithCoordinationStatus(value) {
+  return faithCoordinationStatuses.includes(value) ? value : null;
+}
+
+function normalizeFaithInventoryCadence(value) {
+  return faithInventoryCadences.includes(value) ? value : null;
+}
+
+function normalizePlatformProvisioningStatus(value) {
+  return platformProvisioningStatuses.includes(value) ? value : null;
+}
+
+function normalizePlatformImpersonationStatus(value) {
+  return platformImpersonationStatuses.includes(value) ? value : null;
+}
+
+function normalizePlatformExportType(value) {
+  return platformExportTypes.includes(value) ? value : null;
+}
+
+function normalizePlatformExportStatus(value) {
+  return platformExportStatuses.includes(value) ? value : null;
+}
+
+function normalizeRetentionSchedule(value) {
+  return retentionSchedules.includes(value) ? value : null;
+}
+
+function normalizeCurrency(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 0;
+  return Number(number.toFixed(2));
+}
+
+function normalizeFeeScheduleLines(lines) {
+  return (Array.isArray(lines) ? lines : [])
+    .map((line) => ({
+      serviceCodeId: sanitizeStr(line.serviceCodeId, 50),
+      amount: normalizeCurrency(line.amount),
+    }))
+    .filter((line) => line.serviceCodeId && line.amount > 0);
+}
+
+function normalizeInvoiceLineItems(rawLineItems, feeScheduleId = null) {
+  const directLines = (Array.isArray(rawLineItems) ? rawLineItems : [])
+    .map((line) => {
+      const serviceCode = serviceCodes.find((item) => item.id === sanitizeStr(line.serviceCodeId, 50));
+      const quantity = Number.isFinite(Number(line.quantity)) ? Number(line.quantity) : 1;
+      const unitAmount = normalizeCurrency(line.unitAmount);
+      return {
+        serviceCodeId: sanitizeStr(line.serviceCodeId, 50),
+        code: sanitizeStr(line.code, 30) ?? serviceCode?.code ?? '',
+        description: sanitizeStr(line.description, 240) ?? serviceCode?.name ?? 'Session',
+        quantity,
+        unitAmount,
+        serviceDate: normalizeIsoDate(line.serviceDate) ?? new Date().toISOString(),
+      };
+    })
+    .filter((line) => line.serviceCodeId && line.quantity > 0 && line.unitAmount > 0);
+
+  if (directLines.length) return directLines;
+  if (!feeScheduleId) return [];
+
+  const schedule = feeSchedules.find((item) => item.id === feeScheduleId);
+  if (!schedule) return [];
+  return schedule.lines
+    .map((line) => {
+      const serviceCode = serviceCodes.find((item) => item.id === line.serviceCodeId);
+      return {
+        serviceCodeId: line.serviceCodeId,
+        code: serviceCode?.code ?? '',
+        description: serviceCode?.name ?? 'Session',
+        quantity: 1,
+        unitAmount: normalizeCurrency(line.amount),
+        serviceDate: new Date().toISOString(),
+      };
+    })
+    .filter((line) => line.serviceCodeId && line.unitAmount > 0);
+}
+
+function computeInvoiceTotals(lineItems, adjustmentsInput, amountPaidInput) {
+  const subtotal = normalizeCurrency((lineItems ?? []).reduce((sum, line) => sum + normalizeCurrency(line.quantity * line.unitAmount), 0));
+  const adjustments = normalizeCurrency(adjustmentsInput);
+  const total = normalizeCurrency(Math.max(subtotal + adjustments, 0));
+  const amountPaid = normalizeCurrency(amountPaidInput);
+  const balance = normalizeCurrency(Math.max(total - amountPaid, 0));
+  return { subtotal, adjustments, total, amountPaid, balance };
+}
+
+function buildAgingReport(invoiceRecords, asOfIso) {
+  const asOf = new Date(asOfIso).getTime();
+  const agingBuckets = {
+    current: 0,
+    days1to30: 0,
+    days31to60: 0,
+    days61to90: 0,
+    over90: 0,
+  };
+
+  const byClient = {};
+  let totalOutstanding = 0;
+
+  invoiceRecords
+    .filter((invoice) => normalizeCurrency(invoice.balance) > 0)
+    .forEach((invoice) => {
+      const balance = normalizeCurrency(invoice.balance);
+      totalOutstanding += balance;
+      const dueAt = new Date(invoice.dueAt).getTime();
+      const daysPastDue = Number.isFinite(dueAt) ? Math.floor((asOf - dueAt) / (24 * 60 * 60 * 1000)) : 0;
+
+      if (daysPastDue <= 0) agingBuckets.current += balance;
+      else if (daysPastDue <= 30) agingBuckets.days1to30 += balance;
+      else if (daysPastDue <= 60) agingBuckets.days31to60 += balance;
+      else if (daysPastDue <= 90) agingBuckets.days61to90 += balance;
+      else agingBuckets.over90 += balance;
+
+      const client = clients.find((item) => item.id === invoice.clientId);
+      const clientKey = invoice.clientId;
+      if (!byClient[clientKey]) {
+        byClient[clientKey] = {
+          clientId: invoice.clientId,
+          clientName: client ? `${client.firstName} ${client.lastName}` : invoice.clientId,
+          outstanding: 0,
+          invoiceCount: 0,
+        };
+      }
+      byClient[clientKey].outstanding = normalizeCurrency(byClient[clientKey].outstanding + balance);
+      byClient[clientKey].invoiceCount += 1;
+    });
+
+  return {
+    totals: {
+      outstanding: normalizeCurrency(totalOutstanding),
+      ...Object.fromEntries(Object.entries(agingBuckets).map(([key, value]) => [key, normalizeCurrency(value)])),
+    },
+    clients: Object.values(byClient).sort((left, right) => right.outstanding - left.outstanding),
+  };
+}
+
+function computeInventoryScore(scoringMethod, responses) {
+  const values = (responses ?? []).map((entry) => Number(entry.value)).filter((value) => Number.isFinite(value));
+  if (!values.length) return null;
+  const total = values.reduce((sum, value) => sum + value, 0);
+  if (scoringMethod === 'average') {
+    return Number((total / values.length).toFixed(2));
+  }
+  return total;
+}
+
+function detectAppointmentConflicts({ startsAt, endsAt, counselorName, locationName, remoteSession, excludeAppointmentId = null }) {
+  const targetStart = new Date(startsAt).getTime();
+  const targetEnd = new Date(endsAt).getTime();
+  if (!Number.isFinite(targetStart) || !Number.isFinite(targetEnd) || targetEnd <= targetStart) {
+    return [{ type: 'invalid_time_range', message: 'endsAt must be later than startsAt' }];
+  }
+
+  const safeCounselor = (counselorName ?? '').trim().toLowerCase();
+  const safeLocation = (locationName ?? '').trim().toLowerCase();
+
+  return appointments
+    .filter((item) => item.id !== excludeAppointmentId)
+    .filter((item) => item.status !== 'cancelled' && item.status !== 'no_show')
+    .filter((item) => {
+      const existingStart = new Date(item.startsAt).getTime();
+      const existingEnd = new Date(item.endsAt).getTime();
+      return targetStart < existingEnd && targetEnd > existingStart;
+    })
+    .flatMap((item) => {
+      const conflicts = [];
+      if (safeCounselor && (item.counselorName ?? '').trim().toLowerCase() === safeCounselor) {
+        conflicts.push({
+          type: 'counselor_overlap',
+          appointmentId: item.id,
+          counselorName: item.counselorName,
+          startsAt: item.startsAt,
+          endsAt: item.endsAt,
+          message: `Counselor ${item.counselorName} already has an overlapping session`,
+        });
+      }
+
+      const existingLocation = (item.locationName ?? '').trim().toLowerCase();
+      if (!remoteSession && !item.remoteSession && safeLocation && existingLocation === safeLocation) {
+        conflicts.push({
+          type: 'location_overlap',
+          appointmentId: item.id,
+          locationName: item.locationName,
+          startsAt: item.startsAt,
+          endsAt: item.endsAt,
+          message: `Location ${item.locationName} is already booked for this time`,
+        });
+      }
+
+      return conflicts;
+    });
+}
+
+function dateKeyInTimezone(isoTimestamp, timezone) {
+  const date = new Date(isoTimestamp);
+  if (Number.isNaN(date.getTime())) return '';
+
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+
+  return formatter.format(date);
+}
+
+function groupBy(items, keyBuilder) {
+  return items.reduce((result, item) => {
+    const key = keyBuilder(item) ?? '';
+    if (!result[key]) result[key] = [];
+    result[key].push(item);
+    return result;
+  }, {});
+}
+
+function buildOperationsSummary(request, timezone) {
+  const todayKey = dateKeyInTimezone(new Date().toISOString(), timezone);
+  const tenantAppointments = filterByTenant(appointments, request);
+  const todayAppointments = tenantAppointments
+    .filter((item) => dateKeyInTimezone(item.startsAt, timezone) === todayKey)
+    .sort((left, right) => left.startsAt.localeCompare(right.startsAt));
+
+  const now = Date.now();
+  const fourteenDaysFromNow = now + 14 * 24 * 60 * 60 * 1000;
+  const tenantConsents = filterByTenant(consentRecords, request);
+  const expiringConsents = tenantConsents.filter((consent) => {
+    if (!consent.effectiveTo) return false;
+    const expiresAt = new Date(consent.effectiveTo).getTime();
+    return Number.isFinite(expiresAt) && expiresAt >= now && expiresAt <= fourteenDaysFromNow;
+  });
+
+  const incompleteNotes = todayAppointments.filter((appointment) => {
+    if (appointment.status !== 'completed' && appointment.status !== 'checked_in') return false;
+    const notesForClient = progressNotes.filter((note) => note.clientId === appointment.clientId);
+    return !notesForClient.some((note) => note.locked);
+  });
+
+  const unsignedDocuments = filterByTenant(documentAssignments, request).filter((item) => item.requiresSignature && item.status !== 'signed');
+  const intakeBacklog = filterByTenant(intakePackets, request).filter((packet) => packet.status === 'assigned' || packet.status === 'in_progress');
+  const waitlistItems = clients.filter((client) => client.status === 'waitlist');
+  const pendingReminders = filterByTenant(reminderRecords, request).filter((record) => record.status === 'pending');
+
+  const priorityItems = [
+    {
+      title: 'Waitlist follow-ups',
+      detail: `${waitlistItems.length} clients currently in intake waitlist stage.`,
+    },
+    {
+      title: 'Incomplete session notes',
+      detail: `${incompleteNotes.length} sessions today need locked progress notes.`,
+    },
+    {
+      title: 'Pending reminders',
+      detail: `${pendingReminders.length} reminder messages still pending delivery.`,
+    },
+  ];
+
+  const complianceItems = [
+    {
+      title: 'Unsigned document assignments',
+      detail: `${unsignedDocuments.length} client documents still require signature.`,
+    },
+    {
+      title: 'Expiring consents (14 days)',
+      detail: `${expiringConsents.length} consent records expire within 14 days.`,
+    },
+    {
+      title: 'Intake bottlenecks',
+      detail: `${intakeBacklog.length} intake packets are still assigned or in progress.`,
+    },
+  ];
+
+  return {
+    timezone,
+    generatedAt: new Date().toISOString(),
+    todaySchedule: {
+      total: todayAppointments.length,
+      items: todayAppointments,
+    },
+    counts: {
+      incompleteNotes: incompleteNotes.length,
+      unsignedDocuments: unsignedDocuments.length,
+      expiringConsents: expiringConsents.length,
+      intakeBottlenecks: intakeBacklog.length,
+      waitlist: waitlistItems.length,
+      pendingReminders: pendingReminders.length,
+    },
+    priorityItems,
+    complianceItems,
+  };
+}
+
+function buildReportingOverview(request, days) {
+  const tenantAppointments = filterByTenant(appointments, request);
+  const tenantInvoices = filterByTenant(invoices, request);
+  const tenantAssignments = filterByTenant(documentAssignments, request);
+  const tenantInventories = filterByTenant(inventoryAssignments, request);
+  const tenantLifecycles = Object.values(clientLifecycles).filter((item) => {
+    if (callerRole(request) === 'platform_admin') return true;
+    return item.tenantId === callerTenant(request);
+  });
+
+  const windowStart = Date.now() - days * 24 * 60 * 60 * 1000;
+  const inWindowAppointments = tenantAppointments.filter((item) => new Date(item.startsAt).getTime() >= windowStart);
+  const completedAppointments = inWindowAppointments.filter((item) => item.status === 'completed');
+  const remoteCompleted = completedAppointments.filter((item) => item.remoteSession);
+
+  const counselorBuckets = Object.values(groupBy(completedAppointments, (item) => item.counselorName || 'Unassigned'))
+    .map((entries) => ({
+      counselorName: entries[0]?.counselorName || 'Unassigned',
+      sessionsCompleted: entries.length,
+      remoteSessions: entries.filter((item) => item.remoteSession).length,
+    }))
+    .sort((left, right) => right.sessionsCompleted - left.sessionsCompleted);
+
+  const referralBuckets = Object.entries(
+    tenantLifecycles.reduce((result, lifecycle) => {
+      const key = lifecycle.referralSource || 'Unspecified';
+      result[key] = (result[key] ?? 0) + 1;
+      return result;
+    }, {}),
+  )
+    .map(([referralSource, count]) => ({ referralSource, count }))
+    .sort((left, right) => right.count - left.count);
+
+  const signedDocuments = tenantAssignments.filter((item) => item.status === 'signed').length;
+  const requiresSignatureCount = tenantAssignments.filter((item) => item.requiresSignature).length;
+  const documentCompletionRate = requiresSignatureCount
+    ? Number(((signedDocuments / requiresSignatureCount) * 100).toFixed(1))
+    : 0;
+
+  const assessmentByInventory = Object.values(groupBy(tenantInventories, (item) => item.inventoryId))
+    .map((entries) => {
+      const inventory = inventoryDefinitions.find((item) => item.id === entries[0]?.inventoryId);
+      const scored = entries.filter((entry) => Number.isFinite(Number(entry.score))).map((entry) => Number(entry.score));
+      const averageScore = scored.length
+        ? Number((scored.reduce((sum, value) => sum + value, 0) / scored.length).toFixed(2))
+        : null;
+      return {
+        inventoryId: entries[0]?.inventoryId,
+        inventoryName: inventory?.name ?? entries[0]?.inventoryId,
+        completedCount: entries.filter((entry) => entry.status === 'completed' || entry.status === 'reviewed').length,
+        averageScore,
+      };
+    })
+    .sort((left, right) => (right.completedCount ?? 0) - (left.completedCount ?? 0));
+
+  const locationPerformance = Object.values(groupBy(inWindowAppointments, (item) => item.locationName || 'Unassigned'))
+    .map((entries) => ({
+      locationName: entries[0]?.locationName || 'Unassigned',
+      totalSessions: entries.length,
+      completedSessions: entries.filter((item) => item.status === 'completed').length,
+      remoteSessions: entries.filter((item) => item.remoteSession).length,
+      completionRate: entries.length
+        ? Number(((entries.filter((item) => item.status === 'completed').length / entries.length) * 100).toFixed(1))
+        : 0,
+    }))
+    .sort((left, right) => right.totalSessions - left.totalSessions);
+
+  const aging = buildAgingReport(tenantInvoices, new Date().toISOString());
+
+  return {
+    generatedAt: new Date().toISOString(),
+    windowDays: days,
+    utilization: {
+      sessionsInWindow: inWindowAppointments.length,
+      sessionsCompleted: completedAppointments.length,
+      remoteRate: completedAppointments.length ? Number(((remoteCompleted.length / completedAppointments.length) * 100).toFixed(1)) : 0,
+      avgSessionsPerCounselor: counselorBuckets.length
+        ? Number((completedAppointments.length / counselorBuckets.length).toFixed(2))
+        : 0,
+    },
+    counselorProductivity: counselorBuckets,
+    referralSources: referralBuckets,
+    documentCompletion: {
+      requiresSignatureCount,
+      signedDocuments,
+      completionRate: documentCompletionRate,
+    },
+    assessmentTrends: assessmentByInventory,
+    accountsReceivable: aging,
+    locationPerformance,
+  };
+}
+
+function buildPlatformOverview(request) {
+  const tenantId = callerTenant(request);
+  const isPlatformAdmin = callerRole(request) === 'platform_admin';
+  const inScope = (item) => isPlatformAdmin || item.tenantId === tenantId;
+
+  const provisioning = tenantProvisioningRequests.filter(inScope);
+  const impersonations = supportImpersonationSessions.filter(inScope);
+  const exports = dataExportJobs.filter(inScope);
+  const policy = retentionPolicies.find((item) => inScope(item)) ?? null;
+
+  return {
+    generatedAt: new Date().toISOString(),
+    provisioning: {
+      total: provisioning.length,
+      queued: provisioning.filter((item) => item.status === 'queued').length,
+      inProgress: provisioning.filter((item) => item.status === 'in_progress').length,
+      completed: provisioning.filter((item) => item.status === 'completed').length,
+      recent: provisioning.slice().sort((left, right) => right.requestedAt.localeCompare(left.requestedAt)).slice(0, 5),
+    },
+    supportImpersonation: {
+      total: impersonations.length,
+      active: impersonations.filter((item) => item.status === 'active').length,
+      ended: impersonations.filter((item) => item.status === 'ended').length,
+      recent: impersonations.slice().sort((left, right) => right.startedAt.localeCompare(left.startedAt)).slice(0, 5),
+    },
+    dataExports: {
+      total: exports.length,
+      queued: exports.filter((item) => item.status === 'queued' || item.status === 'processing').length,
+      completed: exports.filter((item) => item.status === 'completed').length,
+      failed: exports.filter((item) => item.status === 'failed').length,
+      recent: exports.slice().sort((left, right) => right.requestedAt.localeCompare(left.requestedAt)).slice(0, 5),
+    },
+    retentionPolicy: policy,
+  };
+}
+
+function callerTenant(request) {
+  return (request.headers['x-tenant-id'] || 'system').trim();
+}
+
+function callerRole(request) {
+  return (request.headers['x-staff-role'] || '').trim().toLowerCase();
+}
+
+function callerClientId(request) {
+  return sanitizeStr(request.headers['x-client-id'] || '', 50);
+}
+
+function requirePracticeAdmin(request, response) {
+  const role = callerRole(request);
+  if (role === 'platform_admin' || role === 'practice_owner' || role === 'practice_admin') return false;
+  writeJson(response, 403, { error: 'Admin role required' });
+  return true;
+}
+
+function requirePlatformAdmin(request, response) {
+  const role = callerRole(request);
+  if (role === 'platform_admin') return false;
+  writeJson(response, 403, { error: 'Platform admin role required' });
+  return true;
+}
+
+function resolvePortalClient(request, response, requestedClientId) {
+  const role = callerRole(request);
+  const tenantId = callerTenant(request);
+  const requested = sanitizeStr(requestedClientId, 50);
+
+  if (role === 'client') {
+    const callerClient = callerClientId(request) ?? requested;
+    if (!callerClient) {
+      writeJson(response, 401, { error: 'Client identity required' });
+      return null;
+    }
+
+    const client = clients.find((item) => item.id === callerClient);
+    if (!client) {
+      writeJson(response, 404, { error: 'Client not found' });
+      return null;
+    }
+
+    if (enforceTenantScope(request, response, client.tenantId)) return null;
+    if (requested && requested !== callerClient) {
+      writeJson(response, 403, { error: 'Access to this resource is not permitted' });
+      return null;
+    }
+
+    return client;
+  }
+
+  if (requested) {
+    const client = clients.find((item) => item.id === requested);
+    if (!client) {
+      writeJson(response, 400, { error: 'Valid clientId is required' });
+      return null;
+    }
+    if (enforceTenantScope(request, response, client.tenantId)) return null;
+    return client;
+  }
+
+  const fallbackClient = clients.find((item) => item.tenantId === tenantId);
+  if (!fallbackClient) {
+    writeJson(response, 404, { error: 'No client records found for tenant' });
+    return null;
+  }
+
+  return fallbackClient;
+}
+
+function filterByTenant(items, request) {
+  const role = callerRole(request);
+  if (role === 'platform_admin') return items;
+  const tenantId = callerTenant(request);
+  return items.filter((item) => item.tenantId === tenantId);
+}
+
+function extractClientIdForSegment(pathname, segment) {
+  const prefix = '/v1/clients/';
+  const suffix = `/${segment}`;
+  if (!pathname.startsWith(prefix) || !pathname.endsWith(suffix)) return null;
+  return pathname.slice(prefix.length, -suffix.length);
+}
+
+function getOrCreateLifecycle(client) {
+  if (!clientLifecycles[client.id]) {
+    clientLifecycles[client.id] = {
+      tenantId: client.tenantId,
+      clientId: client.id,
+      caseStatus: normalizeCaseStatus(client.status) ?? 'active',
+      referralSource: '',
+      emergencyContact: {
+        name: '',
+        relationship: '',
+        phone: '',
+        authorized: false,
+      },
+      dischargeRecord: null,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  return clientLifecycles[client.id];
+}
+
+/**
+ * Sanitize a user-supplied string: strip null bytes, control characters,
+ * and enforce a maximum length. Returns the cleaned string or null if the
+ * result is empty after trimming.
+ */
+function sanitizeStr(raw, maxLen = 200) {
+  if (typeof raw !== 'string') return null;
+  // Strip null bytes and ASCII control characters (except common whitespace)
+  const cleaned = raw.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '').trim();
+  if (!cleaned) return null;
+  return cleaned.slice(0, maxLen);
+}
+
+function resolveRoute(pathname) {
+  if (pathname === '/openapi.yaml') return '/openapi.yaml';
+  if (pathname === '/docs' || pathname === '/docs/') return '/docs';
+  if (pathname === '/v1/appointment-types') return '/v1/appointment-types';
+  if (pathname.startsWith('/v1/clients/') && pathname.endsWith('/lifecycle')) return '/v1/clients/:id/lifecycle';
+  if (pathname.startsWith('/v1/clients/') && pathname.endsWith('/consents')) return '/v1/clients/:id/consents';
+  if (pathname.startsWith('/v1/clients/') && pathname.endsWith('/intake-packets')) return '/v1/clients/:id/intake-packets';
+  if (pathname.startsWith('/v1/clients/') && pathname.endsWith('/treatment-plan')) return '/v1/clients/:id/treatment-plan';
+  if (pathname.startsWith('/v1/clients/') && pathname.endsWith('/progress-notes')) return '/v1/clients/:id/progress-notes';
+  if (pathname.startsWith('/v1/document-templates/')) return '/v1/document-templates/:id';
+  if (pathname === '/v1/document-templates') return '/v1/document-templates';
+  if (pathname === '/v1/document-assignments') return '/v1/document-assignments';
+  if (pathname.startsWith('/v1/inventory-definitions/')) return '/v1/inventory-definitions/:id';
+  if (pathname === '/v1/inventory-definitions') return '/v1/inventory-definitions';
+  if (pathname === '/v1/inventory-assignments') return '/v1/inventory-assignments';
+  if (pathname === '/v1/scheduling/calendar') return '/v1/scheduling/calendar';
+  if (pathname === '/v1/reminders') return '/v1/reminders';
+  if (pathname === '/v1/waitlist') return '/v1/waitlist';
+  if (pathname === '/v1/operations/summary') return '/v1/operations/summary';
+  if (pathname === '/v1/billing/service-codes') return '/v1/billing/service-codes';
+  if (pathname === '/v1/billing/fee-schedules') return '/v1/billing/fee-schedules';
+  if (pathname === '/v1/billing/invoices') return '/v1/billing/invoices';
+  if (pathname === '/v1/billing/payments') return '/v1/billing/payments';
+  if (pathname === '/v1/billing/superbills') return '/v1/billing/superbills';
+  if (pathname === '/v1/billing/claims') return '/v1/billing/claims';
+  if (pathname === '/v1/billing/reports/aging') return '/v1/billing/reports/aging';
+  if (pathname === '/v1/portal/overview') return '/v1/portal/overview';
+  if (pathname === '/v1/portal/accounts') return '/v1/portal/accounts';
+  if (pathname === '/v1/portal/intake-packets') return '/v1/portal/intake-packets';
+  if (pathname === '/v1/portal/documents') return '/v1/portal/documents';
+  if (pathname === '/v1/portal/appointment-requests') return '/v1/portal/appointment-requests';
+  if (pathname === '/v1/portal/messages') return '/v1/portal/messages';
+  if (pathname === '/v1/portal/resources') return '/v1/portal/resources';
+  if (pathname === '/v1/faith/overview') return '/v1/faith/overview';
+  if (pathname === '/v1/faith/note-templates') return '/v1/faith/note-templates';
+  if (pathname === '/v1/faith/treatment-goals') return '/v1/faith/treatment-goals';
+  if (pathname === '/v1/faith/consent-variants') return '/v1/faith/consent-variants';
+  if (pathname === '/v1/faith/resources') return '/v1/faith/resources';
+  if (pathname === '/v1/faith/inventories') return '/v1/faith/inventories';
+  if (pathname === '/v1/faith/referral-coordination') return '/v1/faith/referral-coordination';
+  if (pathname === '/v1/faith/language-preferences') return '/v1/faith/language-preferences';
+  if (pathname === '/v1/reporting/overview') return '/v1/reporting/overview';
+  if (pathname === '/v1/platform/overview') return '/v1/platform/overview';
+  if (pathname === '/v1/platform/tenant-provisioning') return '/v1/platform/tenant-provisioning';
+  if (pathname === '/v1/platform/impersonation-sessions') return '/v1/platform/impersonation-sessions';
+  if (pathname === '/v1/platform/data-exports') return '/v1/platform/data-exports';
+  if (pathname === '/v1/platform/retention-policies') return '/v1/platform/retention-policies';
+  if (pathname.startsWith('/v1/clients/')) return '/v1/clients/:id';
+  if (pathname.startsWith('/v1/appointments/')) return '/v1/appointments/:id';
+  if (pathname.startsWith('/v1/practices/')) return '/v1/practices/:id';
+  if (pathname.startsWith('/v1/locations/')) return '/v1/locations/:id';
+  if (pathname.startsWith('/v1/staff/') && pathname.endsWith('/availability')) return '/v1/staff/:id/availability';
+  if (pathname.startsWith('/v1/staff/')) return '/v1/staff/:id';
+  if (pathname.startsWith('/v1/i18n/catalog/')) return '/v1/i18n/catalog/:locale';
+  if (pathname.startsWith('/v1/i18n/settings/')) return '/v1/i18n/settings/:locale';
+  return pathname;
+}
+
+/**
+ * Emit an immutable PHI audit event.
+ * Caller role and tenant are extracted from request headers.
+ * Never include PHI field values — only IDs and action names.
+ */
+function emitAudit(request, action, targetType, targetId) {
+  try {
+    const tenantId = (request.headers['x-tenant-id'] || 'system').trim();
+    const actorRole = (request.headers['x-staff-role'] || 'unknown').trim();
+    const actorId = (request.headers['x-actor-id'] || 'anonymous').trim();
+    const requestId = (request.headers['x-request-id'] || '').trim();
+
+    const event = createAuditEvent({
+      tenantId,
+      action,
+      targetType,
+      targetId: String(targetId),
+      occurredAt: new Date().toISOString(),
+      actorRole,
+      actorId,
+      requestId: requestId || undefined,
+    });
+
+    // In production this would be sent to an immutable audit log store.
+    // For now we emit to structured console output separate from application logs.
+    console.log('[AUDIT]', JSON.stringify(event));
+  } catch (auditError) {
+    // Audit failure must never suppress the primary operation.
+    console.error('[AUDIT_FAIL]', auditError.message);
+  }
+}
+
+function renderSwaggerUiHtml(specUrl) {
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Faith Counseling API Docs</title>
+    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
+    <style>
+      html, body { margin: 0; padding: 0; }
+      body { background: #fafafa; }
+    </style>
+  </head>
+  <body>
+    <div id="swagger-ui"></div>
+    <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+    <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-standalone-preset.js"></script>
+    <script>
+      window.ui = SwaggerUIBundle({
+        url: '${specUrl}',
+        dom_id: '#swagger-ui',
+        deepLinking: true,
+        presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
+        layout: 'BaseLayout',
+      });
+    </script>
+  </body>
+</html>`;
+}

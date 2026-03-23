@@ -1,0 +1,19 @@
+{
+  "name": "@faith/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@faith/i18n": "workspace:*",
+    "@faith/telemetry": "workspace:*"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.1"
+  },
+  "scripts": {
+    "build": "node build.js",
+    "start": "pnpm run build && node server.js",
+    "lint": "node -e \"console.log('No lint rules configured for @faith/web yet')\"",
+    "test": "node -e \"console.log('No tests configured for @faith/web yet')\""
+  }
+}

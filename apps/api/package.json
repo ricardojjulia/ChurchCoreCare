@@ -1,0 +1,16 @@
+{
+  "name": "@faith/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "dependencies": {
+    "@faith/i18n": "workspace:*",
+    "@faith/telemetry": "workspace:*"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "lint": "node -e \"console.log('No lint rules configured for @faith/api yet')\"",
+    "test": "node -e \"console.log('No tests configured for @faith/api yet')\""
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "@faith/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "dependencies": {
+    "@faith/telemetry": "workspace:*"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "lint": "node -e \"console.log('No lint rules configured for @faith/worker yet')\"",
+    "test": "node -e \"console.log('No tests configured for @faith/worker yet')\""
+  }
+}
