@@ -2,6 +2,31 @@
 
 Christian counseling practice management SaaS for solo counselors, group practices, and multi-location clinics.
 
+## Version
+
+- Current release line: `0.1`
+- Status: pre-beta
+
+## Recent Changes Log
+
+- React dashboard refresh:
+	- Moved the main web experience onto the current React app shell and updated the primary dashboard title to `Practice HUB`.
+- Workspace layout refinement:
+	- Removed the top-bar client search input and added a dedicated `Clients` panel beside `Workspace Studio`.
+- Live client data wiring:
+	- Connected the `Clients` panel to `GET /api/v1/clients` with loading, empty, and error states.
+- Monitoring improvements:
+	- Expanded the monitor view to show 4xx totals, 5xx totals, and summarized API error status codes.
+- Telemetry summary expansion:
+	- Added request counts, error counts, status breakdowns, recent errors, average duration, and last-route details to service summaries.
+- Build and asset serving fixes:
+	- Corrected the Vite entry configuration, added the React entry HTML file, and reduced stale-bundle issues by disabling cache for built assets during local work.
+- Documentation tracking:
+	- Added an ongoing pre-beta development record in `docs/PRE-BETA-DEVELOPMENT.md` to capture current implementation changes and follow-ups.
+
+For a detailed step-by-step history, see `docs/change-log.md`.
+For current pre-beta implementation notes, see `docs/PRE-BETA-DEVELOPMENT.md`.
+
 ## Initial Scope
 
 This repository starts with the product and architecture foundation required before feature coding:
