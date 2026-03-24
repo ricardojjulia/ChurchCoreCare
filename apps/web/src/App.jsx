@@ -16,12 +16,49 @@ export default function App() {
     auditEvents: 0,
   });
   const [connectionStatus, setConnectionStatus] = useState('loading');
+  const [clientsData, setClientsData] = useState({
+    items: [],
+    loading: true,
+    error: null,
+  });
 
   useEffect(() => {
     // Check API connection
     fetch('/api/health')
       .then(() => setConnectionStatus('connected'))
       .catch(() => setConnectionStatus('error'));
+  }, []);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    fetch('/api/v1/clients')
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error('Unable to load clients');
+        }
+        return response.json();
+      })
+      .then((payload) => {
+        if (isCancelled) return;
+        setClientsData({
+          items: Array.isArray(payload?.items) ? payload.items : [],
+          loading: false,
+          error: null,
+        });
+      })
+      .catch(() => {
+        if (isCancelled) return;
+        setClientsData({
+          items: [],
+          loading: false,
+          error: 'Unable to load clients',
+        });
+      });
+
+    return () => {
+      isCancelled = true;
+    };
   }, []);
 
   const handleAuthContinue = (role) => {
@@ -56,7 +93,7 @@ export default function App() {
           connectionStatus={connectionStatus}
         />
         <Metrics data={metricsData} />
-        <WorkspaceGrid />
+        <WorkspaceGrid clientsData={clientsData} />
       </main>
     </div>
   );

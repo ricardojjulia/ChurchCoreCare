@@ -121,10 +121,34 @@ export function createServiceTelemetry(serviceName) {
       trimSamples(state.proxySamples);
     },
     getSummary() {
+      const requestLatencySummary = summarizeDurations(state.requestSamples);
+      const proxyLatencySummary = summarizeDurations(state.proxySamples);
+      const errorCount = state.requestSamples.filter((sample) => Number(sample.statusCode) >= 400).length;
+      const lastRequest = state.requestSamples[state.requestSamples.length - 1] ?? null;
+      const statusCounts = summarizeStatusCounts(state.requestSamples);
+      const errorStatusCounts = summarizeErrorStatusCounts(state.requestSamples);
+      const recentErrors = state.requestSamples
+        .filter((sample) => Number(sample.statusCode) >= 400)
+        .slice(-10)
+        .map((sample) => ({
+          at: new Date(sample.at).toISOString(),
+          statusCode: sample.statusCode,
+          method: sample.method,
+          route: sample.route,
+        }));
+
       return {
         activeRequests: state.activeRequests,
-        requestLatencyMs: summarizeDurations(state.requestSamples),
-        proxyLatencyMs: summarizeDurations(state.proxySamples),
+        requestLatencyMs: requestLatencySummary,
+        proxyLatencyMs: proxyLatencySummary,
+        requestCount: requestLatencySummary.count,
+        errorCount,
+        statusCounts,
+        errorStatusCounts,
+        recentErrors,
+        avgDurationMs: requestLatencySummary.avg,
+        lastRoute: lastRequest?.route ?? null,
+        lastRequestAt: lastRequest ? new Date(lastRequest.at).toISOString() : null,
         mutationCount: state.mutationCount,
         lastMutationAt: state.lastMutationAt,
         browserVitals: summarizeVitals(state.vitalSamples),
@@ -193,4 +217,24 @@ function round(value) {
 
 function toMegabytes(value) {
   return round(value / 1024 / 1024);
+}
+
+function summarizeStatusCounts(samples) {
+  const counts = {};
+  for (const sample of samples) {
+    const key = String(sample.statusCode ?? 'unknown');
+    counts[key] = (counts[key] ?? 0) + 1;
+  }
+  return counts;
+}
+
+function summarizeErrorStatusCounts(samples) {
+  const counts = {};
+  for (const sample of samples) {
+    const statusCode = Number(sample.statusCode);
+    if (!Number.isFinite(statusCode) || statusCode < 400) continue;
+    const key = String(statusCode);
+    counts[key] = (counts[key] ?? 0) + 1;
+  }
+  return counts;
 }

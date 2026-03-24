@@ -32,20 +32,13 @@ export default function TopBar({ onMenuToggle, connectionStatus }) {
       </button>
 
       <div>
-        <h1>Operations Dashboard</h1>
+        <h1>Practice HUB</h1>
         <p style={{ color: status.color, fontSize: '0.85rem', margin: '4px 0 0' }}>
           {status.text}
         </p>
       </div>
 
       <div className="topbar-actions">
-        <label className="search-wrap" aria-label="Search">
-          <input
-            type="search"
-            placeholder="Search clients, notes, documents..."
-          />
-        </label>
-
         <label className="language-switcher">
           <span>Language</span>
           <select

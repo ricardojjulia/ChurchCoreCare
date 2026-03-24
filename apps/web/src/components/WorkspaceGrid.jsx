@@ -1,7 +1,11 @@
 import { useState } from 'react';
 
-export default function WorkspaceGrid() {
+export default function WorkspaceGrid({ clientsData }) {
   const [activeTab, setActiveTab] = useState('clients');
+
+  const clients = clientsData?.items ?? [];
+  const clientsLoading = clientsData?.loading ?? false;
+  const clientsError = clientsData?.error ?? null;
 
   const tabs = [
     { id: 'practice', label: 'Practice' },
@@ -59,7 +63,7 @@ export default function WorkspaceGrid() {
         </ul>
       </article>
 
-      <article className="panel span-2" id="managePanel">
+      <article className="panel" id="managePanel">
         <div className="panel-head">
           <h2>Workspace Studio</h2>
         </div>
@@ -95,6 +99,30 @@ export default function WorkspaceGrid() {
         >
           Content for {tabs.find(t => t.id === activeTab)?.label} tab
         </div>
+      </article>
+
+      <article className="panel" aria-labelledby="clientsPanelTitle">
+        <div className="panel-head">
+          <h2 id="clientsPanelTitle">Clients</h2>
+        </div>
+        <ul className="checklist" aria-live="polite" aria-busy="false">
+          {clientsLoading ? (
+            <li style={{ padding: '16px', color: '#62708b' }}>Loading clients…</li>
+          ) : clientsError ? (
+            <li style={{ padding: '16px', color: '#62708b' }}>{clientsError}</li>
+          ) : clients.length === 0 ? (
+            <li style={{ padding: '16px', color: '#62708b' }}>No clients available</li>
+          ) : (
+            clients.map((client) => (
+              <li key={client.id} style={{ padding: '12px 16px' }}>
+                <h3 style={{ margin: 0 }}>{client.firstName} {client.lastName}</h3>
+                <p style={{ margin: '4px 0 0', color: '#62708b' }}>
+                  Status: {client.status} • Faith: {client.faithBackground || 'Undeclared'}
+                </p>
+              </li>
+            ))
+          )}
+        </ul>
       </article>
     </section>
   );

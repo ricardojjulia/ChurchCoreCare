@@ -13,6 +13,9 @@ const elements = {
   apiErrors: document.getElementById('apiErrors'),
   apiDuration: document.getElementById('apiDuration'),
   apiOtel: document.getElementById('apiOtel'),
+  apiClientErrors: document.getElementById('apiClientErrors'),
+  apiServerErrors: document.getElementById('apiServerErrors'),
+  apiErrorCodes: document.getElementById('apiErrorCodes'),
   vitalsStatus: document.getElementById('vitalsStatus'),
 };
 
@@ -20,6 +23,11 @@ const FALLBACK = '--';
 
 function formatValue(value) {
   if (value === null || value === undefined || value === '') return FALLBACK;
+  return String(value);
+}
+
+function formatRoute(value) {
+  if (value === null || value === undefined || value === '') return 'No traffic yet';
   return String(value);
 }
 
@@ -39,10 +47,13 @@ async function fetchJson(url, options) {
 }
 
 async function recordVitals() {
+  const memoryMb = Math.round((performance?.memory?.usedJSHeapSize || 0) / (1024 * 1024));
   const payload = {
+    name: 'monitor.heartbeat.memory_mb',
+    value: Number.isFinite(memoryMb) ? memoryMb : 0,
+    rating: 'good',
     page: 'monitor',
     timestamp: new Date().toISOString(),
-    memoryMb: Math.round((performance?.memory?.usedJSHeapSize || 0) / (1024 * 1024)),
     navigationType: performance.getEntriesByType('navigation')[0]?.type || 'navigate',
   };
 
@@ -76,6 +87,27 @@ function applyHealthyState(isHealthy) {
   elements.overallStatus.textContent = isHealthy ? 'Healthy' : 'Degraded';
 }
 
+function sumStatusRange(statusCounts, min, max) {
+  if (!statusCounts || typeof statusCounts !== 'object') return 0;
+  let total = 0;
+  for (const [statusCode, count] of Object.entries(statusCounts)) {
+    const code = Number(statusCode);
+    if (!Number.isFinite(code) || code < min || code > max) continue;
+    total += Number(count) || 0;
+  }
+  return total;
+}
+
+function formatStatusCounts(statusCounts) {
+  if (!statusCounts || typeof statusCounts !== 'object') return FALLBACK;
+  const entries = Object.entries(statusCounts)
+    .filter(([, count]) => Number(count) > 0)
+    .sort(([leftCode], [rightCode]) => Number(leftCode) - Number(rightCode));
+
+  if (!entries.length) return FALLBACK;
+  return entries.map(([code, count]) => `${code}: ${count}`).join(' · ');
+}
+
 async function refreshMonitoring() {
   try {
     elements.overallStatus.textContent = 'Refreshing…';
@@ -98,13 +130,16 @@ async function refreshMonitoring() {
     elements.webRequests.textContent = formatValue(readSummaryValue(webTelemetry, ['requests', 'requestCount', 'totalRequests']));
     elements.webErrors.textContent = formatValue(readSummaryValue(webTelemetry, ['errors', 'errorCount', 'totalErrors']));
     elements.webDuration.textContent = formatValue(readSummaryValue(webTelemetry, ['avgDurationMs', 'averageDurationMs', 'avgMs']));
-    elements.webRoute.textContent = formatValue(readSummaryValue(webTelemetry, ['lastRoute', 'route']));
+    elements.webRoute.textContent = formatRoute(readSummaryValue(webTelemetry, ['lastRoute', 'route']));
 
     const apiTelemetry = apiSummary.summary || {};
     elements.apiRequests.textContent = formatValue(readSummaryValue(apiTelemetry, ['requests', 'requestCount', 'totalRequests']));
     elements.apiErrors.textContent = formatValue(readSummaryValue(apiTelemetry, ['errors', 'errorCount', 'totalErrors']));
     elements.apiDuration.textContent = formatValue(readSummaryValue(apiTelemetry, ['avgDurationMs', 'averageDurationMs', 'avgMs']));
     elements.apiOtel.textContent = apiSummary.exportedViaOtel ? 'Yes' : 'No';
+    elements.apiClientErrors.textContent = formatValue(sumStatusRange(apiTelemetry.errorStatusCounts, 400, 499));
+    elements.apiServerErrors.textContent = formatValue(sumStatusRange(apiTelemetry.errorStatusCounts, 500, 599));
+    elements.apiErrorCodes.textContent = formatStatusCounts(apiTelemetry.errorStatusCounts);
 
     applyHealthyState(true);
     await recordVitals();
