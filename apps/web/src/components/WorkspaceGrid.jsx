@@ -1,11 +1,43 @@
 import { useState } from 'react';
+import ClientModal from './ClientModal';
 
-export default function WorkspaceGrid({ clientsData }) {
+export default function WorkspaceGrid({ clientsData, onClientsUpdated }) {
   const [activeTab, setActiveTab] = useState('clients');
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingClient, setEditingClient] = useState(null);
 
   const clients = clientsData?.items ?? [];
   const clientsLoading = clientsData?.loading ?? false;
   const clientsError = clientsData?.error ?? null;
+
+  const handleAddClient = () => {
+    setEditingClient(null);
+    setModalOpen(true);
+  };
+
+  const handleEditClient = (client) => {
+    setEditingClient(client);
+    setModalOpen(true);
+  };
+
+  const handleDeleteClient = async (client) => {
+    if (!confirm(`Delete client ${client.firstName} ${client.lastName}?`)) return;
+
+    try {
+      const response = await fetch(`/api/v1/clients/${client.id}`, {
+        method: 'DELETE',
+      });
+      if (response.ok) {
+        onClientsUpdated();
+      }
+    } catch (error) {
+      console.error('Delete failed:', error);
+    }
+  };
+
+  const handleClientSaved = () => {
+    onClientsUpdated();
+  };
 
   const tabs = [
     { id: 'practice', label: 'Practice' },
@@ -104,8 +136,15 @@ export default function WorkspaceGrid({ clientsData }) {
       <article className="panel" aria-labelledby="clientsPanelTitle">
         <div className="panel-head">
           <h2 id="clientsPanelTitle">Clients</h2>
+          <button
+            type="button"
+            className="action-btn primary"
+            onClick={handleAddClient}
+          >
+            New Client
+          </button>
         </div>
-        <ul className="checklist" aria-live="polite" aria-busy="false">
+        <ul className="checklist" aria-live="polite" aria-busy={clientsLoading ? 'true' : 'false'}>
           {clientsLoading ? (
             <li style={{ padding: '16px', color: '#62708b' }}>Loading clients…</li>
           ) : clientsError ? (
@@ -114,15 +153,50 @@ export default function WorkspaceGrid({ clientsData }) {
             <li style={{ padding: '16px', color: '#62708b' }}>No clients available</li>
           ) : (
             clients.map((client) => (
-              <li key={client.id} style={{ padding: '12px 16px' }}>
-                <h3 style={{ margin: 0 }}>{client.firstName} {client.lastName}</h3>
-                <p style={{ margin: '4px 0 0', color: '#62708b' }}>
-                  Status: {client.status} • Faith: {client.faithBackground || 'Undeclared'}
-                </p>
+              <li
+                key={client.id}
+                style={{
+                  padding: '12px 16px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  borderBottom: '1px solid #e1e8ed',
+                }}
+              >
+                <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => handleEditClient(client)}>
+                  <h3 style={{ margin: 0 }}>{client.firstName} {client.lastName}</h3>
+                  <p style={{ margin: '4px 0 0', color: '#62708b', fontSize: '0.9rem' }}>
+                    Status: {client.status} • Faith: {client.faithBackground || 'Undeclared'}
+                  </p>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    type="button"
+                    className="action-btn"
+                    onClick={() => handleEditClient(client)}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    className="action-btn"
+                    onClick={() => handleDeleteClient(client)}
+                    style={{ color: '#b42318' }}
+                  >
+                    Delete
+                  </button>
+                </div>
               </li>
             ))
           )}
         </ul>
+
+        <ClientModal
+          isOpen={modalOpen}
+          initialClient={editingClient}
+          onClose={() => setModalOpen(false)}
+          onSubmit={handleClientSaved}
+        />
       </article>
     </section>
   );

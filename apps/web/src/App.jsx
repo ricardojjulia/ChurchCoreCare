@@ -21,6 +21,7 @@ export default function App() {
     loading: true,
     error: null,
   });
+  const [refreshClientsKey, setRefreshClientsKey] = useState(0);
 
   useEffect(() => {
     // Check API connection
@@ -59,7 +60,7 @@ export default function App() {
     return () => {
       isCancelled = true;
     };
-  }, []);
+  }, [refreshClientsKey]);
 
   const handleAuthContinue = (role) => {
     setUserRole(role);
@@ -93,7 +94,7 @@ export default function App() {
           connectionStatus={connectionStatus}
         />
         <Metrics data={metricsData} />
-        <WorkspaceGrid clientsData={clientsData} />
+        <WorkspaceGrid clientsData={clientsData} onClientsUpdated={() => setRefreshClientsKey((k) => k + 1)} />
       </main>
     </div>
   );

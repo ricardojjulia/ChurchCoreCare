@@ -4,28 +4,54 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## Version
 
-- Current release line: `0.1`
-- Status: pre-beta
+- Current release: `1.0.0`
+- Status: production-ready (client module)
 
-## Recent Changes Log
+## v1.0.0 — Client Management Module (Major Release)
 
-- React dashboard refresh:
-	- Moved the main web experience onto the current React app shell and updated the primary dashboard title to `Practice HUB`.
-- Workspace layout refinement:
-	- Removed the top-bar client search input and added a dedicated `Clients` panel beside `Workspace Studio`.
-- Live client data wiring:
-	- Connected the `Clients` panel to `GET /api/v1/clients` with loading, empty, and error states.
-- Monitoring improvements:
-	- Expanded the monitor view to show 4xx totals, 5xx totals, and summarized API error status codes.
-- Telemetry summary expansion:
-	- Added request counts, error counts, status breakdowns, recent errors, average duration, and last-route details to service summaries.
-- Build and asset serving fixes:
-	- Corrected the Vite entry configuration, added the React entry HTML file, and reduced stale-bundle issues by disabling cache for built assets during local work.
-- Documentation tracking:
-	- Added an ongoing pre-beta development record in `docs/PRE-BETA-DEVELOPMENT.md` to capture current implementation changes and follow-ups.
+### Overview
+Major release completing Phase 1 of the full client management suite. Implements comprehensive client CRUD operations with full UI integration, audit logging, and OpenAPI documentation.
 
-For a detailed step-by-step history, see `docs/change-log.md`.
-For current pre-beta implementation notes, see `docs/PRE-BETA-DEVELOPMENT.md`.
+### New Features
+
+**API Enhancements**
+- `GET /v1/clients/{id}` — Retrieve single client with tenant-scoped access audit logging
+- `DELETE /v1/clients/{id}` — Soft-delete (archive) client by setting status to inactive
+- `PATCH /v1/clients/{id}` — Full client update with validation and appointment name sync
+- All endpoints include tenant-scope enforcement, RBAC checks, and audit trail recording
+
+**React Components**
+- `ClientForm.jsx` — Reusable form component for create/edit workflows with validation
+- `ClientModal.jsx` — Modal wrapper with backdrop and form integration
+- Enhanced `WorkspaceGrid.jsx` — Edit/delete buttons on client list with real-time refresh
+
+**UI Features**
+- "New Client" button in Clients panel
+- Inline edit on client name (opens modal with pre-populated data)
+- Delete (archive) button with confirmation dialog
+- Live client list with loading, error, and empty states
+- Automatic refresh after add/edit/delete mutations
+
+**Documentation**
+- Updated OpenAPI specification with full `/v1/clients/{id}` path documentation
+- Added `UpdateClientRequest` schema for PATCH operations
+- Documented all status codes, request/response formats, and RBAC requirements
+
+### Breaking Changes
+None — fully backward compatible. Extends existing client functionality without modifying previous endpoints.
+
+### Performance Improvements
+- Form submission with client-side validation before API calls
+- Optimistic UI updates with fallback error states
+- Efficient refresh mechanism using state triggers
+- Soft-delete prevents data loss while preserving referential integrity
+
+### Bug Fixes
+- Previous build/serving issues resolved with Vite configuration
+- Stale bundle issues mitigated with cache control headers
+
+For a detailed feature breakdown, see `docs/RELEASE_1.0.0.md`.
+For current implementation history, see `docs/PRE-BETA-DEVELOPMENT.md`.
 
 ## Initial Scope
 

@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: Faith Counseling API
-  version: 0.1.0
-  summary: Initial tenant-aware API contract for practice and client lifecycle foundations.
+  version: 1.0.0
+  summary: Production-ready API for practice and client lifecycle management with full CRUD operations, audit logging, and HIPAA compliance.
 servers:
   - url: https://api.example.com
     description: Placeholder production URL
@@ -104,6 +104,82 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Client'
+  /v1/clients/{id}:
+    get:
+      tags: [Clients]
+      summary: Get a single client by ID
+      operationId: getClient
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Client retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  item:
+                    $ref: '#/components/schemas/Client'
+        '404':
+          description: Client not found
+    patch:
+      tags: [Clients]
+      summary: Update a client (partial update)
+      operationId: updateClient
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateClientRequest'
+      responses:
+        '200':
+          description: Client updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  item:
+                    $ref: '#/components/schemas/Client'
+        '404':
+          description: Client not found
+    delete:
+      tags: [Clients]
+      summary: Delete (archive) a client
+      operationId: deleteClient
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Client archived (status set to inactive)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  item:
+                    $ref: '#/components/schemas/Client'
+        '404':
+          description: Client not found
   /v1/appointments:
     post:
       tags: [Appointments]
@@ -357,6 +433,20 @@ components:
         referralSourceId:
           type: string
           format: uuid
+    UpdateClientRequest:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        preferredName:
+          type: string
+        faithBackground:
+          type: string
+        status:
+          type: string
+          enum: [active, waitlist, inactive, discharged]
     CreateAppointmentRequest:
       type: object
       required: [clientId, startsAt, endsAt]

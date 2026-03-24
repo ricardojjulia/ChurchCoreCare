@@ -1173,11 +1173,6 @@ async function handleClientsCollection(request, response, requestUrl) {
 }
 
 async function handleClientById(request, response, requestUrl) {
-  if (request.method !== 'PATCH') {
-    writeJson(response, 405, { error: 'Method not allowed' });
-    return;
-  }
-
   const clientId = requestUrl.pathname.replace('/v1/clients/', '');
   const client = clients.find((item) => item.id === clientId);
   if (!client) {
@@ -1187,6 +1182,31 @@ async function handleClientById(request, response, requestUrl) {
 
   // Tenant-scope: caller must belong to the same tenant as this client
   if (enforceTenantScope(request, response, client.tenantId)) return;
+
+  if (request.method === 'GET') {
+    emitAudit(request, 'client.read', 'client', client.id);
+    writeJson(response, 200, { item: client });
+    return;
+  }
+
+  if (request.method === 'DELETE') {
+    // Check RBAC: only practice_admin can delete clients
+    if (enforceRbac(request, response, ['practice_admin', 'practice_owner'])) return;
+    
+    // Soft delete: set status to inactive instead of removing
+    if (client.status !== 'inactive') {
+      client.status = 'inactive';
+      telemetry.recordMutation('client.delete');
+      emitAudit(request, 'client.delete', 'client', client.id);
+    }
+    writeJson(response, 200, { item: client });
+    return;
+  }
+
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
 
   const payload = await readJsonBody(request);
   const status = payload.status ? normalizeClientStatus(payload.status) : client.status;
