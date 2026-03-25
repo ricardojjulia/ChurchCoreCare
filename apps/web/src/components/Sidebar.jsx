@@ -30,7 +30,7 @@ function resolveUserLabel(user, role) {
   return role ? `Signed in as ${role}` : 'Not signed in';
 }
 
-export default function Sidebar({ isOpen, onClose, currentUser, currentView, onNavigate, onSignOut }) {
+export default function Sidebar({ isOpen, onClose, currentUser, currentView, onNavigate, onOpenClientPicker, onSignOut }) {
   const userRole = currentUser?.role ?? null;
   const visibleNavItems = NAV_ITEMS.filter((item) => canViewNavItem(item, userRole));
 
@@ -70,7 +70,11 @@ export default function Sidebar({ isOpen, onClose, currentUser, currentView, onN
                 type="button"
                 className={`nav-item ${currentView === item.key ? 'active' : ''}`}
                 onClick={() => {
-                  onNavigate?.(item.key);
+                  if (item.key === 'clients') {
+                    onOpenClientPicker?.();
+                  } else {
+                    onNavigate?.(item.key);
+                  }
                   onClose();
                 }}
               >

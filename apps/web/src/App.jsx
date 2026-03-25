@@ -6,6 +6,7 @@ import Metrics from './components/Metrics';
 import WorkspaceGrid from './components/WorkspaceGrid';
 import ClientDetailPage from './components/ClientDetail/ClientDetailPage.jsx';
 import UserMaintenance from './components/UserMaintenance.jsx';
+import ClientPickerModal from './components/ClientPickerModal.jsx';
 import './App.css';
 
 function firstString(...values) {
@@ -59,6 +60,7 @@ export default function App() {
   const [refreshClientsKey, setRefreshClientsKey] = useState(0);
   const [selectedClientId, setSelectedClientId] = useState(null);
   const [currentView, setCurrentView] = useState('dashboard');
+  const [clientPickerOpen, setClientPickerOpen] = useState(false);
   const userRole = currentUser?.role ?? null;
 
   useEffect(() => {
@@ -172,6 +174,10 @@ export default function App() {
     setCurrentView('clients');
   };
 
+  const handleOpenClientPicker = () => {
+    setClientPickerOpen(true);
+  };
+
   const showDashboard = currentView === 'dashboard';
   const showUsers = currentView === 'users';
   const showClientsWorkspace = currentView === 'clients' || (!showDashboard && !showUsers);
@@ -201,7 +207,15 @@ export default function App() {
         currentUser={currentUser}
         currentView={currentView}
         onNavigate={handleNavigate}
+        onOpenClientPicker={handleOpenClientPicker}
         onSignOut={handleSignOut}
+      />
+      <ClientPickerModal
+        isOpen={clientPickerOpen}
+        clients={clientsData.items}
+        loading={clientsData.loading}
+        onSelectClient={handleOpenClient}
+        onClose={() => setClientPickerOpen(false)}
       />
       <main className="main-content">
         <TopBar

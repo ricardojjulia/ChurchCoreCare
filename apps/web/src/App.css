@@ -154,8 +154,8 @@
   display: grid;
 }
 
-.auth-card--workspace {
-  width: min(860px, 96vw);
+.auth-card.auth-card--workspace {
+  width: min(960px, 96vw);
   padding: 0;
   overflow: hidden;
 }
@@ -214,6 +214,7 @@
   padding: 28px;
   display: grid;
   align-content: center;
+  min-width: 0;
 }
 
 .auth-helper {
@@ -242,6 +243,17 @@
   font-size: 0.78rem;
 }
 
+@media (max-width: 980px) {
+  .auth-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-intro {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+}
+
 @media (max-width: 760px) {
   .auth-shell {
     grid-template-columns: 1fr;
@@ -255,4 +267,56 @@
   .topbar-session {
     display: none;
   }
+}
+
+/* ── Client Picker Modal ──────────────────────────────── */
+.client-picker-sheet {
+  width: min(480px, 96vw);
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.client-picker-search {
+  margin-bottom: 12px;
+}
+
+.client-picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.client-picker-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 12px;
+  text-align: left;
+  cursor: pointer;
+  gap: 12px;
+  transition: background 0.15s;
+}
+
+.client-picker-item:hover {
+  background: var(--surface-muted, rgba(99, 102, 241, 0.08));
+}
+
+.client-picker-name {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.client-picker-status {
+  font-size: 0.8rem;
+  color: var(--text-soft, #64748b);
+  flex-shrink: 0;
 }
