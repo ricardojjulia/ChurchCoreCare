@@ -1,156 +1,408 @@
-const elements = {
-  refreshButton: document.getElementById('refreshButton'),
-  overallStatus: document.getElementById('overallStatus'),
-  webHealth: document.getElementById('webHealth'),
-  apiHealth: document.getElementById('apiHealth'),
-  webUpdated: document.getElementById('webUpdated'),
-  apiUpdated: document.getElementById('apiUpdated'),
-  webRequests: document.getElementById('webRequests'),
-  webErrors: document.getElementById('webErrors'),
-  webDuration: document.getElementById('webDuration'),
-  webRoute: document.getElementById('webRoute'),
-  apiRequests: document.getElementById('apiRequests'),
-  apiErrors: document.getElementById('apiErrors'),
-  apiDuration: document.getElementById('apiDuration'),
-  apiOtel: document.getElementById('apiOtel'),
-  apiClientErrors: document.getElementById('apiClientErrors'),
-  apiServerErrors: document.getElementById('apiServerErrors'),
-  apiErrorCodes: document.getElementById('apiErrorCodes'),
-  vitalsStatus: document.getElementById('vitalsStatus'),
-};
+// ─── State ──────────────────────────────────────────────────────────────────
+const MAX_HISTORY = 20;
+const REFRESH_INTERVAL = 15000;
 
-const FALLBACK = '--';
+let historyData = [];      // rolling {t, req, err}  (avoids collision with window.history)
+let lastErrors = [];       // recentErrors from API
+let filterActive = 'all';
+let drillOpen = false;
+let countdown = REFRESH_INTERVAL / 1000;
+let refreshTimer = null;
+let countdownTimer = null;
 
-function formatValue(value) {
-  if (value === null || value === undefined || value === '') return FALLBACK;
-  return String(value);
+// ─── Helpers ────────────────────────────────────────────────────────────────
+const $ = (id) => document.getElementById(id);
+function setText(id, val) { const e = $(id); if (e) e.textContent = val ?? '—'; }
+function toast(msg, type = '') {
+  const t = $('toast');
+  t.textContent = msg; t.className = type ? `show ${type}` : 'show';
+  clearTimeout(t._t); t._t = setTimeout(() => { t.className = ''; }, 3500);
+}
+function fmtMs(ms) {
+  if (ms == null || ms === '—') return '—';
+  const n = Number(ms);
+  return Number.isFinite(n) ? `${Math.round(n)} ms` : '—';
+}
+function fmtUptime(sec) {
+  if (!sec) return '—';
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+function fmtTime(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+function methodBadge(method) {
+  const cls = { GET: 'badge-get', POST: 'badge-post', PATCH: 'badge-patch', DELETE: 'badge-delete' };
+  return `<span class="badge ${cls[method?.toUpperCase()] ?? ''}">${method ?? '?'}</span>`;
+}
+function statusBadge(code) {
+  const n = Number(code);
+  const cls = n >= 500 ? 'badge-5xx' : n >= 400 ? 'badge-4xx' : 'badge-2xx';
+  return `<span class="badge ${cls}">${code}</span>`;
 }
 
-function formatRoute(value) {
-  if (value === null || value === undefined || value === '') return 'No traffic yet';
-  return String(value);
+// ─── Sparkline ───────────────────────────────────────────────────────────────
+function buildPath(points, maxVal, W, H) {
+  if (points.length < 2) return '';
+  const step = W / (points.length - 1);
+  const coords = points.map((v, i) => {
+    const x = i * step;
+    const y = maxVal > 0 ? H - (v / maxVal) * H * 0.9 : H;
+    return [x, y];
+  });
+  return coords.map(([x, y], i) => `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`).join(' ');
+}
+function buildFillPath(points, maxVal, W, H) {
+  const line = buildPath(points, maxVal, W, H);
+  if (!line) return '';
+  const last = points.length - 1;
+  return `${line} L ${(last * W / (points.length - 1)).toFixed(1)} ${H} L 0 ${H} Z`;
 }
 
-function toLocalDateTime(value) {
-  if (!value) return FALLBACK;
-  const dt = new Date(value);
-  if (Number.isNaN(dt.valueOf())) return FALLBACK;
-  return dt.toLocaleString();
+function updateSparkline() {
+  if (historyData.length < 2) return;
+  const W = 400, H = 100;
+  const reqMax = Math.max(...historyData.map((h) => h.req), 1);
+  const errMax = Math.max(...historyData.map((h) => h.err), 1, reqMax * 0.3);
+
+  const reqPoints = historyData.map((h) => h.req);
+  const errPoints = historyData.map((h) => h.err);
+
+  $('sparkLine').setAttribute('d',  buildPath(reqPoints, reqMax, W, H));
+  $('sparkFill').setAttribute('d',  buildFillPath(reqPoints, reqMax, W, H));
+  $('errLine').setAttribute('d',    buildPath(errPoints, errMax, W, H));
+  $('errFill').setAttribute('d',    buildFillPath(errPoints, errMax, W, H));
+  $('sparklineNote').textContent = `${historyData.length} samples`;
 }
 
-async function fetchJson(url, options) {
-  const response = await fetch(url, options);
-  if (!response.ok) {
-    throw new Error(`${url} returned ${response.status}`);
+// ─── Donut ────────────────────────────────────────────────────────────────────
+function updateDonut(counts) {
+  const circ = 2 * Math.PI * 38; // ≈ 238.76
+  let ok = 0, c4 = 0, c5 = 0, other = 0;
+  for (const [code, n] of Object.entries(counts || {})) {
+    const c = Number(code);
+    if (c >= 200 && c < 300) ok += n;
+    else if (c >= 400 && c < 500) c4 += n;
+    else if (c >= 500) c5 += n;
+    else other += n;
   }
-  return response.json();
+  const total = ok + c4 + c5 + other || 1;
+  const errFrac = (c4 + c5) / total;
+  const okFrac  = ok / total;
+
+  const okLen  = okFrac  * circ;
+  const errLen = errFrac * circ;
+  $('donutOk').setAttribute('stroke-dasharray',  `${okLen.toFixed(1)} ${(circ - okLen).toFixed(1)}`);
+  $('donutOk').style.strokeDashoffset = (-errLen).toFixed(1);
+  $('donutErr').setAttribute('stroke-dasharray', `${errLen.toFixed(1)} ${(circ - errLen).toFixed(1)}`);
+
+  const errPct = Math.round(errFrac * 100);
+  $('donutPct').textContent = `${errPct}%`;
+  $('donutPct').setAttribute('fill', errPct > 5 ? '#ef4444' : '#10b981');
+
+  setText('dl2xx', ok);
+  setText('dl4xx', c4);
+  setText('dl5xx', c5);
+  setText('dlOth',  other);
+
+  const scGrid = $('scGrid');
+  const allCodes = Object.entries(counts || {}).sort(([a], [b]) => Number(a) - Number(b));
+  if (!allCodes.length) { scGrid.innerHTML = '<span class="empty-state" style="grid-column:1/-1">No requests yet</span>'; return; }
+  scGrid.innerHTML = allCodes.map(([code, n]) => {
+    const c = Number(code);
+    const cls = c >= 500 ? 'sc-5xx' : c >= 400 ? 'sc-4xx' : c >= 300 ? 'sc-3xx' : c >= 200 ? 'sc-2xx' : 'sc-unk';
+    return `<div class="sc-pill ${cls}" data-code="${code}"><span class="sc-count">${n}</span> <span>${code}</span></div>`;
+  }).join('');
+  setText('scTotal', `${total} total`);
+
+  scGrid.querySelectorAll('.sc-pill').forEach((pill) => {
+    pill.addEventListener('click', () => {
+      openDrill(`${pill.dataset.code[0]}xx`);
+    });
+  });
 }
 
-async function recordVitals() {
-  const memoryMb = Math.round((performance?.memory?.usedJSHeapSize || 0) / (1024 * 1024));
-  const payload = {
-    name: 'monitor.heartbeat.memory_mb',
-    value: Number.isFinite(memoryMb) ? memoryMb : 0,
-    rating: 'good',
-    page: 'monitor',
-    timestamp: new Date().toISOString(),
-    navigationType: performance.getEntriesByType('navigation')[0]?.type || 'navigate',
-  };
+// ─── Latency bars ─────────────────────────────────────────────────────────────
+function updateLatencyBars(lat, proxy) {
+  const maxMs = Math.max(lat?.max || 0, proxy?.max || 0, 1);
+  const pct = (v) => `${Math.min(100, (v / maxMs) * 100).toFixed(1)}%`;
 
-  await fetch('/api/v1/telemetry/vitals', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-staff-role': 'practice_admin',
-      'x-tenant-id': 'system',
-      'x-actor-id': 'monitor-page',
-      'x-request-id': `monitor-${Date.now()}`,
-    },
-    body: JSON.stringify(payload),
+  $('barAvg').style.width    = pct(lat?.avg  || 0);
+  $('barP95').style.width    = pct(lat?.p95  || 0);
+  $('barMax').style.width    = pct(lat?.max  || 0);
+  setText('barAvgVal', fmtMs(lat?.avg));
+  setText('barP95Val', fmtMs(lat?.p95));
+  setText('barMaxVal', fmtMs(lat?.max));
+
+  if (proxy?.count > 0) {
+    $('barProxyAvg').style.width = pct(proxy?.avg || 0);
+    $('barProxyP95').style.width = pct(proxy?.p95 || 0);
+    setText('barProxyAvgVal', fmtMs(proxy?.avg));
+    setText('barProxyP95Val', fmtMs(proxy?.p95));
+  }
+}
+
+// ─── Memory ──────────────────────────────────────────────────────────────────
+function updateMemory(proc) {
+  if (!proc) return;
+  const maxMb = Math.max(proc.rssMb || 0, proc.heapTotalMb || 0, 1);
+  const pct = (v) => `${Math.min(100, (v / maxMb) * 100).toFixed(1)}%`;
+
+  $('memHeapBar').style.width  = pct(proc.heapUsedMb || 0);
+  $('memTotalBar').style.width = pct(proc.heapTotalMb || 0);
+  $('memRssBar').style.width   = pct(proc.rssMb || 0);
+  setText('memHeapUsed',  `${proc.heapUsedMb ?? '—'} MB`);
+  setText('memHeapTotal', `${proc.heapTotalMb ?? '—'} MB`);
+  setText('memRss',       `${proc.rssMb ?? '—'} MB`);
+}
+
+// ─── Browser vitals ───────────────────────────────────────────────────────────
+function updateVitals(vitals) {
+  const grid = $('vitalsGrid');
+  const entries = Object.entries(vitals || {});
+  if (!entries.length) { grid.innerHTML = '<div class="empty-state">No vitals recorded yet.</div>'; return; }
+  grid.innerHTML = entries.map(([name, v]) => {
+    const ratingCls = v.rating === 'good' ? 'vital-good' : v.rating === 'needs-improvement' ? 'vital-needs-improvement' : 'vital-poor';
+    const shortName = name.replace('monitor.', '').replace(/_/g, ' ');
+    return `<div class="vital-card">
+      <div class="vital-name">${shortName}</div>
+      <div class="vital-val ${ratingCls}">${v.value}</div>
+      <div class="vital-unit">${v.rating ?? ''} · ×${v.count}</div>
+    </div>`;
+  }).join('');
+}
+
+// ─── Drill-down ───────────────────────────────────────────────────────────────
+function openDrill(filter) {
+  filterActive = filter || 'all';
+  drillOpen = true;
+  $('drillBody').classList.add('open');
+  $('drillLabel').textContent = '▲ Collapse';
+  $('filterRow').querySelectorAll('.filter-btn').forEach((b) => {
+    b.classList.toggle('active', b.dataset.filter === filterActive);
+  });
+  renderErrorTable();
+}
+
+function renderErrorTable() {
+  let rows = lastErrors;
+  if (filterActive === '4xx') rows = rows.filter((r) => Number(r.statusCode) >= 400 && Number(r.statusCode) < 500);
+  else if (filterActive === '5xx') rows = rows.filter((r) => Number(r.statusCode) >= 500);
+  else if (filterActive === 'GET')  rows = rows.filter((r) => r.method?.toUpperCase() === 'GET');
+  else if (filterActive === 'POST') rows = rows.filter((r) => r.method?.toUpperCase() === 'POST');
+
+  const tbody = $('errTableBody');
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="4" class="empty-state">${filterActive === 'all' ? 'No errors in this session.' : `No ${filterActive} errors.`}</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = [...rows].reverse().map((r, i) => `
+    <tr style="animation-delay:${i * 0.03}s">
+      <td style="color:var(--muted);font-size:11px;font-variant-numeric:tabular-nums">${fmtTime(r.at)}</td>
+      <td>${methodBadge(r.method)}</td>
+      <td style="font-family:monospace;font-size:12px;color:var(--cyan)">${r.route ?? '?'}</td>
+      <td>${statusBadge(r.statusCode)}</td>
+    </tr>`).join('');
+}
+
+function initDrillToggle() {
+  $('drillToggle').addEventListener('click', () => {
+    drillOpen = !drillOpen;
+    $('drillBody').classList.toggle('open', drillOpen);
+    $('drillLabel').textContent = drillOpen ? '▲ Collapse' : '▼ Expand';
+  });
+  $('filterRow').querySelectorAll('.filter-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      filterActive = btn.dataset.filter;
+      $('filterRow').querySelectorAll('.filter-btn').forEach((b) => b.classList.toggle('active', b === btn));
+      renderErrorTable();
+    });
+  });
+}
+
+// ─── OTEL settings ────────────────────────────────────────────────────────────
+function updateOtelBanner(isActive) {
+  const banner = $('otelBanner');
+  if (isActive) {
+    banner.className = 'otel-status-banner active';
+    setText('otelBannerTitle', 'OpenTelemetry Active');
+    setText('otelBannerSub',   'Traces and metrics are being exported to your configured OTLP endpoint.');
+    $('otelCurrentStatus').value = 'Exporting via OTLP';
+  } else {
+    banner.className = 'otel-status-banner inactive';
+    setText('otelBannerTitle', 'OpenTelemetry Not Configured');
+    setText('otelBannerSub',   'Set OTEL_EXPORTER_OTLP_ENDPOINT in .env to enable trace and metric export.');
+    $('otelCurrentStatus').value = 'Not configured — OTEL_SDK_DISABLED or no endpoint set';
+  }
+}
+
+function initOtelSettings() {
+  $('testOtelBtn').addEventListener('click', async () => {
+    const endpoint = $('otelEndpoint').value.trim() || $('otelTracesEndpoint').value.trim();
+    const result = $('otelTestResult');
+    if (!endpoint) {
+      result.textContent = 'Enter an endpoint URL to test.';
+      result.className = 'otel-test-result visible fail';
+      return;
+    }
+    $('testOtelBtn').disabled = true;
+    $('testOtelBtn').textContent = 'Testing…';
+    result.className = 'otel-test-result visible';
+    result.textContent = 'Sending test trace…';
+    try {
+      const url = endpoint.replace(/\/$/, '') + (endpoint.includes('/v1/') ? '' : '/v1/traces');
+      const res = await fetch(url, {
+        method: 'POST', mode: 'cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resourceSpans: [] }),
+        signal: AbortSignal.timeout(5000),
+      });
+      result.className = 'otel-test-result visible ok';
+      result.textContent = `✓ Endpoint responded with ${res.status}. OTEL collector is reachable.`;
+    } catch (err) {
+      result.className = 'otel-test-result visible fail';
+      result.textContent = `✗ ${err.name === 'AbortError' ? 'Timed out (5s)' : err.message}. Check the endpoint URL and collector status.`;
+    } finally {
+      $('testOtelBtn').disabled = false;
+      $('testOtelBtn').textContent = 'Test Connection';
+    }
   });
 
-  elements.vitalsStatus.textContent = `Vitals recorded at ${new Date().toLocaleTimeString()}.`;
+  $('genEnvBtn').addEventListener('click', () => {
+    const ep  = $('otelEndpoint').value.trim();
+    const tr  = $('otelTracesEndpoint').value.trim();
+    const met = $('otelMetricsEndpoint').value.trim();
+    const svc = $('otelServiceName').value.trim() || 'faith-api';
+    const lines = [];
+    if (ep)  lines.push(`OTEL_EXPORTER_OTLP_ENDPOINT=${ep}`);
+    if (tr)  lines.push(`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${tr}`);
+    if (met) lines.push(`OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=${met}`);
+    lines.push(`OTEL_SERVICE_NAME=${svc}`);
+    lines.push(`# Restart API after adding these to .env`);
+    const snip = $('envSnippet');
+    snip.textContent = lines.join('\n');
+    snip.style.display = 'block';
+    toast('Snippet generated — copy and add to your .env file');
+  });
 }
 
-function readSummaryValue(summary, keys) {
-  if (!summary || typeof summary !== 'object') return FALLBACK;
-  for (const key of keys) {
-    if (summary[key] !== undefined && summary[key] !== null) {
-      return summary[key];
-    }
-  }
-  return FALLBACK;
-}
+// ─── Main refresh ─────────────────────────────────────────────────────────────
+async function doRefresh() {
+  const chip = $('healthChip');
+  $('refreshBtn').disabled = true;
 
-function applyHealthyState(isHealthy) {
-  elements.overallStatus.dataset.state = isHealthy ? 'ok' : 'error';
-  elements.overallStatus.textContent = isHealthy ? 'Healthy' : 'Degraded';
-}
-
-function sumStatusRange(statusCounts, min, max) {
-  if (!statusCounts || typeof statusCounts !== 'object') return 0;
-  let total = 0;
-  for (const [statusCode, count] of Object.entries(statusCounts)) {
-    const code = Number(statusCode);
-    if (!Number.isFinite(code) || code < min || code > max) continue;
-    total += Number(count) || 0;
-  }
-  return total;
-}
-
-function formatStatusCounts(statusCounts) {
-  if (!statusCounts || typeof statusCounts !== 'object') return FALLBACK;
-  const entries = Object.entries(statusCounts)
-    .filter(([, count]) => Number(count) > 0)
-    .sort(([leftCode], [rightCode]) => Number(leftCode) - Number(rightCode));
-
-  if (!entries.length) return FALLBACK;
-  return entries.map(([code, count]) => `${code}: ${count}`).join(' · ');
-}
-
-async function refreshMonitoring() {
   try {
-    elements.overallStatus.textContent = 'Refreshing…';
-
-    const [webSummary, apiHealth, apiSummary] = await Promise.all([
-      fetchJson('/telemetry/summary'),
-      fetchJson('/api/health'),
-      fetchJson('/api/v1/telemetry/summary'),
+    const [apiHealth, apiSummaryResp, webSummaryResp] = await Promise.allSettled([
+      fetch('/api/health', { credentials: 'include' }).then((r) => r.json()),
+      fetch('/api/v1/telemetry/summary', { credentials: 'include' }).then((r) => r.json()),
+      fetch('/telemetry/summary', { credentials: 'include' }).then((r) => r.json()).catch(() => ({})),
     ]);
 
-    const webService = formatValue(webSummary.service);
-    const apiService = formatValue(apiHealth.service || apiSummary.service);
+    const health = apiHealth.status === 'fulfilled' ? apiHealth.value : null;
+    const apiData = apiSummaryResp.status === 'fulfilled' ? apiSummaryResp.value : null;
+    const webData = webSummaryResp.status === 'fulfilled' ? webSummaryResp.value : null;
+    const sum = apiData?.summary ?? {};
 
-    elements.webHealth.textContent = webService;
-    elements.apiHealth.textContent = apiService;
-    elements.webUpdated.textContent = toLocalDateTime(new Date().toISOString());
-    elements.apiUpdated.textContent = toLocalDateTime(apiHealth.timestamp);
+    // Health chip
+    if (health?.service) {
+      chip.className = 'status-chip healthy';
+      $('healthText').textContent = `${health.service} · ${new Date(health.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
+    } else {
+      chip.className = 'status-chip degraded';
+      $('healthText').textContent = 'Degraded';
+    }
 
-    const webTelemetry = webSummary.summary || {};
-    elements.webRequests.textContent = formatValue(readSummaryValue(webTelemetry, ['requests', 'requestCount', 'totalRequests']));
-    elements.webErrors.textContent = formatValue(readSummaryValue(webTelemetry, ['errors', 'errorCount', 'totalErrors']));
-    elements.webDuration.textContent = formatValue(readSummaryValue(webTelemetry, ['avgDurationMs', 'averageDurationMs', 'avgMs']));
-    elements.webRoute.textContent = formatRoute(readSummaryValue(webTelemetry, ['lastRoute', 'route']));
+    // KPIs
+    const reqCount = sum.requestCount ?? 0;
+    const errCount = sum.errorCount   ?? 0;
+    setText('kpiRequests', reqCount);
+    setText('kpiRequestsSub', `${sum.mutationCount ?? 0} mutations`);
+    setText('kpiErrors',   errCount);
+    const errRate = reqCount > 0 ? `${((errCount / reqCount) * 100).toFixed(1)}% error rate` : 'No traffic yet';
+    setText('kpiErrorsSub', errRate);
+    setText('kpiLatency', fmtMs(sum.avgDurationMs));
+    setText('kpiLatencySub', `p95 ${fmtMs(sum.requestLatencyMs?.p95)}  max ${fmtMs(sum.requestLatencyMs?.max)}`);
+    setText('kpiUptime',   fmtUptime(sum.process?.uptimeSeconds));
+    setText('kpiActive',   sum.activeRequests ?? 0);
+    setText('kpiMutations', sum.mutationCount ?? 0);
+    if (sum.lastMutationAt) setText('kpiMutationsSub', `Last: ${fmtTime(sum.lastMutationAt)}`);
 
-    const apiTelemetry = apiSummary.summary || {};
-    elements.apiRequests.textContent = formatValue(readSummaryValue(apiTelemetry, ['requests', 'requestCount', 'totalRequests']));
-    elements.apiErrors.textContent = formatValue(readSummaryValue(apiTelemetry, ['errors', 'errorCount', 'totalErrors']));
-    elements.apiDuration.textContent = formatValue(readSummaryValue(apiTelemetry, ['avgDurationMs', 'averageDurationMs', 'avgMs']));
-    elements.apiOtel.textContent = apiSummary.exportedViaOtel ? 'Yes' : 'No';
-    elements.apiClientErrors.textContent = formatValue(sumStatusRange(apiTelemetry.errorStatusCounts, 400, 499));
-    elements.apiServerErrors.textContent = formatValue(sumStatusRange(apiTelemetry.errorStatusCounts, 500, 599));
-    elements.apiErrorCodes.textContent = formatStatusCounts(apiTelemetry.errorStatusCounts);
+    // Push history point
+    historyData.push({ t: Date.now(), req: reqCount, err: errCount });
+    if (historyData.length > MAX_HISTORY) historyData.shift();
+    updateSparkline();
 
-    applyHealthyState(true);
-    await recordVitals();
-  } catch (error) {
-    applyHealthyState(false);
-    elements.vitalsStatus.textContent = `Monitoring refresh failed: ${error.message}`;
+    // Charts
+    updateDonut(sum.statusCounts);
+    updateLatencyBars(sum.requestLatencyMs, sum.proxyLatencyMs);
+    updateMemory(sum.process);
+
+    // Vitals
+    const vitals = { ...(sum.browserVitals ?? {}), ...(webData?.summary?.browserVitals ?? {}) };
+    updateVitals(vitals);
+
+    // Errors drill-down
+    lastErrors = sum.recentErrors ?? [];
+    setText('errorCount', lastErrors.length);
+    if (drillOpen) renderErrorTable();
+
+    // OTEL
+    updateOtelBanner(apiData?.exportedViaOtel ?? false);
+
+    // Record heartbeat vital
+    recordHeartbeat();
+
+  } catch (err) {
+    chip.className = 'status-chip degraded';
+    $('healthText').textContent = 'Error';
+    toast(`Refresh failed: ${err.message}`, 'err');
+  } finally {
+    $('refreshBtn').disabled = false;
   }
 }
 
-elements.refreshButton?.addEventListener('click', () => {
-  void refreshMonitoring();
+async function recordHeartbeat() {
+  const memMb = Math.round((performance?.memory?.usedJSHeapSize ?? 0) / 1048576);
+  await fetch('/api/v1/telemetry/vitals', {
+    method: 'POST', credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: 'monitor.heartbeat.memory_mb', value: memMb, rating: 'good', page: 'monitor', timestamp: new Date().toISOString(), navigationType: 'navigate' }),
+  }).catch(() => {});
+}
+
+// ─── Auto-refresh countdown ───────────────────────────────────────────────────
+function resetCountdown() {
+  clearInterval(countdownTimer);
+  countdown = REFRESH_INTERVAL / 1000;
+  countdownTimer = setInterval(() => {
+    countdown--;
+    if (countdown > 0) {
+      $('countdown').textContent = `↺ in ${countdown}s`;
+    } else {
+      $('countdown').textContent = 'Refreshing…';
+    }
+  }, 1000);
+}
+
+function scheduleRefresh() {
+  clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(async () => {
+    await doRefresh();
+    resetCountdown();
+    scheduleRefresh();
+  }, REFRESH_INTERVAL);
+}
+
+// ─── Boot ─────────────────────────────────────────────────────────────────────
+$('refreshBtn').addEventListener('click', async () => {
+  clearTimeout(refreshTimer);
+  clearInterval(countdownTimer);
+  await doRefresh();
+  resetCountdown();
+  scheduleRefresh();
 });
 
-void refreshMonitoring();
+initDrillToggle();
+initOtelSettings();
+doRefresh().then(() => { resetCountdown(); scheduleRefresh(); });
