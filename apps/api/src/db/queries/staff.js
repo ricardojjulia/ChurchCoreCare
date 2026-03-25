@@ -26,10 +26,6 @@ function rowToStaff(row) {
     licenseNumber: decrypt(row.license_number_enc),
     supervisionStatus: row.supervision_status,
     supervisingStaffId: row.supervising_staff_id,
-    locationIds:
-      typeof row.location_ids === 'string'
-        ? JSON.parse(row.location_ids)
-        : (row.location_ids ?? []),
     bio: decrypt(row.bio_enc),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -129,15 +125,14 @@ export async function createStaff({
   licenseNumber = null,
   supervisionStatus = 'not_required',
   supervisingStaffId = null,
-  locationIds = [],
   bio = null,
 }) {
   await pool.query(
     `INSERT INTO staff_members
        (id, tenant_id, role, first_name_enc, last_name_enc,
         license_type, license_number_enc, supervision_status,
-        supervising_staff_id, location_ids, bio_enc)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        supervising_staff_id, bio_enc)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       tenantId,
@@ -148,7 +143,6 @@ export async function createStaff({
       encrypt(licenseNumber),
       supervisionStatus,
       supervisingStaffId,
-      JSON.stringify(locationIds),
       encrypt(bio),
     ],
   );
@@ -193,10 +187,6 @@ export async function updateStaff(id, tenantId, fields) {
   if (fields.supervisingStaffId !== undefined) {
     setClauses.push('supervising_staff_id = ?');
     values.push(fields.supervisingStaffId);
-  }
-  if (fields.locationIds !== undefined) {
-    setClauses.push('location_ids = ?');
-    values.push(JSON.stringify(fields.locationIds));
   }
   if (fields.bio !== undefined) {
     setClauses.push('bio_enc = ?');

@@ -4,16 +4,163 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## Version
 
-- Current release: `1.2.0`
-- Status: production-ready (client module + MySQL persistence layer + Docker local DB)
+- Current release: `1.4.0`
+- Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI)
 
-## v1.2.0 — Docker Local Database, Env Loading Fix & Login Bug Fix (March 2026)
+## v1.4.0 — Mantine UI Migration, Counselor Maintenance & Bug Fixes (March 2026)
 
 ### Overview
 
-Completes the local developer experience for the MySQL persistence layer. Adds a Docker Compose file for one-command database startup, fixes environment variable loading so the API always reads `.env` on start, and resolves a login regression where the session INSERT failed due to a missing `role` column in the staff account query.
+Completes a full migration of all React components from raw HTML inputs and inline styles to [Mantine v7](https://mantine.dev) component primitives. Adds a dedicated Counselor Maintenance screen showing only counselor and intern staff. Fixes two navigation regressions introduced during the UI refactor.
 
 ### Changes
+
+#### Full Mantine v7 UI Migration
+
+Every component in `apps/web/src/components/` has been rewritten to use Mantine v7 primitives, replacing raw `<input>`, `<select>`, `<textarea>`, and all inline style objects.
+
+**Migrated components:**
+
+| Component | Notes |
+| --- | --- |
+| `ClientForm.jsx` | `useForm` with field-level validation; `TextInput`, `Select`, `Alert` |
+| `ClientModal.jsx` | Replaced custom backdrop div with Mantine `Modal` |
+| `WorkspaceGrid.jsx` | `Paper`, `Tabs`, `Button`, `UnstyledButton`; `notifications.show()` for delete feedback |
+| `UserMaintenance.jsx` | `Table`, `Modal`, `useForm`, `Badge`, `PasswordInput` |
+| `CounselorDetail/tabs/ProfileTab.jsx` | `useForm`, `Select`, `Textarea`; self/admin RBAC |
+| `CounselorDetail/tabs/LicensesTab.jsx` | List-of-cards with `Modal` for add/edit; `DateInput` for issue/expiry dates |
+| `CounselorDetail/tabs/SpecialtiesTab.jsx` | `CheckGroup` multi-select for specialties, modalities, age groups; `NumberInput` for max caseload |
+| `CounselorDetail/tabs/CounselorFaithProfileTab.jsx` | `Select` for tradition/integration style; `Checkbox` for ordained/memberships |
+| `CounselorDetail/tabs/CertificationsTab.jsx` | Two-section layout (Certifications / CEU Log); `Modal` for add/edit |
+| `CounselorDetail/tabs/EmploymentTab.jsx` | `DateInput` for hire/termination/malpractice dates; non-admin masked read-only view |
+| `CounselorDetail/tabs/AvailabilityTab.jsx` | Mantine `Table` with `Badge` for remote/in-person |
+| `ClientDetail/tabs/DemographicsTab.jsx` | `PasswordInput` for SSN; `DateInput` for DOB with age calculation; inline phone/address rows |
+| `ClientDetail/tabs/ContactsTab.jsx` | `ContactCard` sub-component with `Paper`, `SimpleGrid`, `Badge` indicators |
+| `ClientDetail/tabs/InsuranceTab.jsx` | Collapsible `Paper` header; `NumberInput` for copay/authorized visits; `DateInput` for all date fields |
+| `ClientDetail/tabs/ClinicalHistoryTab.jsx` | `CollapsibleSection` pattern; `YesNoToggle` checkboxes; risk active `Alert` with confirmation |
+| `ClientDetail/tabs/DiagnosesTab.jsx` | Three sub-lists (Diagnoses, Medications, Allergies); discontinued medications toggle |
+| `ClientDetail/tabs/FaithProfileTab.jsx` | `Select` with `searchable` for denomination; faith integration description panel |
+| `ClientDetail/tabs/LegalAdminTab.jsx` | Guardian toggle for non-minors; `DateInput` for court order expiry; Minor badge |
+
+`CounselorDetail/sharedStyles.js` was deleted after all tabs were migrated off it.
+
+#### Counselor Maintenance Screen
+
+New `CounselorMaintenance.jsx` component replaces the generic `UserMaintenance` component in the Counselors sidebar view:
+
+- Title reads **"Counselor Maintenance"** (was "User Maintenance")
+- Filters staff list to only `counselor` and `intern` roles — admin and other roles do not appear
+- Adds a **License Type** column relevant to clinical staff
+- **"View Profile"** button (primary) opens the full `CounselorDetailPage`
+- **"Edit"** button opens a quick-edit modal scoped to counselor/intern role options only
+- **"Add Counselor"** modal limits the Role dropdown to `counselor` and `intern`
+- `App.jsx` updated to import and render `CounselorMaintenance` for the `counselors` nav view
+
+### Bug Fixes
+
+#### Clients Sidebar — Empty Screen After Navigation
+
+Clicking "Clients" in the sidebar called `onOpenClientPicker()` (a search modal) without updating `currentView`. Closing the modal left the app on whatever screen was previously active, often showing nothing if `currentView` had no matching render branch.
+
+**Fix:** `Sidebar.jsx` now calls `onNavigate('clients')` for the Clients item, same as all other nav items. The Clients view navigates to `currentView = 'clients'`, which renders `WorkspaceGrid` with the full client list.
+
+#### Client Detail Page — Blank Screen on Open
+
+Clicking "Edit" on any client rendered a completely blank screen. Root cause: Mantine v7 `Tabs` renders **all panel children on mount** (hidden via CSS, not unmounted). `ClientDetailTabs.jsx` passed the `client` prop only to `DemographicsTab` but not to `InsuranceTab`, `ClinicalHistoryTab`, `FaithProfileTab`, or `LegalAdminTab`. All four components access `client.insurance`, `client.clinical`, etc. at the top of their render function, throwing a `TypeError` immediately — before anything was displayed.
+
+**Fix:** `ClientDetailTabs.jsx` now passes `client` to every tab panel component.
+
+### Backward Compatibility
+
+No breaking changes. All API routes, database schema, and authentication behavior are unchanged.
+
+---
+
+## v1.3.0 — Counselor Profiling System (March 2026)
+
+### v1.3.0 Overview
+
+Adds a comprehensive counselor profiling system covering all information a Christian counseling practice needs to maintain on its counseling personnel. Each counselor now has a dedicated detail page with seven tabs: Profile, Licenses, Specialties, Faith Profile, Certifications, Employment, and Availability. RBAC allows counselors to edit their own specialty and faith profiles while keeping licenses, certifications, and employment records admin-controlled.
+
+### v1.3.0 Changes
+
+#### Database Schema (5 new tables)
+
+- `staff_licenses` — multi-row, one per state license per counselor; PHI-encrypted license number
+- `staff_certifications` — multi-row, one per certification or CEU entry; PHI-encrypted cert number and notes
+- `staff_specialty_profiles` — singleton per counselor; JSON columns for specialties, modalities, age groups, languages
+- `staff_employment` — singleton per counselor; PHI-encrypted NPI, malpractice policy, and direct phone
+- `staff_faith_profiles` — singleton per counselor; PHI-encrypted theological approach, faith credentials, and spiritual gifts
+
+Run migration: `node apps/api/src/db/migrate.js`
+
+#### API Routes (7 new sub-resource routes)
+
+All routes are scoped under `/api/v1/staff/:staffId/`:
+
+- `GET|POST /licenses` — list and create licenses (admin or self for GET; admin-only POST)
+- `GET|PATCH|DELETE /licenses/:id` — get, update, delete a single license
+- `GET|POST /certifications` — list and create certifications
+- `GET|PATCH|DELETE /certifications/:id` — get, update, delete a single certification
+- `GET|PUT /specialty-profile` — get or upsert specialty profile (self or admin write)
+- `GET|PUT /employment` — get or upsert employment record (admin-only)
+- `GET|PUT /faith-profile` — get or upsert faith profile (self or admin write)
+
+#### Domain Enums (8 new)
+
+Added to `packages/domain/src/index.js`: `counselingSpecialties`, `therapeuticModalities`, `ageGroupsServed`, `employmentTypes`, `employmentStatuses`, `licenseStatuses`, `faithTraditions`, `integrationStyles`
+
+#### Web UI — CounselorDetailPage
+
+New component tree at `apps/web/src/components/CounselorDetail/`:
+
+- **Profile tab** — core staff record fields; admins edit all, counselors edit their own bio
+- **Licenses tab** — list-of-cards with add/edit/delete (admin only); masked license numbers
+- **Specialties tab** — checkbox multi-select for 19 specialties, 16 modalities, 9 age groups, 10 languages; editable by self or admin
+- **Faith Profile tab** — faith tradition, ordination details, AACC/ACBC/CCCA memberships, prayer and scripture integration preferences; editable by self or admin
+- **Certifications tab** — cards split into Certifications and CEU Log sections with total CEU hours; admin write
+- **Employment tab** — NPI, malpractice insurance, employment status; admin-only write with sensitive fields masked for non-admins; 10-digit NPI validation
+- **Availability tab** — read-only weekly grid from existing scheduling data
+
+#### App Routing
+
+- `Sidebar.jsx` — added "Counselors" nav item, visible to admin roles only
+- `UserMaintenance.jsx` — added "View Profile" button per staff row when `onViewCounselor` prop is provided
+- `App.jsx` — added `selectedCounselorId` state, `handleOpenCounselor`/`handleCounselorBack` handlers, and `CounselorDetailPage` render branch
+
+### v1.3.0 RBAC Summary
+
+| Resource | Read | Write |
+| --- | --- | --- |
+| Licenses | Admin or self | Admin only |
+| Certifications | Admin or self | Admin only |
+| Specialty Profile | Admin or self | Self or admin |
+| Faith Profile | Admin or self | Self or admin |
+| Employment | Admin only | Admin only |
+
+### v1.3.0 Backward Compatibility
+
+No breaking changes. Existing staff list, user maintenance, and client workflows are unaffected.
+
+### v1.3.0 Deferred
+
+- Availability editing (managed through Scheduling)
+- Credentialing expiry alerts
+- CEU reporting and export
+- Supervision assignment UI
+- Counselor-facing self-service portal
+
+See `PLANS/CounselorProfiling.md` for the full implementation plan.
+
+---
+
+## v1.2.0 — Docker Local Database, Env Loading Fix & Login Bug Fix (March 2026)
+
+### v1.2.0 Overview
+
+Completes the local developer experience for the MySQL persistence layer. Adds a Docker Compose file for one-command database startup, fixes environment variable loading so the API always reads `.env` on start, and resolves a login regression where the session INSERT failed due to a missing `role` column in the staff account query.
+
+### v1.2.0 Changes
 
 #### Docker Local Database
 
@@ -50,12 +197,12 @@ curl -s -X POST http://localhost:3001/v1/auth/login \
   -d '{"email":"admin@faithcounseling.local","password":"ChangeMe!Dev2024#"}'
 ```
 
-### Bug Fixes
+### v1.2.0 Bug Fixes
 
 - API no longer connects anonymously when started via `pnpm start` without explicit env vars
 - Login endpoint no longer throws `Column 'role' cannot be null` on first attempt
 
-### Backward Compatibility
+### v1.2.0 Backward Compatibility
 
 No breaking changes. In-memory mode (no `DB_NAME`) is unaffected.
 

@@ -1,62 +1,55 @@
 import { useState } from 'react';
+import { Burger, Group, Select, Badge, Text, Box } from '@mantine/core';
 
 const LANGUAGES = [
-  { code: 'en', name: 'English' },
-  { code: 'es', name: 'Español' },
-  { code: 'fr', name: 'Français' },
-  { code: 'pt', name: 'Português' },
+  { value: 'en', label: 'English' },
+  { value: 'es', label: 'Español' },
+  { value: 'fr', label: 'Français' },
+  { value: 'pt', label: 'Português' },
 ];
 
-export default function TopBar({ onMenuToggle, connectionStatus }) {
+const STATUS_CONFIG = {
+  loading:   { color: 'gray',  label: 'Connecting…' },
+  connected: { color: 'green', label: 'API Connected' },
+  error:     { color: 'red',   label: 'Connection Error' },
+};
+
+export default function TopBar({ opened, onMenuToggle, connectionStatus, currentUser }) {
   const [language, setLanguage] = useState('en');
+  const status = STATUS_CONFIG[connectionStatus] ?? STATUS_CONFIG.loading;
 
-  const statusConfig = {
-    loading: { color: '#62708b', text: 'Connecting...' },
-    connected: { color: '#08926a', text: 'API Connected' },
-    error: { color: '#b42318', text: 'Connection Error' },
-  };
-
-  const status = statusConfig[connectionStatus] || statusConfig.loading;
+  const userLabel =
+    typeof currentUser?.name === 'string' && currentUser.name.trim()
+      ? currentUser.name.trim()
+      : typeof currentUser?.email === 'string' && currentUser.email.trim()
+        ? currentUser.email.trim()
+        : 'Secure session';
 
   return (
-    <header className="topbar">
-      <button
-        type="button"
-        className="hamburger-menu"
-        onClick={onMenuToggle}
-        aria-label="Open menu"
-      >
-        <span />
-        <span />
-        <span />
-      </button>
+    <Group h="100%" px="md" justify="space-between" wrap="nowrap">
+      <Burger opened={opened} onClick={onMenuToggle} aria-label="Toggle navigation" size="sm" />
 
-      <div>
-        <h1>Practice HUB</h1>
-        <p style={{ color: status.color, fontSize: '0.85rem', margin: '4px 0 0' }}>
-          {status.text}
-        </p>
-      </div>
+      <Group gap="xs" justify="center" style={{ flex: 1 }}>
+        <Text fw={700} fz="lg" style={{ whiteSpace: 'nowrap' }}>Practice HUB</Text>
+        <Badge color={status.color} variant="light" size="sm">{status.label}</Badge>
+      </Group>
 
-      <div className="topbar-actions">
-        <label className="language-switcher">
-          <span>Language</span>
-          <select
-            value={language}
-            onChange={(e) => setLanguage(e.target.value)}
-          >
-            {LANGUAGES.map(lang => (
-              <option key={lang.code} value={lang.code}>
-                {lang.name}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <button type="button" className="action-btn">
-          Open Sign-In Panel
-        </button>
-      </div>
-    </header>
+      <Group gap="sm" wrap="nowrap">
+        <Select
+          data={LANGUAGES}
+          value={language}
+          onChange={setLanguage}
+          size="xs"
+          w={120}
+          aria-label="Language"
+        />
+        <Box>
+          <Badge variant="outline" color="gray" radius="xl" size="lg">
+            {userLabel}
+          </Badge>
+          <Text fz="xs" c="dimmed" ta="right" mt={2}>Server-managed session</Text>
+        </Box>
+      </Group>
+    </Group>
   );
 }
