@@ -52,6 +52,46 @@ export const supervisionStatuses = Object.freeze([
   'completed',
 ]);
 
+export const counselingSpecialties = Object.freeze([
+  'anxiety', 'depression', 'trauma', 'grief', 'marriage_couples', 'family',
+  'addiction', 'eating_disorders', 'ocd', 'adhd', 'spiritual_formation',
+  'biblical_counseling', 'premarital', 'parenting', 'adolescents',
+  'mens_issues', 'womens_issues', 'personality_disorders', 'crisis',
+]);
+
+export const therapeuticModalities = Object.freeze([
+  'cbt', 'emdr', 'dbt', 'gottman', 'eft', 'narrative', 'solution_focused',
+  'psychodynamic', 'act', 'motivational_interviewing', 'play_therapy',
+  'art_therapy', 'mindfulness', 'somatic', 'internal_family_systems',
+  'biblical_integration',
+]);
+
+export const ageGroupsServed = Object.freeze([
+  'children_0_5', 'children_6_12', 'adolescents', 'young_adults',
+  'adults', 'older_adults', 'couples', 'families', 'groups',
+]);
+
+export const employmentTypes = Object.freeze([
+  'full_time', 'part_time', 'contractor', 'intern', 'volunteer',
+]);
+
+export const employmentStatuses = Object.freeze([
+  'active', 'on_leave', 'terminated',
+]);
+
+export const licenseStatuses = Object.freeze([
+  'active', 'expired', 'inactive', 'pending_renewal',
+]);
+
+export const faithTraditions = Object.freeze([
+  'non_denominational', 'baptist', 'reformed', 'methodist', 'lutheran',
+  'catholic', 'pentecostal', 'evangelical', 'other',
+]);
+
+export const integrationStyles = Object.freeze([
+  'always_offered', 'on_request', 'not_offered',
+]);
+
 export const consentTypes = Object.freeze([
   'informed_consent',
   'privacy_notice',

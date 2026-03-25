@@ -1011,6 +1011,108 @@ CREATE TABLE IF NOT EXISTS retention_policies (
   INDEX idx_retention_tenant (tenant_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- ─── Counselor profiling tables ───────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS staff_licenses (
+  id                VARCHAR(64)  NOT NULL,
+  staff_id          VARCHAR(64)  NOT NULL,
+  tenant_id         VARCHAR(64)  NOT NULL,
+  license_type      VARCHAR(64)  NOT NULL,
+  license_number_enc TEXT,
+  issuing_state     VARCHAR(64),
+  issuing_body      VARCHAR(255),
+  issue_date        DATE         NULL,
+  expiry_date       DATE         NULL,
+  status            VARCHAR(32)  NOT NULL DEFAULT 'active',
+  is_primary        TINYINT(1)   NOT NULL DEFAULT 0,
+  created_at        TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at        TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_staff_licenses_staff  (staff_id, tenant_id),
+  INDEX idx_staff_licenses_tenant (tenant_id),
+  CONSTRAINT fk_staff_licenses_member FOREIGN KEY (staff_id) REFERENCES staff_members (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS staff_certifications (
+  id              VARCHAR(64)  NOT NULL,
+  staff_id        VARCHAR(64)  NOT NULL,
+  tenant_id       VARCHAR(64)  NOT NULL,
+  cert_name       VARCHAR(255) NOT NULL,
+  issuing_body    VARCHAR(255),
+  issue_date      DATE         NULL,
+  expiry_date     DATE         NULL,
+  cert_number_enc TEXT         NULL,
+  ceu_hours       DECIMAL(5,1) NULL,
+  is_ceu          TINYINT(1)   NOT NULL DEFAULT 0,
+  notes_enc       TEXT         NULL,
+  created_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_staff_certs_staff  (staff_id, tenant_id),
+  INDEX idx_staff_certs_tenant (tenant_id),
+  CONSTRAINT fk_staff_certs_member FOREIGN KEY (staff_id) REFERENCES staff_members (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS staff_specialty_profiles (
+  id                VARCHAR(64) NOT NULL,
+  staff_id          VARCHAR(64) NOT NULL,
+  tenant_id         VARCHAR(64) NOT NULL,
+  specialties       JSON,
+  modalities        JSON,
+  age_groups_served JSON,
+  languages         JSON,
+  max_caseload      INT         NULL,
+  notes_enc         TEXT        NULL,
+  updated_at        TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_specialty_staff (staff_id),
+  INDEX idx_specialty_tenant (tenant_id),
+  CONSTRAINT fk_specialty_member FOREIGN KEY (staff_id) REFERENCES staff_members (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS staff_employment (
+  id                     VARCHAR(64)  NOT NULL,
+  staff_id               VARCHAR(64)  NOT NULL,
+  tenant_id              VARCHAR(64)  NOT NULL,
+  employment_type        VARCHAR(32)  NOT NULL DEFAULT 'full_time',
+  employment_status      VARCHAR(32)  NOT NULL DEFAULT 'active',
+  hire_date              DATE         NULL,
+  termination_date       DATE         NULL,
+  npi_number_enc         TEXT         NULL,
+  malpractice_insurer    VARCHAR(255) NULL,
+  malpractice_policy_enc TEXT         NULL,
+  malpractice_expiry     DATE         NULL,
+  direct_phone_enc       TEXT         NULL,
+  location_ids           JSON         NULL,
+  updated_at             TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_employment_staff (staff_id),
+  INDEX idx_employment_tenant (tenant_id),
+  CONSTRAINT fk_employment_member FOREIGN KEY (staff_id) REFERENCES staff_members (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS staff_faith_profiles (
+  id                          VARCHAR(64)  NOT NULL,
+  staff_id                    VARCHAR(64)  NOT NULL,
+  tenant_id                   VARCHAR(64)  NOT NULL,
+  faith_tradition             VARCHAR(128) NULL,
+  theological_approach_enc    TEXT         NULL,
+  ordained                    TINYINT(1)   NOT NULL DEFAULT 0,
+  ordaining_body              VARCHAR(255) NULL,
+  aacc_member                 TINYINT(1)   NOT NULL DEFAULT 0,
+  acbc_certified              TINYINT(1)   NOT NULL DEFAULT 0,
+  ccca_member                 TINYINT(1)   NOT NULL DEFAULT 0,
+  other_faith_credentials_enc TEXT         NULL,
+  prayer_integration          VARCHAR(32)  NULL,
+  scripture_integration       VARCHAR(32)  NULL,
+  spiritual_gifts_enc         TEXT         NULL,
+  updated_at                  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_staff_faith (staff_id),
+  INDEX idx_staff_faith_tenant (tenant_id),
+  CONSTRAINT fk_staff_faith_member FOREIGN KEY (staff_id) REFERENCES staff_members (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ─── Practices (extended) — add columns missing from initial definition ────────
 -- practices table was created earlier; these ALTER statements are idempotent-safe
 -- via the IF NOT EXISTS DDL for tables above. When running on a fresh DB the

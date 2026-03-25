@@ -1,302 +1,133 @@
 import { useState } from 'react';
+import { notifications } from '@mantine/notifications';
+import { Stack, Title, SimpleGrid, TextInput, Select, Textarea, Checkbox, Button, Group, Text, Badge } from '@mantine/core';
+import { DateInput } from '@mantine/dates';
 import { upsertClientLegal, upsertClinicalHistory, patchClient } from '../../../lib/clientApi.js';
 
-const inputStyle = {
-  width: '100%',
-  padding: '8px 12px',
-  border: '1px solid #e1e8ed',
-  borderRadius: '4px',
-  fontSize: '14px',
-  boxSizing: 'border-box',
-};
-
-const labelStyle = {
-  display: 'block',
-  marginBottom: '4px',
-  fontSize: '14px',
-  fontWeight: 500,
-  color: '#374151',
-};
-
-const sectionHeaderStyle = {
-  fontSize: '16px',
-  fontWeight: 600,
-  marginBottom: '12px',
-  borderBottom: '1px solid #e1e8ed',
-  paddingBottom: '8px',
-  color: '#111827',
-};
-
-const saveBtnStyle = {
-  padding: '8px 20px',
-  border: 'none',
-  borderRadius: '4px',
-  backgroundColor: '#0861ea',
-  color: '#fff',
-  fontSize: '14px',
-  cursor: 'pointer',
-};
-
-const gridStyle = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-  gap: '14px',
-};
+function strToDate(s) { if (!s) return null; const d = new Date(s); return isNaN(d) ? null : d; }
+function dateToStr(d) { return d ? d.toISOString().slice(0, 10) : null; }
 
 export default function LegalAdminTab({ client, clientId }) {
   const legal = client.legal ?? {};
-  const ch = client.clinical ?? {};
-
-  // Guardian section visibility
+  const ch    = client.clinical ?? {};
   const isMinor = !!client.is_minor;
-  const [showGuardian, setShowGuardian] = useState(isMinor || !!(legal.guardian_name));
 
-  // Guardian fields
-  const [guardianName, setGuardianName] = useState(legal.guardian_name ?? '');
-  const [guardianRelationship, setGuardianRelationship] = useState(legal.guardian_relationship ?? '');
-  const [guardianPhone, setGuardianPhone] = useState(legal.guardian_phone ?? '');
-  const [guardianEmail, setGuardianEmail] = useState(legal.guardian_email ?? '');
-  const [guardianAddressLine1, setGuardianAddressLine1] = useState(legal.guardian_address?.line1 ?? '');
-  const [guardianAddressCity, setGuardianAddressCity] = useState(legal.guardian_address?.city ?? '');
-  const [guardianAddressState, setGuardianAddressState] = useState(legal.guardian_address?.state ?? '');
-  const [guardianAddressPostal, setGuardianAddressPostal] = useState(legal.guardian_address?.postal ?? '');
+  const [showGuardian,   setShowGuardian]   = useState(isMinor || !!(legal.guardian_name));
+  const [courtOrdered,   setCourtOrdered]   = useState(!!(legal.court_ordered || client.court_ordered));
+  const [saving,         setSaving]         = useState(false);
 
-  // Court order fields
-  const [courtOrdered, setCourtOrdered] = useState(!!legal.court_ordered || !!client.court_ordered);
-  const [courtCaseNumber, setCourtCaseNumber] = useState(legal.court_case_number ?? '');
-  const [courtOrderExpires, setCourtOrderExpires] = useState(legal.court_order_expires ?? '');
-  const [courtContactName, setCourtContactName] = useState(legal.court_contact?.name ?? '');
-  const [courtContactPhone, setCourtContactPhone] = useState(legal.court_contact?.phone ?? '');
-  const [courtAttorneyName, setCourtAttorneyName] = useState(legal.court_contact?.attorney ?? '');
-  const [custodyNotes, setCustodyNotes] = useState(legal.custody_notes ?? '');
+  // Guardian
+  const [guardianName,          setGuardianName]          = useState(legal.guardian_name          ?? '');
+  const [guardianRelationship,  setGuardianRelationship]  = useState(legal.guardian_relationship  ?? '');
+  const [guardianPhone,         setGuardianPhone]         = useState(legal.guardian_phone         ?? '');
+  const [guardianEmail,         setGuardianEmail]         = useState(legal.guardian_email         ?? '');
+  const [guardianLine1,         setGuardianLine1]         = useState(legal.guardian_address?.line1  ?? '');
+  const [guardianCity,          setGuardianCity]          = useState(legal.guardian_address?.city   ?? '');
+  const [guardianState,         setGuardianState]         = useState(legal.guardian_address?.state  ?? '');
+  const [guardianPostal,        setGuardianPostal]        = useState(legal.guardian_address?.postal ?? '');
 
-  // Admin fields (mirrors clinical history)
+  // Court
+  const [courtCaseNumber,  setCourtCaseNumber]  = useState(legal.court_case_number     ?? '');
+  const [courtOrderExpires,setCourtOrderExpires]= useState(strToDate(legal.court_order_expires));
+  const [courtContactName, setCourtContactName] = useState(legal.court_contact?.name   ?? '');
+  const [courtContactPhone,setCourtContactPhone]= useState(legal.court_contact?.phone  ?? '');
+  const [courtAttorneyName,setCourtAttorneyName]= useState(legal.court_contact?.attorney ?? '');
+  const [custodyNotes,     setCustodyNotes]     = useState(legal.custody_notes          ?? '');
+
+  // Admin
   const [referralSourceDetail, setReferralSourceDetail] = useState(client.referral_source_detail ?? '');
-  const [pcpName, setPcpName] = useState(ch.pcp_name ?? '');
-  const [pcpPractice, setPcpPractice] = useState(ch.pcp_practice ?? '');
-  const [pcpPhone, setPcpPhone] = useState(ch.pcp_phone ?? '');
-  const [preferredPharmacy, setPreferredPharmacy] = useState(
-    typeof ch.preferred_pharmacy === 'object' && ch.preferred_pharmacy
-      ? JSON.stringify(ch.preferred_pharmacy)
-      : (ch.preferred_pharmacy ?? '')
-  );
-
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(false);
+  const [pcpName,              setPcpName]              = useState(ch.pcp_name     ?? '');
+  const [pcpPractice,          setPcpPractice]          = useState(ch.pcp_practice ?? '');
+  const [pcpPhone,             setPcpPhone]             = useState(ch.pcp_phone    ?? '');
+  const [preferredPharmacy,    setPreferredPharmacy]    = useState(typeof ch.preferred_pharmacy === 'object' && ch.preferred_pharmacy ? JSON.stringify(ch.preferred_pharmacy) : (ch.preferred_pharmacy ?? ''));
 
   const handleSave = async () => {
-    setLoading(true);
-    setError(null);
-    setSuccess(false);
+    setSaving(true);
     try {
-      // Save legal record
       await upsertClientLegal(clientId, {
-        guardian_name: guardianName.trim() || null,
-        guardian_relationship: guardianRelationship || null,
-        guardian_phone: guardianPhone.trim() || null,
-        guardian_email: guardianEmail.trim() || null,
-        guardian_address: {
-          line1: guardianAddressLine1.trim(),
-          city: guardianAddressCity.trim(),
-          state: guardianAddressState.trim(),
-          postal: guardianAddressPostal.trim(),
-        },
-        court_ordered: courtOrdered ? 1 : 0,
-        court_case_number: courtCaseNumber.trim() || null,
-        court_order_expires: courtOrderExpires || null,
-        court_contact: {
-          name: courtContactName.trim() || null,
-          phone: courtContactPhone.trim() || null,
-          attorney: courtAttorneyName.trim() || null,
-        },
-        custody_notes: custodyNotes.trim() || null,
+        guardian_name:         guardianName.trim()         || null,
+        guardian_relationship: guardianRelationship        || null,
+        guardian_phone:        guardianPhone.trim()        || null,
+        guardian_email:        guardianEmail.trim()        || null,
+        guardian_address: { line1: guardianLine1.trim(), city: guardianCity.trim(), state: guardianState.trim(), postal: guardianPostal.trim() },
+        court_ordered:         courtOrdered ? 1 : 0,
+        court_case_number:     courtCaseNumber.trim()      || null,
+        court_order_expires:   dateToStr(courtOrderExpires),
+        court_contact: { name: courtContactName.trim() || null, phone: courtContactPhone.trim() || null, attorney: courtAttorneyName.trim() || null },
+        custody_notes:         custodyNotes.trim()         || null,
       });
-
-      // Save admin / clinical mirror fields
       await upsertClinicalHistory(clientId, {
-        pcp_name: pcpName.trim() || null,
-        pcp_practice: pcpPractice.trim() || null,
-        pcp_phone: pcpPhone.trim() || null,
-        preferred_pharmacy: preferredPharmacy.trim() || null,
+        pcp_name: pcpName.trim() || null, pcp_practice: pcpPractice.trim() || null,
+        pcp_phone: pcpPhone.trim() || null, preferred_pharmacy: preferredPharmacy.trim() || null,
       });
-
-      // Save referral source detail on client record
-      await patchClient(clientId, {
-        referral_source_detail: referralSourceDetail.trim() || null,
-        court_ordered: courtOrdered ? 1 : 0,
-      });
-
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
+      await patchClient(clientId, { referral_source_detail: referralSourceDetail.trim() || null, court_ordered: courtOrdered ? 1 : 0 });
+      notifications.show({ title: 'Saved', message: 'Legal & administrative record saved.', color: 'green' });
     } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
+      notifications.show({ title: 'Error', message: err.message, color: 'red' });
+    } finally { setSaving(false); }
   };
 
   return (
-    <div style={{ padding: '24px', maxWidth: '900px' }}>
-
-      {/* ── Guardian Section ─────────────────────────────────────────────────── */}
-      <section style={{ marginBottom: '32px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', borderBottom: '1px solid #e1e8ed', paddingBottom: '8px' }}>
-          <h2 style={{ ...sectionHeaderStyle, borderBottom: 'none', marginBottom: 0, paddingBottom: 0 }}>
-            Guardian Information
-            {isMinor && (
-              <span style={{ marginLeft: '8px', fontSize: '12px', background: '#fef3c7', color: '#92400e', padding: '2px 8px', borderRadius: '10px', fontWeight: 500 }}>
-                Minor Client
-              </span>
-            )}
-          </h2>
+    <Stack gap="xl" maw={900}>
+      {/* Guardian */}
+      <Stack gap="sm">
+        <Group justify="space-between">
+          <Group gap="xs">
+            <Title order={4} fz="sm" tt="uppercase" c="dimmed">Guardian Information</Title>
+            {isMinor && <Badge size="xs" color="yellow" variant="light">Minor Client</Badge>}
+          </Group>
           {!isMinor && (
-            <button
-              type="button"
-              onClick={() => setShowGuardian((v) => !v)}
-              style={{ background: 'none', border: 'none', color: '#0861ea', fontSize: '13px', cursor: 'pointer' }}
-            >
+            <Button variant="subtle" size="xs" onClick={() => setShowGuardian((v) => !v)}>
               {showGuardian ? 'Hide Guardian Info' : 'Show Guardian Info'}
-            </button>
+            </Button>
           )}
-        </div>
-
+        </Group>
         {showGuardian && (
-          <div style={gridStyle}>
-            <div>
-              <label style={labelStyle}>Guardian Full Name</label>
-              <input style={inputStyle} type="text" value={guardianName} onChange={(e) => setGuardianName(e.target.value)} />
-            </div>
-            <div>
-              <label style={labelStyle}>Relationship</label>
-              <select style={inputStyle} value={guardianRelationship} onChange={(e) => setGuardianRelationship(e.target.value)}>
-                <option value="">-- Select --</option>
-                <option value="parent">Parent</option>
-                <option value="legal guardian">Legal Guardian</option>
-                <option value="power of attorney">Power of Attorney</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
-            <div>
-              <label style={labelStyle}>Guardian Phone</label>
-              <input style={inputStyle} type="tel" value={guardianPhone} onChange={(e) => setGuardianPhone(e.target.value)} />
-            </div>
-            <div>
-              <label style={labelStyle}>Guardian Email</label>
-              <input style={inputStyle} type="email" value={guardianEmail} onChange={(e) => setGuardianEmail(e.target.value)} />
-            </div>
-            <div>
-              <label style={labelStyle}>Address Line 1</label>
-              <input style={inputStyle} type="text" value={guardianAddressLine1} onChange={(e) => setGuardianAddressLine1(e.target.value)} />
-            </div>
-            <div>
-              <label style={labelStyle}>City</label>
-              <input style={inputStyle} type="text" value={guardianAddressCity} onChange={(e) => setGuardianAddressCity(e.target.value)} />
-            </div>
-            <div>
-              <label style={labelStyle}>State</label>
-              <input style={inputStyle} type="text" value={guardianAddressState} onChange={(e) => setGuardianAddressState(e.target.value)} maxLength={64} />
-            </div>
-            <div>
-              <label style={labelStyle}>ZIP</label>
-              <input style={inputStyle} type="text" value={guardianAddressPostal} onChange={(e) => setGuardianAddressPostal(e.target.value)} />
-            </div>
-          </div>
+          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+            <TextInput label="Guardian Full Name"    value={guardianName}         onChange={(e) => setGuardianName(e.target.value)} />
+            <Select    label="Relationship"          data={[{ value: '', label: '— Select —' }, { value: 'parent', label: 'Parent' }, { value: 'legal guardian', label: 'Legal Guardian' }, { value: 'power of attorney', label: 'Power of Attorney' }, { value: 'other', label: 'Other' }]} value={guardianRelationship} onChange={(v) => setGuardianRelationship(v ?? '')} />
+            <TextInput label="Guardian Phone" type="tel"   value={guardianPhone}  onChange={(e) => setGuardianPhone(e.target.value)} />
+            <TextInput label="Guardian Email" type="email" value={guardianEmail}  onChange={(e) => setGuardianEmail(e.target.value)} />
+            <TextInput label="Address Line 1" value={guardianLine1}   onChange={(e) => setGuardianLine1(e.target.value)} />
+            <TextInput label="City"           value={guardianCity}    onChange={(e) => setGuardianCity(e.target.value)} />
+            <TextInput label="State"          value={guardianState}   onChange={(e) => setGuardianState(e.target.value)} maxLength={64} />
+            <TextInput label="ZIP"            value={guardianPostal}  onChange={(e) => setGuardianPostal(e.target.value)} />
+          </SimpleGrid>
         )}
-      </section>
+      </Stack>
 
-      {/* ── Court Order Section ──────────────────────────────────────────────── */}
-      <section style={{ marginBottom: '32px' }}>
-        <h2 style={sectionHeaderStyle}>Court Order</h2>
-
-        <div style={{ marginBottom: '14px' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', cursor: 'pointer', fontWeight: 500 }}>
-            <input type="checkbox" checked={courtOrdered} onChange={(e) => setCourtOrdered(e.target.checked)} />
-            Client is court-ordered to attend counseling
-          </label>
-        </div>
-
+      {/* Court Order */}
+      <Stack gap="sm">
+        <Title order={4} fz="sm" tt="uppercase" c="dimmed">Court Order</Title>
+        <Checkbox label="Client is court-ordered to attend counseling" checked={courtOrdered} onChange={(e) => setCourtOrdered(e.currentTarget.checked)} />
         {courtOrdered && (
           <>
-            <div style={{ ...gridStyle, marginBottom: '14px' }}>
-              <div>
-                <label style={labelStyle}>Case Number</label>
-                <input style={inputStyle} type="text" value={courtCaseNumber} onChange={(e) => setCourtCaseNumber(e.target.value)} />
-              </div>
-              <div>
-                <label style={labelStyle}>Court Order Expires</label>
-                <input style={inputStyle} type="date" value={courtOrderExpires} onChange={(e) => setCourtOrderExpires(e.target.value)} />
-              </div>
-              <div>
-                <label style={labelStyle}>Court Officer / Contact Name</label>
-                <input style={inputStyle} type="text" value={courtContactName} onChange={(e) => setCourtContactName(e.target.value)} />
-              </div>
-              <div>
-                <label style={labelStyle}>Court Contact Phone</label>
-                <input style={inputStyle} type="tel" value={courtContactPhone} onChange={(e) => setCourtContactPhone(e.target.value)} />
-              </div>
-              <div>
-                <label style={labelStyle}>Attorney Name</label>
-                <input style={inputStyle} type="text" value={courtAttorneyName} onChange={(e) => setCourtAttorneyName(e.target.value)} />
-              </div>
-            </div>
-            <div style={{ marginBottom: '14px' }}>
-              <label style={labelStyle}>Custody Notes</label>
-              <textarea
-                style={{ ...inputStyle, minHeight: '70px', resize: 'vertical' }}
-                value={custodyNotes}
-                onChange={(e) => setCustodyNotes(e.target.value)}
-              />
-            </div>
+            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+              <TextInput  label="Case Number"              value={courtCaseNumber}  onChange={(e) => setCourtCaseNumber(e.target.value)} />
+              <DateInput  label="Court Order Expires" valueFormat="YYYY-MM-DD" value={courtOrderExpires} onChange={setCourtOrderExpires} />
+              <TextInput  label="Court Officer / Contact Name" value={courtContactName}  onChange={(e) => setCourtContactName(e.target.value)} />
+              <TextInput  label="Court Contact Phone" type="tel" value={courtContactPhone} onChange={(e) => setCourtContactPhone(e.target.value)} />
+              <TextInput  label="Attorney Name"        value={courtAttorneyName}  onChange={(e) => setCourtAttorneyName(e.target.value)} />
+            </SimpleGrid>
+            <Textarea label="Custody Notes" rows={3} value={custodyNotes} onChange={(e) => setCustodyNotes(e.target.value)} />
           </>
         )}
-      </section>
+      </Stack>
 
-      {/* ── Administrative Section ────────────────────────────────────────────── */}
-      <section style={{ marginBottom: '32px' }}>
-        <h2 style={sectionHeaderStyle}>Administrative</h2>
+      {/* Administrative */}
+      <Stack gap="sm">
+        <Title order={4} fz="sm" tt="uppercase" c="dimmed">Administrative</Title>
+        <TextInput label="Referral Source Detail" value={referralSourceDetail} onChange={(e) => setReferralSourceDetail(e.target.value)} placeholder="e.g. Referred by Dr. Smith at First Baptist" />
+        <Text fz="xs" c="dimmed" fs="italic">The PCP and Pharmacy fields below are also editable on the Clinical History tab.</Text>
+        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+          <TextInput label="Primary Care Physician" value={pcpName}          onChange={(e) => setPcpName(e.target.value)} />
+          <TextInput label="PCP Practice / Clinic"  value={pcpPractice}      onChange={(e) => setPcpPractice(e.target.value)} />
+          <TextInput label="PCP Phone" type="tel"    value={pcpPhone}         onChange={(e) => setPcpPhone(e.target.value)} />
+          <TextInput label="Preferred Pharmacy"      value={preferredPharmacy} onChange={(e) => setPreferredPharmacy(e.target.value)} placeholder="Pharmacy name, address" />
+        </SimpleGrid>
+      </Stack>
 
-        <div style={{ marginBottom: '14px' }}>
-          <label style={labelStyle}>Referral Source Detail</label>
-          <input
-            style={inputStyle}
-            type="text"
-            value={referralSourceDetail}
-            onChange={(e) => setReferralSourceDetail(e.target.value)}
-            placeholder='e.g. Referred by Dr. Smith at First Baptist'
-          />
-        </div>
-
-        <p style={{ fontSize: '13px', color: '#62708b', marginBottom: '12px', fontStyle: 'italic' }}>
-          The PCP and Pharmacy fields below are also editable on the Clinical History tab and write to the same record.
-        </p>
-
-        <div style={gridStyle}>
-          <div>
-            <label style={labelStyle}>Primary Care Physician</label>
-            <input style={inputStyle} type="text" value={pcpName} onChange={(e) => setPcpName(e.target.value)} />
-          </div>
-          <div>
-            <label style={labelStyle}>PCP Practice / Clinic</label>
-            <input style={inputStyle} type="text" value={pcpPractice} onChange={(e) => setPcpPractice(e.target.value)} />
-          </div>
-          <div>
-            <label style={labelStyle}>PCP Phone</label>
-            <input style={inputStyle} type="tel" value={pcpPhone} onChange={(e) => setPcpPhone(e.target.value)} />
-          </div>
-          <div>
-            <label style={labelStyle}>Preferred Pharmacy (name &amp; address)</label>
-            <input style={inputStyle} type="text" value={preferredPharmacy} onChange={(e) => setPreferredPharmacy(e.target.value)} placeholder="Pharmacy name, address" />
-          </div>
-        </div>
-      </section>
-
-      {error && <p style={{ color: '#b42318', fontSize: '14px', marginBottom: '12px' }}>{error}</p>}
-      {success && <p style={{ color: '#065f46', fontSize: '14px', marginBottom: '12px' }}>Legal &amp; administrative record saved.</p>}
-
-      <button type="button" style={saveBtnStyle} disabled={loading} onClick={handleSave}>
-        {loading ? 'Saving...' : 'Save Legal & Admin'}
-      </button>
-    </div>
+      <Group><Button loading={saving} onClick={handleSave}>Save Legal & Admin</Button></Group>
+    </Stack>
   );
 }

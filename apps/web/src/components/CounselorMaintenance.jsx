@@ -11,13 +11,9 @@ import {
 } from '../lib/clientApi.js';
 import { useState } from 'react';
 
-const ROLE_OPTIONS = [
-  { value: 'platform_admin',   label: 'Platform Admin' },
-  { value: 'practice_owner',   label: 'Practice Owner' },
-  { value: 'practice_admin',   label: 'Practice Admin' },
-  { value: 'counselor',        label: 'Counselor' },
-  { value: 'intern',           label: 'Intern' },
-  { value: 'scheduler_biller', label: 'Scheduler / Biller' },
+const COUNSELOR_ROLE_OPTIONS = [
+  { value: 'counselor', label: 'Counselor' },
+  { value: 'intern',    label: 'Intern' },
 ];
 
 const LICENSE_OPTIONS = [
@@ -41,15 +37,13 @@ const SUPERVISION_OPTIONS = [
 ];
 
 const ROLE_COLORS = {
-  platform_admin:   'red',
-  practice_owner:   'violet',
-  practice_admin:   'blue',
-  counselor:        'green',
-  intern:           'yellow',
-  scheduler_biller: 'gray',
+  counselor: 'green',
+  intern:    'yellow',
 };
 
-export default function UserMaintenance({ userRole, onViewCounselor }) {
+const COUNSELOR_ROLES = new Set(['counselor', 'intern']);
+
+export default function CounselorMaintenance({ userRole, onViewCounselor }) {
   const [items,   setItems]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null);
@@ -77,9 +71,10 @@ export default function UserMaintenance({ userRole, onViewCounselor }) {
     setLoading(true);
     try {
       const payload = await fetchStaff();
-      setItems(Array.isArray(payload?.items) ? payload.items : []);
+      const all = Array.isArray(payload?.items) ? payload.items : [];
+      setItems(all.filter((s) => COUNSELOR_ROLES.has(s.role)));
     } catch (err) {
-      notifications.show({ title: 'Error', message: err.message || 'Unable to load users', color: 'red' });
+      notifications.show({ title: 'Error', message: err.message || 'Unable to load counselors', color: 'red' });
     } finally {
       setLoading(false);
     }
@@ -114,7 +109,7 @@ export default function UserMaintenance({ userRole, onViewCounselor }) {
           role: values.role, licenseType: values.licenseType,
           supervisionStatus: values.supervisionStatus,
         });
-        notifications.show({ title: 'Saved', message: 'User updated.', color: 'green' });
+        notifications.show({ title: 'Saved', message: 'Counselor updated.', color: 'green' });
         close();
       } else {
         const result = await createStaffUser({
@@ -125,10 +120,10 @@ export default function UserMaintenance({ userRole, onViewCounselor }) {
         });
         const tempPassword = result?.accountProvisioning?.temporaryPassword;
         notifications.show({
-          title: 'User created',
+          title: 'Counselor created',
           message: tempPassword
             ? `Temporary password for ${result.accountProvisioning.email}: ${tempPassword}`
-            : 'User created successfully.',
+            : 'Counselor created successfully.',
           color: 'green',
           autoClose: tempPassword ? false : 4000,
         });
@@ -136,14 +131,14 @@ export default function UserMaintenance({ userRole, onViewCounselor }) {
       }
       await loadStaff();
     } catch (err) {
-      notifications.show({ title: 'Error', message: err.message || 'Unable to save user', color: 'red' });
+      notifications.show({ title: 'Error', message: err.message || 'Unable to save counselor', color: 'red' });
     } finally {
       setSaving(false);
     }
   };
 
   const runAction = async (staffId, actionLabel, action) => {
-    if (!window.confirm(`${actionLabel} for this user?`)) return;
+    if (!window.confirm(`${actionLabel} for this counselor?`)) return;
     try {
       const result = await runStaffAccountAction(staffId, action);
       await loadStaff();
@@ -163,29 +158,30 @@ export default function UserMaintenance({ userRole, onViewCounselor }) {
   if (!canManageUsers) {
     return (
       <Paper p="md" radius="lg" withBorder>
-        <Title order={2} fz="lg" mb="xs">User Maintenance</Title>
+        <Title order={2} fz="lg" mb="xs">Counselor Maintenance</Title>
         <Text c="dimmed">Admin access is required.</Text>
       </Paper>
     );
   }
 
   return (
-    <Paper p="md" radius="lg" withBorder component="section" aria-labelledby="umTitle">
+    <Paper p="md" radius="lg" withBorder component="section" aria-labelledby="cmTitle">
       <Group justify="space-between" mb="md">
-        <Title order={2} fz="lg" id="umTitle">User Maintenance</Title>
-        <Button onClick={openCreate}>New User</Button>
+        <Title order={2} fz="lg" id="cmTitle">Counselor Maintenance</Title>
+        <Button onClick={openCreate}>New Counselor</Button>
       </Group>
 
       {loading ? (
         <Group justify="center" py="xl"><Loader size="sm" /></Group>
       ) : items.length === 0 ? (
-        <Text c="dimmed">No users found.</Text>
+        <Text c="dimmed">No counselors found.</Text>
       ) : (
         <Table striped highlightOnHover withTableBorder withColumnBorders>
           <Table.Thead>
             <Table.Tr>
               <Table.Th>Name</Table.Th>
               <Table.Th>Role</Table.Th>
+              <Table.Th>License Type</Table.Th>
               <Table.Th>Email</Table.Th>
               <Table.Th>Status</Table.Th>
               <Table.Th>Last Login</Table.Th>
@@ -201,6 +197,7 @@ export default function UserMaintenance({ userRole, onViewCounselor }) {
                     {item.role}
                   </Badge>
                 </Table.Td>
+                <Table.Td fz="sm">{item.licenseType || '—'}</Table.Td>
                 <Table.Td>{item.email || '—'}</Table.Td>
                 <Table.Td>
                   <Badge color={item.accountLocked ? 'red' : 'green'} variant="light" size="sm">
@@ -212,8 +209,12 @@ export default function UserMaintenance({ userRole, onViewCounselor }) {
                 </Table.Td>
                 <Table.Td>
                   <Group gap="xs" wrap="nowrap">
-                    <Button size="xs" variant="default"
-                      onClick={() => onViewCounselor ? onViewCounselor(item.id) : openEdit(item)}>
+                    {onViewCounselor && (
+                      <Button size="xs" variant="filled" onClick={() => onViewCounselor(item.id)}>
+                        View Profile
+                      </Button>
+                    )}
+                    <Button size="xs" variant="default" onClick={() => openEdit(item)}>
                       Edit
                     </Button>
                     <Button size="xs" variant="default"
@@ -236,7 +237,7 @@ export default function UserMaintenance({ userRole, onViewCounselor }) {
         </Table>
       )}
 
-      <Modal opened={opened} onClose={() => { if (!saving) close(); }} title={editing ? 'Edit User' : 'Create User'}>
+      <Modal opened={opened} onClose={() => { if (!saving) close(); }} title={editing ? 'Edit Counselor' : 'Add Counselor'}>
         <form onSubmit={form.onSubmit(handleSave)}>
           <Stack gap="sm">
             <TextInput label="First name" required {...form.getInputProps('firstName')} />
@@ -246,9 +247,9 @@ export default function UserMaintenance({ userRole, onViewCounselor }) {
               required={!editing} disabled={Boolean(editing)}
               {...form.getInputProps('email')}
             />
-            <Select label="Role"              data={ROLE_OPTIONS}        {...form.getInputProps('role')} />
-            <Select label="License type"      data={LICENSE_OPTIONS}     {...form.getInputProps('licenseType')} />
-            <Select label="Supervision status" data={SUPERVISION_OPTIONS} {...form.getInputProps('supervisionStatus')} />
+            <Select label="Role"              data={COUNSELOR_ROLE_OPTIONS} {...form.getInputProps('role')} />
+            <Select label="License type"      data={LICENSE_OPTIONS}        {...form.getInputProps('licenseType')} />
+            <Select label="Supervision status" data={SUPERVISION_OPTIONS}   {...form.getInputProps('supervisionStatus')} />
 
             {!editing && (
               <PasswordInput
@@ -261,7 +262,7 @@ export default function UserMaintenance({ userRole, onViewCounselor }) {
 
             <Group justify="flex-end" mt="xs">
               <Button variant="default" onClick={close} disabled={saving}>Cancel</Button>
-              <Button type="submit" loading={saving}>Save User</Button>
+              <Button type="submit" loading={saving}>Save</Button>
             </Group>
           </Stack>
         </form>

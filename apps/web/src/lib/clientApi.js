@@ -345,3 +345,113 @@ export function runStaffAccountAction(staffId, action, payload = {}) {
     body: JSON.stringify({ action, ...payload }),
   });
 }
+
+// ── Counselor detail ──────────────────────────────────────────────────────────
+
+export function fetchCounselor(staffId) {
+  return apiFetch(`/api/v1/staff/${staffId}`);
+}
+
+export function fetchStaffAvailability(staffId) {
+  return apiFetch(`/api/v1/staff/${staffId}/availability`);
+}
+
+// ── Staff licenses ────────────────────────────────────────────────────────────
+
+export function fetchStaffLicenses(staffId) {
+  return apiFetch(`/api/v1/staff/${staffId}/licenses`);
+}
+
+export function createStaffLicense(staffId, data) {
+  return apiFetch(`/api/v1/staff/${staffId}/licenses`, {
+    method: 'POST',
+    headers: csrfHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateStaffLicense(staffId, licenseId, data) {
+  return apiFetch(`/api/v1/staff/${staffId}/licenses/${licenseId}`, {
+    method: 'PATCH',
+    headers: csrfHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteStaffLicense(staffId, licenseId) {
+  return apiFetch(`/api/v1/staff/${staffId}/licenses/${licenseId}`, {
+    method: 'DELETE',
+    headers: csrfHeaders(),
+  });
+}
+
+// ── Staff certifications ──────────────────────────────────────────────────────
+
+export function fetchStaffCertifications(staffId) {
+  return apiFetch(`/api/v1/staff/${staffId}/certifications`);
+}
+
+export function createStaffCertification(staffId, data) {
+  return apiFetch(`/api/v1/staff/${staffId}/certifications`, {
+    method: 'POST',
+    headers: csrfHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateStaffCertification(staffId, certId, data) {
+  return apiFetch(`/api/v1/staff/${staffId}/certifications/${certId}`, {
+    method: 'PATCH',
+    headers: csrfHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteStaffCertification(staffId, certId) {
+  return apiFetch(`/api/v1/staff/${staffId}/certifications/${certId}`, {
+    method: 'DELETE',
+    headers: csrfHeaders(),
+  });
+}
+
+// ── Staff specialty profile (singleton) ───────────────────────────────────────
+
+export function fetchStaffSpecialtyProfile(staffId) {
+  return apiFetch(`/api/v1/staff/${staffId}/specialty-profile`);
+}
+
+export function upsertStaffSpecialtyProfile(staffId, data) {
+  return apiFetch(`/api/v1/staff/${staffId}/specialty-profile`, {
+    method: 'PUT',
+    headers: csrfHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+// ── Staff employment (singleton) ──────────────────────────────────────────────
+
+export function fetchStaffEmployment(staffId) {
+  return apiFetch(`/api/v1/staff/${staffId}/employment`);
+}
+
+export function upsertStaffEmployment(staffId, data) {
+  return apiFetch(`/api/v1/staff/${staffId}/employment`, {
+    method: 'PUT',
+    headers: csrfHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+// ── Staff faith profile (singleton) ──────────────────────────────────────────
+
+export function fetchStaffFaithProfile(staffId) {
+  return apiFetch(`/api/v1/staff/${staffId}/faith-profile`);
+}
+
+export function upsertStaffFaithProfile(staffId, data) {
+  return apiFetch(`/api/v1/staff/${staffId}/faith-profile`, {
+    method: 'PUT',
+    headers: csrfHeaders(),
+    body: JSON.stringify(data),
+  });
+}

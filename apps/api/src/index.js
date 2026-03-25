@@ -60,6 +60,17 @@ import {
   listAvailabilityTemplates, upsertAvailabilityTemplate, deleteAvailabilityTemplate,
 } from './db/queries/staff.js';
 import {
+  listStaffLicenses, getStaffLicenseById, createStaffLicense,
+  updateStaffLicense, deleteStaffLicense,
+} from './db/queries/staffLicenses.js';
+import {
+  listStaffCertifications, getStaffCertificationById, createStaffCertification,
+  updateStaffCertification, deleteStaffCertification,
+} from './db/queries/staffCertifications.js';
+import { getStaffSpecialtyProfile, upsertStaffSpecialtyProfile } from './db/queries/staffSpecialtyProfiles.js';
+import { getStaffEmployment, upsertStaffEmployment } from './db/queries/staffEmployment.js';
+import { getStaffFaithProfile, upsertStaffFaithProfile } from './db/queries/staffFaithProfiles.js';
+import {
   listAppointments, getAppointmentById, createAppointment, updateAppointment, deleteAppointment,
   listAppointmentsByDateRange,
   listReminders, createReminder, updateReminder,
@@ -1190,6 +1201,41 @@ const server = http.createServer(async (request, response) => {
 
     if (requestUrl.pathname.endsWith('/account-actions') && requestUrl.pathname.startsWith('/v1/staff/')) {
       await handleStaffAccountActions(request, response, requestUrl, session);
+      return;
+    }
+
+    if (/^\/v1\/staff\/[^/]+\/licenses\/[^/]+$/.test(requestUrl.pathname)) {
+      await handleStaffLicenseById(request, response, requestUrl, session);
+      return;
+    }
+
+    if (/^\/v1\/staff\/[^/]+\/licenses$/.test(requestUrl.pathname)) {
+      await handleStaffLicenses(request, response, requestUrl, session);
+      return;
+    }
+
+    if (/^\/v1\/staff\/[^/]+\/certifications\/[^/]+$/.test(requestUrl.pathname)) {
+      await handleStaffCertificationById(request, response, requestUrl, session);
+      return;
+    }
+
+    if (/^\/v1\/staff\/[^/]+\/certifications$/.test(requestUrl.pathname)) {
+      await handleStaffCertifications(request, response, requestUrl, session);
+      return;
+    }
+
+    if (/^\/v1\/staff\/[^/]+\/specialty-profile$/.test(requestUrl.pathname)) {
+      await handleStaffSpecialtyProfile(request, response, requestUrl, session);
+      return;
+    }
+
+    if (/^\/v1\/staff\/[^/]+\/employment$/.test(requestUrl.pathname)) {
+      await handleStaffEmployment(request, response, requestUrl, session);
+      return;
+    }
+
+    if (/^\/v1\/staff\/[^/]+\/faith-profile$/.test(requestUrl.pathname)) {
+      await handleStaffFaithProfile(request, response, requestUrl, session);
       return;
     }
 
@@ -2493,7 +2539,7 @@ async function handleDocumentTemplates(request, response, session) {
     return;
   }
 
-  if (requirePracticeAdmin(request, response)) return;
+  if (requirePracticeAdmin(request, response, session)) return;
 
   const payload = await readJsonBody(request);
   const title = sanitizeStr(payload.title, 200);
@@ -2615,7 +2661,7 @@ async function handleDocumentTemplateById(request, response, requestUrl, session
     return;
   }
 
-  if (requirePracticeAdmin(request, response)) return;
+  if (requirePracticeAdmin(request, response, session)) return;
 
   const payload = await readJsonBody(request);
   if (typeof payload.title === 'string') item.title = sanitizeStr(payload.title, 200) ?? item.title;
@@ -2832,7 +2878,7 @@ async function handleInventoryDefinitions(request, response, session) {
     return;
   }
 
-  if (requirePracticeAdmin(request, response)) return;
+  if (requirePracticeAdmin(request, response, session)) return;
 
   const payload = await readJsonBody(request);
   const name = sanitizeStr(payload.name, 200);
@@ -5399,7 +5445,7 @@ async function handleTenantProvisioning(request, response, session) {
 
 async function handleSupportImpersonationSessions(request, response, session) {
   if (request.method === 'GET') {
-    if (requirePlatformAdmin(request, response)) return;
+    if (requirePlatformAdmin(request, response, session)) return;
     if (process.env.DB_NAME) {
       const items = await listImpersonationSessions();
       emitAudit(request, 'platform.impersonation.read', 'support_impersonation_session', 'collection', session);
@@ -5419,7 +5465,7 @@ async function handleSupportImpersonationSessions(request, response, session) {
     return;
   }
 
-  if (requirePlatformAdmin(request, response)) return;
+  if (requirePlatformAdmin(request, response, session)) return;
 
   const payload = await readJsonBody(request);
 
@@ -5519,7 +5565,7 @@ async function handleDataExportJobs(request, response, session) {
     return;
   }
 
-  if (requirePracticeAdmin(request, response)) return;
+  if (requirePracticeAdmin(request, response, session)) return;
 
   const payload = await readJsonBody(request);
   const exportType = normalizePlatformExportType(payload.exportType ?? 'clinical_records');
@@ -5583,7 +5629,7 @@ async function handleRetentionPolicies(request, response, session) {
     return;
   }
 
-  if (requirePracticeAdmin(request, response)) return;
+  if (requirePracticeAdmin(request, response, session)) return;
 
   const payload = await readJsonBody(request);
   const clinicalRecordsSchedule = normalizeRetentionSchedule(payload.clinicalRecordsSchedule ?? '10_years');
@@ -5646,7 +5692,7 @@ async function handlePracticesCollection(request, response, session) {
     return;
   }
 
-  if (requirePracticeAdmin(request, response)) return;
+  if (requirePracticeAdmin(request, response, session)) return;
 
   const payload = await readJsonBody(request);
   const name = sanitizeStr(payload.name);
@@ -5746,7 +5792,7 @@ async function handlePracticeById(request, response, requestUrl, session) {
     return;
   }
 
-  if (requirePracticeAdmin(request, response)) return;
+  if (requirePracticeAdmin(request, response, session)) return;
 
   const payload = await readJsonBody(request);
   const nextType = payload.type ? normalizePracticeType(payload.type) : item.type;
@@ -5783,7 +5829,7 @@ async function handleLocationsCollection(request, response, session) {
     return;
   }
 
-  if (requirePracticeAdmin(request, response)) return;
+  if (requirePracticeAdmin(request, response, session)) return;
 
   const payload = await readJsonBody(request);
   const name = sanitizeStr(payload.name);
@@ -5882,7 +5928,7 @@ async function handleLocationById(request, response, requestUrl, session) {
   }
 
   if (request.method === 'DELETE') {
-    if (requirePracticeAdmin(request, response)) return;
+    if (requirePracticeAdmin(request, response, session)) return;
     const index = locations.findIndex((record) => record.id === locationId);
     locations.splice(index, 1);
     telemetry.recordMutation('location.delete');
@@ -5896,7 +5942,7 @@ async function handleLocationById(request, response, requestUrl, session) {
     return;
   }
 
-  if (requirePracticeAdmin(request, response)) return;
+  if (requirePracticeAdmin(request, response, session)) return;
 
   const payload = await readJsonBody(request);
   if (typeof payload.name === 'string') item.name = sanitizeStr(payload.name) ?? item.name;
@@ -5954,7 +6000,7 @@ async function handleStaffCollection(request, response, session) {
     return;
   }
 
-  if (requirePracticeAdmin(request, response)) return;
+  if (requirePracticeAdmin(request, response, session)) return;
 
   const payload = await readJsonBody(request);
   const firstName = sanitizeStr(payload.firstName);
@@ -6110,7 +6156,7 @@ async function handleStaffById(request, response, requestUrl, session) {
     return;
   }
 
-  if (requirePracticeAdmin(request, response)) return;
+  if (requirePracticeAdmin(request, response, session)) return;
 
   const payload = await readJsonBody(request);
   if (typeof payload.firstName === 'string') item.firstName = sanitizeStr(payload.firstName) ?? item.firstName;
@@ -6199,7 +6245,7 @@ async function handleStaffAvailability(request, response, requestUrl, session) {
     return;
   }
 
-  if (requirePracticeAdmin(request, response)) return;
+  if (requirePracticeAdmin(request, response, session)) return;
 
   const payload = await readJsonBody(request);
   const template = Array.isArray(payload.template) ? payload.template : [];
@@ -6270,6 +6316,387 @@ async function handleStaffAccountActions(request, response, requestUrl, session)
   }
 
   writeJson(response, 400, { error: 'action must be one of reset_password, unlock, deactivate' });
+}
+
+// ─── Counselor profiling sub-resource helpers ─────────────────────────────────
+
+/**
+ * Resolves the caller's staff_member_id from their session's staff_account_id.
+ * Returns null if the account is not found or session is missing.
+ */
+async function resolveCallerStaffMemberId(session) {
+  if (!session?.staff_account_id) return null;
+  const [rows] = await pool.query(
+    'SELECT staff_member_id FROM staff_accounts WHERE id = ? AND tenant_id = ?',
+    [session.staff_account_id, session.tenant_id],
+  );
+  return rows[0]?.staff_member_id ?? null;
+}
+
+function isAdminRole(role) {
+  return role === 'platform_admin' || role === 'practice_owner' || role === 'practice_admin';
+}
+
+// ─── /v1/staff/:id/licenses ───────────────────────────────────────────────────
+
+async function handleStaffLicenses(request, response, requestUrl, session) {
+  const parts = requestUrl.pathname.split('/');
+  const staffId = parts[3];
+  const tenantId = callerTenant(request, session);
+
+  if (process.env.DB_NAME) {
+    const staff = await getStaffById(staffId, tenantId);
+    if (!staff) { writeJson(response, 404, { error: 'Staff not found' }); return; }
+
+    if (request.method === 'GET') {
+      const callerMemberId = await resolveCallerStaffMemberId(session);
+      const admin = isAdminRole(callerRole(request, session));
+      if (!admin && callerMemberId !== staffId) {
+        writeJson(response, 403, { error: 'Access denied' }); return;
+      }
+      const items = await listStaffLicenses(staffId, tenantId);
+      await emitAudit(request, 'staff.licenses.list', 'staff_license', staffId, session);
+      writeJson(response, 200, { items });
+      return;
+    }
+
+    if (request.method !== 'POST') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+    if (requirePracticeAdmin(request, response, session)) return;
+
+    const payload = await readJsonBody(request);
+    const licenseType = sanitizeStr(payload.licenseType, 64);
+    if (!licenseType) { writeJson(response, 400, { error: 'licenseType is required' }); return; }
+
+    const item = await createStaffLicense({
+      id: crypto.randomUUID(), staffId, tenantId,
+      licenseType,
+      licenseNumber:  sanitizeStr(payload.licenseNumber, 80) ?? null,
+      issuingState:   sanitizeStr(payload.issuingState, 64) ?? null,
+      issuingBody:    sanitizeStr(payload.issuingBody, 255) ?? null,
+      issueDate:      payload.issueDate ?? null,
+      expiryDate:     payload.expiryDate ?? null,
+      status:         sanitizeStr(payload.status, 32) ?? 'active',
+      isPrimary:      payload.isPrimary ? 1 : 0,
+    });
+    await emitAudit(request, 'staff.license.create', 'staff_license', item.id, session);
+    writeJson(response, 201, { item });
+    return;
+  }
+
+  writeJson(response, 503, { error: 'Database not configured' });
+}
+
+async function handleStaffLicenseById(request, response, requestUrl, session) {
+  const parts = requestUrl.pathname.split('/');
+  const staffId   = parts[3];
+  const licenseId = parts[5];
+  const tenantId  = callerTenant(request, session);
+
+  if (process.env.DB_NAME) {
+    const staff = await getStaffById(staffId, tenantId);
+    if (!staff) { writeJson(response, 404, { error: 'Staff not found' }); return; }
+
+    if (request.method === 'GET') {
+      const callerMemberId = await resolveCallerStaffMemberId(session);
+      const admin = isAdminRole(callerRole(request, session));
+      if (!admin && callerMemberId !== staffId) {
+        writeJson(response, 403, { error: 'Access denied' }); return;
+      }
+      const item = await getStaffLicenseById(licenseId, staffId, tenantId);
+      if (!item) { writeJson(response, 404, { error: 'License not found' }); return; }
+      writeJson(response, 200, { item });
+      return;
+    }
+
+    if (requirePracticeAdmin(request, response, session)) return;
+
+    if (request.method === 'PATCH') {
+      const payload = await readJsonBody(request);
+      const fields = {};
+      if (payload.licenseType  !== undefined) fields.licenseType  = sanitizeStr(payload.licenseType, 64);
+      if (payload.licenseNumber !== undefined) fields.licenseNumber = sanitizeStr(payload.licenseNumber, 80);
+      if (payload.issuingState  !== undefined) fields.issuingState  = sanitizeStr(payload.issuingState, 64);
+      if (payload.issuingBody   !== undefined) fields.issuingBody   = sanitizeStr(payload.issuingBody, 255);
+      if (payload.issueDate     !== undefined) fields.issueDate  = payload.issueDate;
+      if (payload.expiryDate    !== undefined) fields.expiryDate = payload.expiryDate;
+      if (payload.status        !== undefined) fields.status     = sanitizeStr(payload.status, 32);
+      if (payload.isPrimary     !== undefined) fields.isPrimary  = payload.isPrimary;
+      const item = await updateStaffLicense(licenseId, staffId, tenantId, fields);
+      await emitAudit(request, 'staff.license.update', 'staff_license', licenseId, session);
+      writeJson(response, 200, { item });
+      return;
+    }
+
+    if (request.method === 'DELETE') {
+      await deleteStaffLicense(licenseId, staffId, tenantId);
+      await emitAudit(request, 'staff.license.delete', 'staff_license', licenseId, session);
+      writeJson(response, 200, { deleted: true });
+      return;
+    }
+
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  writeJson(response, 503, { error: 'Database not configured' });
+}
+
+// ─── /v1/staff/:id/certifications ────────────────────────────────────────────
+
+async function handleStaffCertifications(request, response, requestUrl, session) {
+  const parts = requestUrl.pathname.split('/');
+  const staffId  = parts[3];
+  const tenantId = callerTenant(request, session);
+
+  if (process.env.DB_NAME) {
+    const staff = await getStaffById(staffId, tenantId);
+    if (!staff) { writeJson(response, 404, { error: 'Staff not found' }); return; }
+
+    if (request.method === 'GET') {
+      const callerMemberId = await resolveCallerStaffMemberId(session);
+      const admin = isAdminRole(callerRole(request, session));
+      if (!admin && callerMemberId !== staffId) {
+        writeJson(response, 403, { error: 'Access denied' }); return;
+      }
+      const items = await listStaffCertifications(staffId, tenantId);
+      await emitAudit(request, 'staff.certifications.list', 'staff_certification', staffId, session);
+      writeJson(response, 200, { items });
+      return;
+    }
+
+    if (request.method !== 'POST') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+    if (requirePracticeAdmin(request, response, session)) return;
+
+    const payload = await readJsonBody(request);
+    const certName = sanitizeStr(payload.certName, 255);
+    if (!certName) { writeJson(response, 400, { error: 'certName is required' }); return; }
+
+    const item = await createStaffCertification({
+      id: crypto.randomUUID(), staffId, tenantId,
+      certName,
+      issuingBody:  sanitizeStr(payload.issuingBody, 255) ?? null,
+      issueDate:    payload.issueDate  ?? null,
+      expiryDate:   payload.expiryDate ?? null,
+      certNumber:   sanitizeStr(payload.certNumber, 80) ?? null,
+      ceuHours:     payload.ceuHours != null ? Number(payload.ceuHours) : null,
+      isCeu:        payload.isCeu ? 1 : 0,
+      notes:        sanitizeStr(payload.notes, 1000) ?? null,
+    });
+    await emitAudit(request, 'staff.certification.create', 'staff_certification', item.id, session);
+    writeJson(response, 201, { item });
+    return;
+  }
+
+  writeJson(response, 503, { error: 'Database not configured' });
+}
+
+async function handleStaffCertificationById(request, response, requestUrl, session) {
+  const parts  = requestUrl.pathname.split('/');
+  const staffId  = parts[3];
+  const certId   = parts[5];
+  const tenantId = callerTenant(request, session);
+
+  if (process.env.DB_NAME) {
+    const staff = await getStaffById(staffId, tenantId);
+    if (!staff) { writeJson(response, 404, { error: 'Staff not found' }); return; }
+
+    if (request.method === 'GET') {
+      const callerMemberId = await resolveCallerStaffMemberId(session);
+      const admin = isAdminRole(callerRole(request, session));
+      if (!admin && callerMemberId !== staffId) {
+        writeJson(response, 403, { error: 'Access denied' }); return;
+      }
+      const item = await getStaffCertificationById(certId, staffId, tenantId);
+      if (!item) { writeJson(response, 404, { error: 'Certification not found' }); return; }
+      writeJson(response, 200, { item });
+      return;
+    }
+
+    if (requirePracticeAdmin(request, response, session)) return;
+
+    if (request.method === 'PATCH') {
+      const payload = await readJsonBody(request);
+      const fields = {};
+      if (payload.certName    !== undefined) fields.certName    = sanitizeStr(payload.certName, 255);
+      if (payload.issuingBody !== undefined) fields.issuingBody = sanitizeStr(payload.issuingBody, 255);
+      if (payload.issueDate   !== undefined) fields.issueDate   = payload.issueDate;
+      if (payload.expiryDate  !== undefined) fields.expiryDate  = payload.expiryDate;
+      if (payload.certNumber  !== undefined) fields.certNumber  = sanitizeStr(payload.certNumber, 80);
+      if (payload.ceuHours    !== undefined) fields.ceuHours    = payload.ceuHours != null ? Number(payload.ceuHours) : null;
+      if (payload.isCeu       !== undefined) fields.isCeu       = payload.isCeu;
+      if (payload.notes       !== undefined) fields.notes       = sanitizeStr(payload.notes, 1000);
+      const item = await updateStaffCertification(certId, staffId, tenantId, fields);
+      await emitAudit(request, 'staff.certification.update', 'staff_certification', certId, session);
+      writeJson(response, 200, { item });
+      return;
+    }
+
+    if (request.method === 'DELETE') {
+      await deleteStaffCertification(certId, staffId, tenantId);
+      await emitAudit(request, 'staff.certification.delete', 'staff_certification', certId, session);
+      writeJson(response, 200, { deleted: true });
+      return;
+    }
+
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  writeJson(response, 503, { error: 'Database not configured' });
+}
+
+// ─── /v1/staff/:id/specialty-profile ─────────────────────────────────────────
+
+async function handleStaffSpecialtyProfile(request, response, requestUrl, session) {
+  const parts    = requestUrl.pathname.split('/');
+  const staffId  = parts[3];
+  const tenantId = callerTenant(request, session);
+
+  if (process.env.DB_NAME) {
+    const staff = await getStaffById(staffId, tenantId);
+    if (!staff) { writeJson(response, 404, { error: 'Staff not found' }); return; }
+
+    const callerMemberId = await resolveCallerStaffMemberId(session);
+    const admin = isAdminRole(callerRole(request, session));
+    const isSelf = callerMemberId === staffId;
+
+    if (request.method === 'GET') {
+      if (!admin && !isSelf) { writeJson(response, 403, { error: 'Access denied' }); return; }
+      const item = await getStaffSpecialtyProfile(staffId, tenantId);
+      await emitAudit(request, 'staff.specialty_profile.read', 'staff_specialty_profile', staffId, session);
+      writeJson(response, 200, { item: item ?? {} });
+      return;
+    }
+
+    if (request.method === 'PUT') {
+      if (!admin && !isSelf) { writeJson(response, 403, { error: 'Access denied' }); return; }
+      const payload = await readJsonBody(request);
+      const item = await upsertStaffSpecialtyProfile({
+        id:              crypto.randomUUID(),
+        staffId,
+        tenantId,
+        specialties:     Array.isArray(payload.specialties)     ? payload.specialties     : [],
+        modalities:      Array.isArray(payload.modalities)      ? payload.modalities      : [],
+        ageGroupsServed: Array.isArray(payload.ageGroupsServed) ? payload.ageGroupsServed : [],
+        languages:       Array.isArray(payload.languages)       ? payload.languages       : [],
+        maxCaseload:     payload.maxCaseload != null ? Number(payload.maxCaseload) : null,
+        notes:           sanitizeStr(payload.notes, 2000) ?? null,
+      });
+      await emitAudit(request, 'staff.specialty_profile.update', 'staff_specialty_profile', staffId, session);
+      writeJson(response, 200, { item });
+      return;
+    }
+
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  writeJson(response, 503, { error: 'Database not configured' });
+}
+
+// ─── /v1/staff/:id/employment ─────────────────────────────────────────────────
+
+async function handleStaffEmployment(request, response, requestUrl, session) {
+  const parts    = requestUrl.pathname.split('/');
+  const staffId  = parts[3];
+  const tenantId = callerTenant(request, session);
+
+  if (process.env.DB_NAME) {
+    const staff = await getStaffById(staffId, tenantId);
+    if (!staff) { writeJson(response, 404, { error: 'Staff not found' }); return; }
+
+    if (!isAdminRole(callerRole(request, session))) {
+      writeJson(response, 403, { error: 'Access denied' }); return;
+    }
+
+    if (request.method === 'GET') {
+      const item = await getStaffEmployment(staffId, tenantId);
+      await emitAudit(request, 'staff.employment.read', 'staff_employment', staffId, session);
+      writeJson(response, 200, { item: item ?? {} });
+      return;
+    }
+
+    if (request.method === 'PUT') {
+      const payload = await readJsonBody(request);
+      const item = await upsertStaffEmployment({
+        id:                 crypto.randomUUID(),
+        staffId,
+        tenantId,
+        employmentType:     sanitizeStr(payload.employmentType, 32)    ?? 'full_time',
+        employmentStatus:   sanitizeStr(payload.employmentStatus, 32)  ?? 'active',
+        hireDate:           payload.hireDate         ?? null,
+        terminationDate:    payload.terminationDate  ?? null,
+        npiNumber:          sanitizeStr(payload.npiNumber, 20)         ?? null,
+        malpracticeInsurer: sanitizeStr(payload.malpracticeInsurer, 255) ?? null,
+        malpracticePolicy:  sanitizeStr(payload.malpracticePolicy, 80) ?? null,
+        malpracticeExpiry:  payload.malpracticeExpiry ?? null,
+        directPhone:        sanitizeStr(payload.directPhone, 30)       ?? null,
+        locationIds:        Array.isArray(payload.locationIds)         ? payload.locationIds : [],
+      });
+      await emitAudit(request, 'staff.employment.update', 'staff_employment', staffId, session);
+      writeJson(response, 200, { item });
+      return;
+    }
+
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  writeJson(response, 503, { error: 'Database not configured' });
+}
+
+// ─── /v1/staff/:id/faith-profile ─────────────────────────────────────────────
+
+async function handleStaffFaithProfile(request, response, requestUrl, session) {
+  const parts    = requestUrl.pathname.split('/');
+  const staffId  = parts[3];
+  const tenantId = callerTenant(request, session);
+
+  if (process.env.DB_NAME) {
+    const staff = await getStaffById(staffId, tenantId);
+    if (!staff) { writeJson(response, 404, { error: 'Staff not found' }); return; }
+
+    const callerMemberId = await resolveCallerStaffMemberId(session);
+    const admin = isAdminRole(callerRole(request, session));
+    const isSelf = callerMemberId === staffId;
+
+    if (request.method === 'GET') {
+      if (!admin && !isSelf) { writeJson(response, 403, { error: 'Access denied' }); return; }
+      const item = await getStaffFaithProfile(staffId, tenantId);
+      await emitAudit(request, 'staff.faith_profile.read', 'staff_faith_profile', staffId, session);
+      writeJson(response, 200, { item: item ?? {} });
+      return;
+    }
+
+    if (request.method === 'PUT') {
+      if (!admin && !isSelf) { writeJson(response, 403, { error: 'Access denied' }); return; }
+      const payload = await readJsonBody(request);
+      const item = await upsertStaffFaithProfile({
+        id:                    crypto.randomUUID(),
+        staffId,
+        tenantId,
+        faithTradition:        sanitizeStr(payload.faithTradition, 128)          ?? null,
+        theologicalApproach:   sanitizeStr(payload.theologicalApproach, 3000)    ?? null,
+        ordained:              Boolean(payload.ordained),
+        ordainingBody:         sanitizeStr(payload.ordainingBody, 255)           ?? null,
+        aaccMember:            Boolean(payload.aaccMember),
+        acbcCertified:         Boolean(payload.acbcCertified),
+        cccaMember:            Boolean(payload.cccaMember),
+        otherFaithCredentials: sanitizeStr(payload.otherFaithCredentials, 2000)  ?? null,
+        prayerIntegration:     sanitizeStr(payload.prayerIntegration, 32)        ?? null,
+        scriptureIntegration:  sanitizeStr(payload.scriptureIntegration, 32)     ?? null,
+        spiritualGifts:        sanitizeStr(payload.spiritualGifts, 2000)         ?? null,
+      });
+      await emitAudit(request, 'staff.faith_profile.update', 'staff_faith_profile', staffId, session);
+      writeJson(response, 200, { item });
+      return;
+    }
+
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  writeJson(response, 503, { error: 'Database not configured' });
 }
 
 async function handleLocales(request, response) {

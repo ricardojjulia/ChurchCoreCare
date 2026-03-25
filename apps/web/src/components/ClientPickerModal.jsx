@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { Modal, TextInput, Text, Stack, UnstyledButton, Badge, Loader, Group } from '@mantine/core';
 
 function firstString(...values) {
   for (const value of values) {
@@ -12,17 +13,9 @@ function firstString(...values) {
 
 function resolveClientFullName(client) {
   const firstName = firstString(client?.firstName, client?.first_name);
-  const lastName = firstString(client?.lastName, client?.last_name);
-  const combined = `${firstName} ${lastName}`.trim();
-
-  return firstString(
-    client?.fullName,
-    client?.full_name,
-    client?.name,
-    combined,
-    client?.preferredName,
-    client?.preferred_name,
-  );
+  const lastName  = firstString(client?.lastName,  client?.last_name);
+  const combined  = `${firstName} ${lastName}`.trim();
+  return firstString(client?.fullName, client?.full_name, client?.name, combined, client?.preferredName, client?.preferred_name);
 }
 
 export default function ClientPickerModal({ isOpen, clients, loading, onSelectClient, onClose }) {
@@ -30,13 +23,8 @@ export default function ClientPickerModal({ isOpen, clients, loading, onSelectCl
   const inputRef = useRef(null);
 
   useEffect(() => {
-    if (isOpen) {
-      setQuery('');
-      setTimeout(() => inputRef.current?.focus(), 50);
-    }
+    if (isOpen) { setQuery(''); setTimeout(() => inputRef.current?.focus(), 80); }
   }, [isOpen]);
-
-  if (!isOpen) return null;
 
   const normalized = query.toLowerCase().trim();
   const filtered = (clients || []).filter((c) => {
@@ -45,49 +33,47 @@ export default function ClientPickerModal({ isOpen, clients, loading, onSelectCl
   });
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-sheet client-picker-sheet" onClick={(e) => e.stopPropagation()}>
-        <div className="panel-head">
-          <h3>Open Client</h3>
-          <button type="button" className="action-btn" onClick={onClose} aria-label="Close">✕</button>
-        </div>
-
-        <input
+    <Modal opened={isOpen} onClose={onClose} title="Open Client" size="sm">
+      <Stack gap="sm">
+        <TextInput
           ref={inputRef}
           type="search"
-          className="auth-input client-picker-search"
           placeholder="Search by name…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
 
         {loading ? (
-          <p className="um-muted">Loading clients…</p>
+          <Group justify="center" py="md"><Loader size="sm" /></Group>
         ) : filtered.length === 0 ? (
-          <p className="um-muted">{query ? 'No clients match your search.' : 'No clients found.'}</p>
+          <Text fz="sm" c="dimmed" ta="center" py="md">
+            {query ? 'No clients match your search.' : 'No clients found.'}
+          </Text>
         ) : (
-          <ul className="client-picker-list">
+          <Stack gap={4} style={{ maxHeight: '55vh', overflowY: 'auto' }}>
             {filtered.map((c) => {
               const fullName = resolveClientFullName(c) || `Client #${c.id}`;
               return (
-                <li key={c.id}>
-                  <button
-                    type="button"
-                    className="client-picker-item"
-                    onClick={() => {
-                      onSelectClient(c.id);
-                      onClose();
-                    }}
-                  >
-                    <span className="client-picker-name">{fullName}</span>
-                    {c.status && <span className="client-picker-status">{c.status}</span>}
-                  </button>
-                </li>
+                <UnstyledButton
+                  key={c.id}
+                  onClick={() => { onSelectClient(c.id); onClose(); }}
+                  p="xs"
+                  style={(theme) => ({
+                    borderRadius: theme.radius.md,
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    '&:hover': { background: theme.colors.gray[0] },
+                  })}
+                >
+                  <Text fz="sm" fw={500}>{fullName}</Text>
+                  {c.status && <Badge size="xs" variant="light">{c.status}</Badge>}
+                </UnstyledButton>
               );
             })}
-          </ul>
+          </Stack>
         )}
-      </div>
-    </div>
+      </Stack>
+    </Modal>
   );
 }

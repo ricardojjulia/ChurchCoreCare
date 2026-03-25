@@ -1,34 +1,23 @@
+import { SimpleGrid, Paper, Text, Badge } from '@mantine/core';
+
+const META_COLOR = { positive: 'green', warning: 'orange', '': 'gray' };
+
 export default function Metrics({ data }) {
   const metrics = [
-    {
-      label: "Today's Sessions",
-      value: data.sessions || 0,
-      meta: '+12% from yesterday',
-      metaClass: 'positive',
-    },
-    {
-      label: 'Appointment Types',
-      value: data.appointmentTypes || 0,
-      meta: '3 pending',
-      metaClass: 'warning',
-    },
-    {
-      label: 'Audit Event Sync',
-      value: data.auditEvents || 0,
-      meta: 'Synced 2m ago',
-      metaClass: '',
-    },
+    { label: "Today's Sessions",   value: data.sessions || 0,       meta: '+12% from yesterday', tone: 'positive' },
+    { label: 'Appointment Types',  value: data.appointmentTypes || 0, meta: '3 pending',           tone: 'warning' },
+    { label: 'Audit Event Sync',   value: data.auditEvents || 0,    meta: 'Synced 2m ago',        tone: '' },
   ];
 
   return (
-    <section className="metrics" aria-label="Key metrics">
-      {metrics.map((metric, idx) => (
-        <article key={idx} className="metric-card">
-          <p className="metric-label">{metric.label}</p>
-          <p className="metric-value">{metric.value}</p>
-          <p className={`metric-meta ${metric.metaClass}`}>{metric.meta}</p>
-        </article>
+    <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="sm" p="md" component="section" aria-label="Key metrics">
+      {metrics.map((m, i) => (
+        <Paper key={i} p="md" radius="lg" withBorder shadow="xs">
+          <Text fz="xs" c="dimmed" fw={500} tt="uppercase" ls={0.5}>{m.label}</Text>
+          <Text fz="2rem" fw={700} my={4}>{m.value}</Text>
+          <Badge color={META_COLOR[m.tone]} variant="light" size="sm">{m.meta}</Badge>
+        </Paper>
       ))}
-    </section>
+    </SimpleGrid>
   );
 }

@@ -1,180 +1,74 @@
-import { useState } from 'react';
+import { useForm } from '@mantine/form';
+import { TextInput, Select, Button, Group, Stack, Alert } from '@mantine/core';
 import { csrfHeaders } from '../lib/csrf.js';
+import { useState } from 'react';
 
-// Client statuses from domain
-const clientStatuses = ['active', 'waitlist', 'inactive', 'discharged'];
+const STATUS_OPTIONS = [
+  { value: 'active',     label: 'Active' },
+  { value: 'waitlist',   label: 'Waitlist' },
+  { value: 'inactive',   label: 'Inactive' },
+  { value: 'discharged', label: 'Discharged' },
+];
 
 export default function ClientForm({ onSubmit, onCancel, initialClient = null }) {
-  const [firstName, setFirstName] = useState(initialClient?.firstName ?? '');
-  const [lastName, setLastName] = useState(initialClient?.lastName ?? '');
-  const [faithBackground, setFaithBackground] = useState(initialClient?.faithBackground ?? 'Undeclared');
-  const [status, setStatus] = useState(initialClient?.status ?? 'active');
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!firstName.trim() || !lastName.trim()) {
-      setError('First and last name are required');
-      return;
-    }
+  const form = useForm({
+    initialValues: {
+      firstName:       initialClient?.firstName       ?? '',
+      lastName:        initialClient?.lastName        ?? '',
+      faithBackground: initialClient?.faithBackground ?? 'Undeclared',
+      status:          initialClient?.status          ?? 'active',
+    },
+    validate: {
+      firstName: (v) => v.trim() ? null : 'First name is required',
+      lastName:  (v) => v.trim() ? null : 'Last name is required',
+    },
+  });
 
-    setLoading(true);
+  const handleSubmit = async (values) => {
     setError(null);
-
     try {
       const payload = {
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        faithBackground: faithBackground.trim() || 'Undeclared',
-        status,
+        firstName:       values.firstName.trim(),
+        lastName:        values.lastName.trim(),
+        faithBackground: values.faithBackground.trim() || 'Undeclared',
+        status:          values.status,
       };
 
-      const url = initialClient ? `/api/v1/clients/${initialClient.id}` : '/api/v1/clients';
+      const url    = initialClient ? `/api/v1/clients/${initialClient.id}` : '/api/v1/clients';
       const method = initialClient ? 'PATCH' : 'POST';
 
-      const response = await fetch(url, {
-        method,
-        headers: csrfHeaders(),
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to save client');
+      const res = await fetch(url, { method, headers: csrfHeaders(), body: JSON.stringify(payload) });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to save client');
       }
 
-      const result = await response.json();
+      const result = await res.json();
       onSubmit(result.item || result);
     } catch (err) {
       setError(err.message);
-    } finally {
-      setLoading(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      <div>
-        <label htmlFor="firstName">First Name *</label>
-        <input
-          id="firstName"
-          type="text"
-          value={firstName}
-          onChange={(e) => setFirstName(e.target.value)}
-          placeholder="First name"
-          disabled={loading}
-          required
-          style={{
-            width: '100%',
-            padding: '8px 12px',
-            border: '1px solid #e1e8ed',
-            borderRadius: '4px',
-            fontSize: '14px',
-          }}
-        />
-      </div>
+    <form onSubmit={form.onSubmit(handleSubmit)}>
+      <Stack gap="sm">
+        <TextInput label="First name" required {...form.getInputProps('firstName')} />
+        <TextInput label="Last name"  required {...form.getInputProps('lastName')} />
+        <TextInput label="Faith background" placeholder="e.g., Evangelical, Catholic…" {...form.getInputProps('faithBackground')} />
+        <Select    label="Status" data={STATUS_OPTIONS} {...form.getInputProps('status')} />
 
-      <div>
-        <label htmlFor="lastName">Last Name *</label>
-        <input
-          id="lastName"
-          type="text"
-          value={lastName}
-          onChange={(e) => setLastName(e.target.value)}
-          placeholder="Last name"
-          disabled={loading}
-          required
-          style={{
-            width: '100%',
-            padding: '8px 12px',
-            border: '1px solid #e1e8ed',
-            borderRadius: '4px',
-            fontSize: '14px',
-          }}
-        />
-      </div>
+        {error && <Alert color="red" variant="light">{error}</Alert>}
 
-      <div>
-        <label htmlFor="faithBackground">Faith Background</label>
-        <input
-          id="faithBackground"
-          type="text"
-          value={faithBackground}
-          onChange={(e) => setFaithBackground(e.target.value)}
-          placeholder="e.g., Evangelical, Catholic, etc."
-          disabled={loading}
-          style={{
-            width: '100%',
-            padding: '8px 12px',
-            border: '1px solid #e1e8ed',
-            borderRadius: '4px',
-            fontSize: '14px',
-          }}
-        />
-      </div>
-
-      <div>
-        <label htmlFor="status">Status</label>
-        <select
-          id="status"
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          disabled={loading}
-          style={{
-            width: '100%',
-            padding: '8px 12px',
-            border: '1px solid #e1e8ed',
-            borderRadius: '4px',
-            fontSize: '14px',
-          }}
-        >
-          {clientStatuses.map((s) => (
-            <option key={s} value={s}>
-              {s.charAt(0).toUpperCase() + s.slice(1)}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {error && (
-        <p style={{ color: '#b42318', margin: 0, fontSize: '14px' }}>
-          {error}
-        </p>
-      )}
-
-      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={loading}
-          style={{
-            padding: '8px 16px',
-            border: '1px solid #e1e8ed',
-            borderRadius: '4px',
-            backgroundColor: 'white',
-            cursor: 'pointer',
-            fontSize: '14px',
-          }}
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={loading}
-          style={{
-            padding: '8px 16px',
-            border: 'none',
-            borderRadius: '4px',
-            backgroundColor: '#0861ea',
-            color: 'white',
-            cursor: 'pointer',
-            fontSize: '14px',
-          }}
-        >
-          {loading ? 'Saving...' : initialClient ? 'Update Client' : 'Create Client'}
-        </button>
-      </div>
+        <Group justify="flex-end" mt="xs">
+          <Button variant="default" onClick={onCancel} disabled={form.submitting}>Cancel</Button>
+          <Button type="submit" loading={form.submitting}>
+            {initialClient ? 'Update Client' : 'Create Client'}
+          </Button>
+        </Group>
+      </Stack>
     </form>
   );
 }

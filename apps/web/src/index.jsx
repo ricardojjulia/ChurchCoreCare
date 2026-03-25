@@ -1,10 +1,22 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { MantineProvider } from '@mantine/core';
+import { Notifications } from '@mantine/notifications';
+import { DatesProvider } from '@mantine/dates';
 import App from './App';
+import { theme } from './theme';
+import '@mantine/core/styles.css';
+import '@mantine/notifications/styles.css';
+import '@mantine/dates/styles.css';
 import './index.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <App />
+    <MantineProvider theme={theme}>
+      <Notifications position="top-right" />
+      <DatesProvider settings={{ firstDayOfWeek: 0 }}>
+        <App />
+      </DatesProvider>
+    </MantineProvider>
   </React.StrictMode>
 );

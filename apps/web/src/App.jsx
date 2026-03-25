@@ -1,11 +1,15 @@
 import { useState, useEffect } from 'react';
+import { AppShell, Center, Paper, Text, Loader } from '@mantine/core';
+import { useDisclosure } from '@mantine/hooks';
 import AuthGate from './components/AuthGate';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
 import Metrics from './components/Metrics';
 import WorkspaceGrid from './components/WorkspaceGrid';
 import ClientDetailPage from './components/ClientDetail/ClientDetailPage.jsx';
+import CounselorDetailPage from './components/CounselorDetail/CounselorDetailPage.jsx';
 import UserMaintenance from './components/UserMaintenance.jsx';
+import CounselorMaintenance from './components/CounselorMaintenance.jsx';
 import ClientPickerModal from './components/ClientPickerModal.jsx';
 import './App.css';
 
@@ -42,23 +46,16 @@ function normalizeSessionUser(profile) {
 }
 
 export default function App() {
+  const [navOpened, { toggle: toggleNav, close: closeNav }] = useDisclosure(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [authBootstrapping, setAuthBootstrapping] = useState(true);
-  const [metricsData] = useState({
-    sessions: 0,
-    appointmentTypes: 0,
-    auditEvents: 0,
-  });
+  const [metricsData] = useState({ sessions: 0, appointmentTypes: 0, auditEvents: 0 });
   const [connectionStatus, setConnectionStatus] = useState('loading');
-  const [clientsData, setClientsData] = useState({
-    items: [],
-    loading: true,
-    error: null,
-  });
+  const [clientsData, setClientsData] = useState({ items: [], loading: true, error: null });
   const [refreshClientsKey, setRefreshClientsKey] = useState(0);
   const [selectedClientId, setSelectedClientId] = useState(null);
+  const [selectedCounselorId, setSelectedCounselorId] = useState(null);
   const [currentView, setCurrentView] = useState('dashboard');
   const [clientPickerOpen, setClientPickerOpen] = useState(false);
   const userRole = currentUser?.role ?? null;
@@ -71,126 +68,74 @@ export default function App() {
 
   useEffect(() => {
     let cancelled = false;
-
     fetch('/api/v1/auth/me', { credentials: 'include' })
-      .then(async (response) => {
-        if (!response.ok) {
-          throw new Error('No active session');
-        }
-        return response.json();
-      })
-      .then((profile) => {
-        if (cancelled) return;
-        setCurrentUser(normalizeSessionUser(profile));
-        setIsAuthenticated(true);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setIsAuthenticated(false);
-        setCurrentUser(null);
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setAuthBootstrapping(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
+      .then(async (res) => { if (!res.ok) throw new Error(); return res.json(); })
+      .then((profile) => { if (cancelled) return; setCurrentUser(normalizeSessionUser(profile)); setIsAuthenticated(true); })
+      .catch(() => { if (cancelled) return; setIsAuthenticated(false); setCurrentUser(null); })
+      .finally(() => { if (cancelled) return; setAuthBootstrapping(false); });
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
     if (!isAuthenticated) return;
     let isCancelled = false;
-
     fetch('/api/v1/clients', { credentials: 'include' })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error('Unable to load clients');
-        }
-        return response.json();
-      })
+      .then((res) => { if (!res.ok) throw new Error(); return res.json(); })
       .then((payload) => {
         if (isCancelled) return;
-        setClientsData({
-          items: Array.isArray(payload?.items) ? payload.items : [],
-          loading: false,
-          error: null,
-        });
+        setClientsData({ items: Array.isArray(payload?.items) ? payload.items : [], loading: false, error: null });
       })
       .catch(() => {
         if (isCancelled) return;
-        setClientsData({
-          items: [],
-          loading: false,
-          error: 'Unable to load clients',
-        });
+        setClientsData({ items: [], loading: false, error: 'Unable to load clients' });
       });
-
-    return () => {
-      isCancelled = true;
-    };
+    return () => { isCancelled = true; };
   }, [refreshClientsKey, isAuthenticated]);
 
   const handleAuthContinue = (profile) => {
     setCurrentUser(normalizeSessionUser(profile));
     setIsAuthenticated(true);
     setSelectedClientId(null);
+    setSelectedCounselorId(null);
     setCurrentView('dashboard');
   };
 
   const handleSignOut = async () => {
-    try {
-      await fetch('/api/v1/auth/logout', {
-        method: 'POST',
-        credentials: 'include',
-      });
-    } catch {
-      // Best-effort sign out.
-    }
+    try { await fetch('/api/v1/auth/logout', { method: 'POST', credentials: 'include' }); } catch { /* best-effort */ }
     setIsAuthenticated(false);
     setCurrentUser(null);
-    setSidebarOpen(false);
+    closeNav();
     setSelectedClientId(null);
+    setSelectedCounselorId(null);
     setCurrentView('dashboard');
   };
 
-  const closeSidebar = () => setSidebarOpen(false);
-
   const handleNavigate = (view) => {
     setCurrentView(view);
-    if (view !== 'clients') {
-      setSelectedClientId(null);
-    }
+    if (view !== 'clients') setSelectedClientId(null);
+    if (view !== 'counselors') setSelectedCounselorId(null);
+    closeNav();
   };
 
-  const handleOpenClient = (clientId) => {
-    setCurrentView('clients');
-    setSelectedClientId(clientId);
-  };
+  const handleOpenClient     = (clientId) => { setCurrentView('clients');    setSelectedClientId(clientId); };
+  const handleClientBack     = ()          => { setSelectedClientId(null);   setCurrentView('clients'); };
+  const handleOpenCounselor  = (staffId)   => { setCurrentView('counselors'); setSelectedCounselorId(staffId); };
+  const handleCounselorBack  = ()          => { setSelectedCounselorId(null); };
 
-  const handleClientBack = () => {
-    setSelectedClientId(null);
-    setCurrentView('clients');
-  };
-
-  const handleOpenClientPicker = () => {
-    setClientPickerOpen(true);
-  };
-
-  const showDashboard = currentView === 'dashboard';
-  const showUsers = currentView === 'users';
-  const showClientsWorkspace = currentView === 'clients' || (!showDashboard && !showUsers);
+  const showDashboard  = currentView === 'dashboard';
+  const showUsers      = currentView === 'users';
+  const showCounselors = currentView === 'counselors';
+  const showClientsWorkspace = currentView === 'clients' || (!showDashboard && !showUsers && !showCounselors);
 
   if (authBootstrapping) {
     return (
-      <section className="auth-gate visible">
-        <div className="auth-card auth-card--loading">
-          <p className="auth-kicker">Secure Workspace</p>
-          <h2>Restoring session</h2>
-          <p>Checking for an active session before loading protected data.</p>
-        </div>
-      </section>
+      <Center h="100vh">
+        <Paper p="xl" radius="lg" withBorder style={{ textAlign: 'center', minWidth: 300 }}>
+          <Loader size="sm" mb="md" />
+          <Text fw={600}>Restoring session</Text>
+          <Text fz="sm" c="dimmed" mt={4}>Checking for an active session…</Text>
+        </Paper>
+      </Center>
     );
   }
 
@@ -199,38 +144,50 @@ export default function App() {
   }
 
   return (
-    <div className="app-shell">
-      {sidebarOpen && <div className="sidebar-backdrop" onClick={closeSidebar} />}
-      <Sidebar
-        isOpen={sidebarOpen}
-        onClose={closeSidebar}
-        currentUser={currentUser}
-        currentView={currentView}
-        onNavigate={handleNavigate}
-        onOpenClientPicker={handleOpenClientPicker}
-        onSignOut={handleSignOut}
-      />
-      <ClientPickerModal
-        isOpen={clientPickerOpen}
-        clients={clientsData.items}
-        loading={clientsData.loading}
-        onSelectClient={handleOpenClient}
-        onClose={() => setClientPickerOpen(false)}
-      />
-      <main className="main-content">
+    <AppShell
+      header={{ height: 56 }}
+      navbar={{ width: 280, breakpoint: 'sm', collapsed: { mobile: !navOpened } }}
+      padding={0}
+    >
+      <AppShell.Header>
         <TopBar
-          onMenuToggle={() => setSidebarOpen(!sidebarOpen)}
+          opened={navOpened}
+          onMenuToggle={toggleNav}
           connectionStatus={connectionStatus}
           currentUser={currentUser}
         />
+      </AppShell.Header>
+
+      <AppShell.Navbar>
+        <Sidebar
+          currentUser={currentUser}
+          currentView={currentView}
+          onNavigate={handleNavigate}
+          onOpenClientPicker={() => { setClientPickerOpen(true); closeNav(); }}
+          onSignOut={handleSignOut}
+        />
+      </AppShell.Navbar>
+
+      <AppShell.Main style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        <ClientPickerModal
+          isOpen={clientPickerOpen}
+          clients={clientsData.items}
+          loading={clientsData.loading}
+          onSelectClient={handleOpenClient}
+          onClose={() => setClientPickerOpen(false)}
+        />
+
         {selectedClientId ? (
-          <ClientDetailPage
-            clientId={selectedClientId}
-            onBack={handleClientBack}
-          />
+          <ClientDetailPage clientId={selectedClientId} onBack={handleClientBack} />
+        ) : selectedCounselorId ? (
+          <CounselorDetailPage staffId={selectedCounselorId} onBack={handleCounselorBack} currentUser={currentUser} />
         ) : showUsers ? (
           <div style={{ padding: '20px' }}>
             <UserMaintenance userRole={userRole} />
+          </div>
+        ) : showCounselors ? (
+          <div style={{ padding: '20px' }}>
+            <CounselorMaintenance userRole={userRole} onViewCounselor={handleOpenCounselor} />
           </div>
         ) : (
           <>
@@ -238,13 +195,13 @@ export default function App() {
             {showClientsWorkspace || showDashboard ? (
               <WorkspaceGrid
                 clientsData={clientsData}
-                onClientsUpdated={() => setRefreshClientsKey((key) => key + 1)}
+                onClientsUpdated={() => setRefreshClientsKey((k) => k + 1)}
                 onViewClient={handleOpenClient}
               />
             ) : null}
           </>
         )}
-      </main>
-    </div>
+      </AppShell.Main>
+    </AppShell>
   );
 }

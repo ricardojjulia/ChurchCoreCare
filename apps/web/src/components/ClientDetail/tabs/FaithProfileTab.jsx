@@ -1,234 +1,86 @@
 import { useState } from 'react';
+import { notifications } from '@mantine/notifications';
+import { Stack, Title, SimpleGrid, TextInput, Select, Textarea, Button, Group, Text, Paper } from '@mantine/core';
 import { upsertFaithProfile, patchClient } from '../../../lib/clientApi.js';
 
-const inputStyle = {
-  width: '100%',
-  padding: '8px 12px',
-  border: '1px solid #e1e8ed',
-  borderRadius: '4px',
-  fontSize: '14px',
-  boxSizing: 'border-box',
-};
-
-const labelStyle = {
-  display: 'block',
-  marginBottom: '4px',
-  fontSize: '14px',
-  fontWeight: 500,
-  color: '#374151',
-};
-
-const sectionHeaderStyle = {
-  fontSize: '16px',
-  fontWeight: 600,
-  marginBottom: '12px',
-  borderBottom: '1px solid #e1e8ed',
-  paddingBottom: '8px',
-  color: '#111827',
-};
-
-const saveBtnStyle = {
-  padding: '8px 20px',
-  border: 'none',
-  borderRadius: '4px',
-  backgroundColor: '#0861ea',
-  color: '#fff',
-  fontSize: '14px',
-  cursor: 'pointer',
-};
-
-const gridStyle = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-  gap: '14px',
-};
-
-const integrationLevelDescriptions = {
-  none: 'Client prefers a secular approach; no faith content.',
-  open: 'Client is willing to incorporate faith when relevant.',
-  preferred: 'Client wants faith-informed counseling as a standard approach.',
-  required: 'Faith integration is essential to the client and must be central.',
-};
-
-const denominationOptions = [
-  'Evangelical',
-  'Baptist',
-  'Catholic',
-  'Methodist',
-  'Presbyterian',
-  'Pentecostal',
-  'Non-denominational',
-  'Orthodox',
-  'Jewish',
-  'Muslim',
-  'Hindu',
-  'Buddhist',
-  'Other',
-  'None',
+const INTEGRATION_OPTIONS = [
+  { value: 'none',      label: 'None — secular approach preferred' },
+  { value: 'open',      label: 'Open — willing to incorporate faith' },
+  { value: 'preferred', label: 'Preferred — wants faith-informed counseling' },
+  { value: 'required',  label: 'Required — faith integration is essential' },
 ];
+
+const INTEGRATION_DESC = {
+  none:      'Client prefers a secular approach; no faith content.',
+  open:      'Client is willing to incorporate faith when relevant.',
+  preferred: 'Client wants faith-informed counseling as a standard approach.',
+  required:  'Faith integration is essential to the client and must be central.',
+};
+
+const DENOMINATION_OPTIONS = ['Evangelical', 'Baptist', 'Catholic', 'Methodist', 'Presbyterian', 'Pentecostal', 'Non-denominational', 'Orthodox', 'Jewish', 'Muslim', 'Hindu', 'Buddhist', 'Other', 'None'].map((d) => ({ value: d, label: d }));
 
 export default function FaithProfileTab({ client, clientId }) {
   const fp = client.faith ?? {};
-
-  const [denomination, setDenomination] = useState(fp.denomination ?? '');
-  const [churchName, setChurchName] = useState(fp.church_name ?? '');
-  const [pastorName, setPastorName] = useState(fp.pastor_name ?? '');
-  const [spiritualDirector, setSpiritualDirector] = useState(fp.spiritual_director ?? '');
+  const [denomination,          setDenomination]          = useState(fp.denomination          ?? '');
+  const [churchName,            setChurchName]            = useState(fp.church_name            ?? '');
+  const [pastorName,            setPastorName]            = useState(fp.pastor_name            ?? '');
+  const [spiritualDirector,     setSpiritualDirector]     = useState(fp.spiritual_director     ?? '');
   const [faithIntegrationLevel, setFaithIntegrationLevel] = useState(fp.faith_integration_level ?? 'open');
-  const [spiritualConcerns, setSpiritualConcerns] = useState(fp.spiritual_concerns ?? '');
+  const [spiritualConcerns,     setSpiritualConcerns]     = useState(fp.spiritual_concerns     ?? '');
   const [religiousRestrictions, setReligiousRestrictions] = useState(fp.religious_restrictions ?? '');
-  const [faithStrengths, setFaithStrengths] = useState(fp.faith_strengths ?? '');
-  const [faithBackground, setFaithBackground] = useState(client.faithBackground ?? '');
-
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(false);
+  const [faithStrengths,        setFaithStrengths]        = useState(fp.faith_strengths        ?? '');
+  const [faithBackground,       setFaithBackground]       = useState(client.faithBackground    ?? '');
+  const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
-    setLoading(true);
-    setError(null);
-    setSuccess(false);
+    setSaving(true);
     try {
       await upsertFaithProfile(clientId, {
-        denomination: denomination.trim() || null,
-        church_name: churchName.trim() || null,
-        pastor_name: pastorName.trim() || null,
-        spiritual_director: spiritualDirector.trim() || null,
+        denomination:          denomination.trim()         || null,
+        church_name:           churchName.trim()           || null,
+        pastor_name:           pastorName.trim()           || null,
+        spiritual_director:    spiritualDirector.trim()    || null,
         faith_integration_level: faithIntegrationLevel,
-        spiritual_concerns: spiritualConcerns.trim() || null,
-        religious_restrictions: religiousRestrictions.trim() || null,
-        faith_strengths: faithStrengths.trim() || null,
+        spiritual_concerns:    spiritualConcerns.trim()    || null,
+        religious_restrictions:religiousRestrictions.trim() || null,
+        faith_strengths:       faithStrengths.trim()       || null,
       });
-      await patchClient(clientId, {
-        faithBackground: faithBackground.trim() || 'Undeclared',
-      });
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
+      await patchClient(clientId, { faithBackground: faithBackground.trim() || 'Undeclared' });
+      notifications.show({ title: 'Saved', message: 'Faith profile saved.', color: 'green' });
     } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
+      notifications.show({ title: 'Error', message: err.message, color: 'red' });
+    } finally { setSaving(false); }
   };
 
   return (
-    <div style={{ padding: '24px', maxWidth: '800px' }}>
-      <h2 style={sectionHeaderStyle}>Faith Profile</h2>
+    <Stack gap="lg" maw={800}>
+      <Title order={4}>Faith Profile</Title>
 
-      <div style={{ ...gridStyle, marginBottom: '16px' }}>
-        <div>
-          <label style={labelStyle}>General Faith Label</label>
-          <input
-            style={inputStyle}
-            type="text"
-            value={faithBackground}
-            onChange={(e) => setFaithBackground(e.target.value)}
-            placeholder="e.g. Evangelical, Catholic, Undeclared"
-          />
-          <p style={{ fontSize: '12px', color: '#62708b', marginTop: '4px' }}>
-            Broad label shown on the client list. Also editable on the main client form.
-          </p>
-        </div>
+      <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
+        <Stack gap={4}>
+          <TextInput label="General Faith Label" placeholder="e.g. Evangelical, Catholic, Undeclared" value={faithBackground} onChange={(e) => setFaithBackground(e.target.value)} />
+          <Text fz="xs" c="dimmed">Broad label shown on the client list.</Text>
+        </Stack>
+        <Select label="Denomination" data={[{ value: '', label: '— Select or type —' }, ...DENOMINATION_OPTIONS]} value={denomination} onChange={(v) => setDenomination(v ?? '')} searchable />
+        <TextInput label="Church / Congregation Name" value={churchName}        onChange={(e) => setChurchName(e.target.value)} />
+        <TextInput label="Pastor / Priest Name"       value={pastorName}        onChange={(e) => setPastorName(e.target.value)} />
+        <TextInput label="Spiritual Director Name"    value={spiritualDirector} onChange={(e) => setSpiritualDirector(e.target.value)} />
+      </SimpleGrid>
 
-        <div>
-          <label style={labelStyle} htmlFor="denomination-input">Denomination</label>
-          <input
-            id="denomination-input"
-            style={inputStyle}
-            type="text"
-            list="denomination-list"
-            value={denomination}
-            onChange={(e) => setDenomination(e.target.value)}
-            placeholder="Type or select..."
-          />
-          <datalist id="denomination-list">
-            {denominationOptions.map((opt) => (
-              <option key={opt} value={opt} />
-            ))}
-          </datalist>
-        </div>
-
-        <div>
-          <label style={labelStyle}>Church / Congregation Name</label>
-          <input style={inputStyle} type="text" value={churchName} onChange={(e) => setChurchName(e.target.value)} />
-        </div>
-
-        <div>
-          <label style={labelStyle}>Pastor / Priest Name</label>
-          <input style={inputStyle} type="text" value={pastorName} onChange={(e) => setPastorName(e.target.value)} />
-        </div>
-
-        <div>
-          <label style={labelStyle}>Spiritual Director Name</label>
-          <input style={inputStyle} type="text" value={spiritualDirector} onChange={(e) => setSpiritualDirector(e.target.value)} />
-        </div>
-      </div>
-
-      <div style={{ marginBottom: '16px' }}>
-        <label style={labelStyle}>Faith Integration Level</label>
-        <select
-          style={inputStyle}
-          value={faithIntegrationLevel}
-          onChange={(e) => setFaithIntegrationLevel(e.target.value)}
-        >
-          <option value="none">None — secular approach preferred</option>
-          <option value="open">Open — willing to incorporate faith</option>
-          <option value="preferred">Preferred — wants faith-informed counseling</option>
-          <option value="required">Required — faith integration is essential</option>
-        </select>
+      <Stack gap="xs">
+        <Select label="Faith Integration Level" data={INTEGRATION_OPTIONS} value={faithIntegrationLevel} onChange={(v) => setFaithIntegrationLevel(v ?? 'open')} />
         {faithIntegrationLevel && (
-          <p
-            style={{
-              fontSize: '13px',
-              color: '#374151',
-              marginTop: '6px',
-              padding: '8px 12px',
-              background: '#f3f4f6',
-              borderRadius: '4px',
-              borderLeft: '3px solid #0861ea',
-            }}
-          >
-            {integrationLevelDescriptions[faithIntegrationLevel]}
-          </p>
+          <Paper p="sm" radius="sm" withBorder style={{ borderLeft: '3px solid var(--mantine-color-brand-5)' }}>
+            <Text fz="sm">{INTEGRATION_DESC[faithIntegrationLevel]}</Text>
+          </Paper>
         )}
-      </div>
+      </Stack>
 
-      <div style={{ marginBottom: '16px' }}>
-        <label style={labelStyle}>Spiritual Concerns</label>
-        <textarea
-          style={{ ...inputStyle, minHeight: '80px', resize: 'vertical' }}
-          value={spiritualConcerns}
-          onChange={(e) => setSpiritualConcerns(e.target.value)}
-          placeholder="What spiritual issues or questions bring the client to counseling?"
-        />
-      </div>
+      <Textarea label="Spiritual Concerns"        rows={3} value={spiritualConcerns}     onChange={(e) => setSpiritualConcerns(e.target.value)}     placeholder="What spiritual issues bring the client to counseling?" />
+      <Textarea label="Religious Restrictions"    rows={2} value={religiousRestrictions} onChange={(e) => setReligiousRestrictions(e.target.value)} placeholder="Fasting, Sabbath, dietary requirements…" />
+      <Textarea label="Spiritual Strengths"       rows={2} value={faithStrengths}        onChange={(e) => setFaithStrengths(e.target.value)}        placeholder="Sources of spiritual support or resilience…" />
 
-      <div style={{ marginBottom: '16px' }}>
-        <label style={labelStyle}>Religious Restrictions</label>
-        <textarea
-          style={{ ...inputStyle, minHeight: '70px', resize: 'vertical' }}
-          value={religiousRestrictions}
-          onChange={(e) => setReligiousRestrictions(e.target.value)}
-          placeholder="Fasting practices, Sabbath observance, dietary requirements, sacred time constraints..."
-        />
-      </div>
-
-      <div style={{ marginBottom: '20px' }}>
-        <label style={labelStyle}>Spiritual Strengths</label>
-        <textarea
-          style={{ ...inputStyle, minHeight: '70px', resize: 'vertical' }}
-          value={faithStrengths}
-          onChange={(e) => setFaithStrengths(e.target.value)}
-          placeholder="What aspects of faith are a source of support or resilience for this client?"
-        />
-      </div>
-
-      {error && <p style={{ color: '#b42318', fontSize: '14px', marginBottom: '12px' }}>{error}</p>}
-      {success && <p style={{ color: '#065f46', fontSize: '14px', marginBottom: '12px' }}>Faith profile saved.</p>}
-
-      <button type="button" style={saveBtnStyle} disabled={loading} onClick={handleSave}>
-        {loading ? 'Saving...' : 'Save Faith Profile'}
-      </button>
-    </div>
+      <Group><Button loading={saving} onClick={handleSave}>Save Faith Profile</Button></Group>
+    </Stack>
   );
 }
