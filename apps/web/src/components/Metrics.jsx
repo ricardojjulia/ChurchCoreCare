@@ -5,7 +5,7 @@ const META_COLOR = { positive: 'green', warning: 'orange', '': 'gray' };
 export default function Metrics({ data }) {
   const metrics = [
     { label: "Today's Sessions",   value: data.sessions || 0,       meta: '+12% from yesterday', tone: 'positive' },
-    { label: 'Appointment Types',  value: data.appointmentTypes || 0, meta: '3 pending',           tone: 'warning' },
+    { label: 'Appointment Types',  value: data.appointmentTypes || 0, meta: `${data.appointmentTypes || 0} configured`, tone: '' },
     { label: 'Audit Event Sync',   value: data.auditEvents || 0,    meta: 'Synced 2m ago',        tone: '' },
   ];
 

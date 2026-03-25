@@ -50,7 +50,7 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [authBootstrapping, setAuthBootstrapping] = useState(true);
-  const [metricsData] = useState({ sessions: 0, appointmentTypes: 0, auditEvents: 0 });
+  const [metricsData, setMetricsData] = useState({ sessions: 0, appointmentTypes: 0, auditEvents: 0 });
   const [connectionStatus, setConnectionStatus] = useState('loading');
   const [clientsData, setClientsData] = useState({ items: [], loading: true, error: null });
   const [refreshClientsKey, setRefreshClientsKey] = useState(0);
@@ -91,6 +91,17 @@ export default function App() {
       });
     return () => { isCancelled = true; };
   }, [refreshClientsKey, isAuthenticated]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    fetch('/api/v1/appointment-types', { credentials: 'include' })
+      .then((res) => { if (!res.ok) throw new Error(); return res.json(); })
+      .then((payload) => {
+        const count = Array.isArray(payload?.items) ? payload.items.length : 0;
+        setMetricsData((prev) => ({ ...prev, appointmentTypes: count }));
+      })
+      .catch(() => {});
+  }, [isAuthenticated]);
 
   const handleAuthContinue = (profile) => {
     setCurrentUser(normalizeSessionUser(profile));
