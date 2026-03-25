@@ -1,6 +1,6 @@
 {
   "name": "faith-counseling",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "private": true,
   "packageManager": "pnpm@10.7.0",
   "engines": {
@@ -27,5 +27,8 @@
   "devDependencies": {
     "@playwright/test": "^1.58.2",
     "axe-core": "^4.11.1"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["argon2"]
   }
 }

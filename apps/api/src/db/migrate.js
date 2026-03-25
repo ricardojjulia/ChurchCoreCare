@@ -1,0 +1,124 @@
+/**
+ * Database migration script — run once to create all tables.
+ *
+ * Usage:
+ *   node apps/api/src/db/migrate.js
+ *
+ * Requires DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD env vars (or .env).
+ *
+ * Safe to re-run — all statements use CREATE TABLE IF NOT EXISTS.
+ */
+
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import mysql from 'mysql2/promise';
+
+// Load .env if present (for local dev convenience)
+try {
+  const { default: dotenv } = await import('dotenv');
+  dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+} catch {
+  // dotenv is optional — ignore if not installed
+}
+
+const currentDir = path.dirname(fileURLToPath(import.meta.url));
+const schemaPath = path.join(currentDir, 'schema.sql');
+
+// Create a one-off connection (not the pool) since we need multipleStatements.
+const connection = await mysql.createConnection({
+  host:               process.env.DB_HOST     || '127.0.0.1',
+  port:               Number(process.env.DB_PORT || 3306),
+  database:           process.env.DB_NAME,
+  user:               process.env.DB_USER,
+  password:           process.env.DB_PASSWORD,
+  ssl:                process.env.DB_SSL === 'true' ? { rejectUnauthorized: true } : false,
+  multipleStatements: true,   // required to execute the full schema file at once
+  timezone:           'Z',
+});
+
+try {
+  console.log('Running schema migration…');
+  const sql = await readFile(schemaPath, 'utf8');
+
+  // Strip comment-only lines to avoid mysql2 choking on them when batched
+  const cleaned = sql
+    .split('\n')
+    .filter((line) => !line.trimStart().startsWith('--'))
+    .join('\n');
+
+  await connection.query(cleaned);
+  console.log('Migration complete — all core tables created.');
+
+  // Seed a default tenant + system practice for local dev
+  await seedDevData(connection);
+} finally {
+  await connection.end();
+}
+
+async function seedDevData(conn) {
+  // Only seed if tenants table is empty
+  const [[{ count }]] = await conn.query('SELECT COUNT(*) AS count FROM tenants');
+  if (count > 0) {
+    console.log('Seed data already present — skipping.');
+    return;
+  }
+
+  console.log('Seeding development data…');
+
+  // Default tenant
+  await conn.query(
+    `INSERT INTO tenants (id, name, plan_type) VALUES (?, ?, ?)`,
+    ['system', 'Grace Counseling Center', 'standard'],
+  );
+
+  // Default practice
+  await conn.query(
+    `INSERT INTO practices (id, tenant_id, name, practice_type, timezone) VALUES (?, ?, ?, ?, ?)`,
+    ['prac-001', 'system', 'Grace Counseling Center', 'solo', 'America/New_York'],
+  );
+
+  // Import encrypt lazily (needs DB_ENCRYPTION_KEY in env)
+  let encrypt;
+  try {
+    const mod = await import('../lib/encrypt.js');
+    encrypt = mod.encrypt;
+  } catch {
+    console.warn('Warning: encrypt module not available; staff seed skipped.');
+    return;
+  }
+
+  // Default staff member
+  await conn.query(
+    `INSERT INTO staff_members
+       (id, tenant_id, role, first_name_enc, last_name_enc, license_type, supervision_status)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [
+      'staff-001', 'system', 'practice_admin',
+      encrypt('Admin'), encrypt('User'),
+      'lpc', 'not_required',
+    ],
+  );
+
+  // Import argon2 for password hashing
+  const { default: argon2 } = await import('argon2');
+  const passwordHash = await argon2.hash('ChangeMe!Dev2024#', {
+    type: argon2.argon2id,
+    memoryCost: 65536,
+    timeCost: 3,
+    parallelism: 1,
+  });
+
+  // Default staff account: admin@faithcounseling.local / ChangeMe!Dev2024#
+  await conn.query(
+    `INSERT INTO staff_accounts
+       (id, staff_member_id, tenant_id, email, password_hash)
+     VALUES (?, ?, ?, ?, ?)`,
+    ['acct-001', 'staff-001', 'system', 'admin@faithcounseling.local', passwordHash],
+  );
+
+  console.log('Dev seed complete.');
+  console.log('  Tenant:   system');
+  console.log('  Email:    admin@faithcounseling.local');
+  console.log('  Password: ChangeMe!Dev2024#  (change immediately)');
+}

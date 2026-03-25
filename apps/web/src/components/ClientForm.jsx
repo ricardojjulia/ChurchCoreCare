@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { csrfHeaders } from '../lib/csrf.js';
 
 // Client statuses from domain
 const clientStatuses = ['active', 'waitlist', 'inactive', 'discharged'];
@@ -34,7 +35,7 @@ export default function ClientForm({ onSubmit, onCancel, initialClient = null })
 
       const response = await fetch(url, {
         method,
-        headers: { 'content-type': 'application/json' },
+        headers: csrfHeaders(),
         body: JSON.stringify(payload),
       });
 

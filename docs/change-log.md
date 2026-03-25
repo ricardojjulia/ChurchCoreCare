@@ -6,19 +6,23 @@
 **Type:** Major Release
 
 ### Overview
+
 First production-ready release completing Phase 1 of the full client management suite. Implements comprehensive client CRUD operations with React UI components, audit logging, RBAC enforcement, and complete OpenAPI documentation.
 
 ### New API Endpoints
+
 - `GET /v1/clients/{id}` — Retrieve single client with tenant scoping
 - `DELETE /v1/clients/{id}` — Soft-delete (archive) client
 - Enhanced `PATCH /v1/clients/{id}` — Full client update support
 
 ### New React Components
+
 - `ClientForm.jsx` — Reusable form component for create/edit workflows
 - `ClientModal.jsx` — Modal wrapper for form presentation
 - Enhanced `WorkspaceGrid.jsx` — Integrated add/edit/delete UI
 
 ### UI Features
+
 - "New Client" button in Clients panel
 - Edit and delete buttons on each client row
 - Real-time client list refresh after mutations
@@ -26,13 +30,15 @@ First production-ready release completing Phase 1 of the full client management 
 - Form validation and error handling
 
 ### Documentation
+
 - Updated OpenAPI spec (`docs/api/openapi.yaml`) with full `/v1/clients/{id}` operations
 - Comprehensive release notes (`docs/RELEASE_1.0.0.md`)
 - Updated README.md with v1.0.0 status
 - All package.json files bumped to 1.0.0
 
 ### Files Modified
-- `apps/api/src/index.js` — Enhanced handleClientById() 
+
+- `apps/api/src/index.js` — Enhanced handleClientById()
 - `apps/web/src/components/ClientForm.jsx` — New
 - `apps/web/src/components/ClientModal.jsx` — New
 - `apps/web/src/components/WorkspaceGrid.jsx` — Enhanced
@@ -42,14 +48,17 @@ First production-ready release completing Phase 1 of the full client management 
 - `package.json` (all) — Bumped to 1.0.0
 
 ### Breaking Changes
+
 None — fully backward compatible.
 
 ### Performance
+
 - <100ms API response time for client operations
 - Efficient client list refresh via state triggers
 - Client-side validation prevents unnecessary API calls
 
 ### Security
+
 - Tenant-scoped access enforcement on all endpoints
 - RBAC checks (admin-only for delete)
 - Audit logging for all client operations
@@ -61,27 +70,31 @@ For detailed release notes, see `docs/RELEASE_1.0.0.md`.
 
 ## Step 10 — Christian Counseling Differentiation
 
-### Files
+### Step 10 Files
+
 - `apps/api/src/index.js`
 - `apps/web/public/index.html`
 - `apps/web/src/app.js`
 - `ops/step10-smoke.mjs`
 
-### Summary
+### Step 10 Summary
+
 - Added `/v1/faith/*` endpoints for note templates, treatment goals, consent variants, resources, inventories, referral coordination, and language preferences.
 - Added the **Faith Workflows** tab in Operations Studio and wired all create/save actions.
 - Added smoke coverage for happy paths and client-role guard behavior.
 
 ## Step 11 — Reporting and Platform Operations
 
-### Files
+### Step 11 Files
+
 - `apps/api/src/index.js`
 - `apps/web/public/index.html`
 - `apps/web/src/app.js`
 - `ops/step11-smoke.mjs`
 - `docs/change-log.md`
 
-### Summary
+### Step 11 Summary
+
 - Added reporting API: `/v1/reporting/overview` with utilization, counselor productivity, referral sources, document completion, assessment trends, A/R, and location performance.
 - Added platform ops APIs:
   - `/v1/platform/overview`
@@ -94,6 +107,7 @@ For detailed release notes, see `docs/RELEASE_1.0.0.md`.
 - Added Step 11 smoke script for endpoint + guard verification.
 
 ## How to Track Current Changes
+
 - List changed files: `git status --short`
 - Inspect full diff: `git diff`
 - Inspect a file diff: `git diff -- apps/api/src/index.js`
@@ -101,7 +115,8 @@ For detailed release notes, see `docs/RELEASE_1.0.0.md`.
 
 ## Step 12 — Hardening, UX, and Validation
 
-### Files
+### Step 12 Files
+
 - `apps/api/src/index.js`
 - `apps/api/src/lib/http.js`
 - `apps/api/src/lib/security.js`
@@ -112,7 +127,8 @@ For detailed release notes, see `docs/RELEASE_1.0.0.md`.
 - `ops/step12-validate.mjs`
 - `package.json`
 
-### Summary
+### Step 12 Summary
+
 - Hardened request handling with explicit malformed JSON and payload-size responses.
 - Expanded local CORS allowlist for the current web port and prevented API response caching.
 - Fixed the web build script to resolve paths correctly from the repository root.

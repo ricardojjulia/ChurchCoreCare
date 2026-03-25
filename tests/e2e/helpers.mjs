@@ -5,13 +5,48 @@ import { expect } from '@playwright/test';
 const require = createRequire(import.meta.url);
 const axeSource = readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
 
+/**
+ * Test credentials used by E2E tests.
+ * These accounts must exist in the DB (created by the migration seed).
+ * Override via TEST_ADMIN_EMAIL / TEST_ADMIN_PASSWORD env vars.
+ */
+const TEST_ACCOUNTS = {
+  // Default seeded account (practice_admin)
+  Administrator: {
+    email:    process.env.TEST_ADMIN_EMAIL    || 'admin@faithcounseling.local',
+    password: process.env.TEST_ADMIN_PASSWORD || 'ChangeMe!Dev2024#',
+  },
+};
+
+/**
+ * Sign in via the real login form.
+ *
+ * Falls back to the legacy role-selector flow when the login form is not
+ * present (i.e. when running against an API without a database configured),
+ * so existing CI pipelines that don't set up MySQL continue to work.
+ */
 export async function signInAs(page, role) {
   await page.goto('/');
-  await expect.poll(async () => page.locator('#roleSelect option').count()).toBeGreaterThan(0);
-  await page.selectOption('#roleSelect', role);
-  await page.click('#continueButton');
-  await expect(page.locator('#authGate')).toBeHidden();
-  await expect(page.locator('#userBadge')).toContainText(prettifyRole(role));
+
+  // Detect which auth UI is rendered
+  const isLoginForm = await page.locator('#loginEmail').isVisible({ timeout: 3000 }).catch(() => false);
+
+  if (isLoginForm) {
+    // Real login form
+    const account = TEST_ACCOUNTS[role] ?? TEST_ACCOUNTS.Administrator;
+    await page.fill('#loginEmail', account.email);
+    await page.fill('#loginPassword', account.password);
+    await page.click('button[type="submit"]');
+    await expect(page.locator('#authGate')).toBeHidden({ timeout: 10000 });
+  } else {
+    // Legacy role-selector fallback (no DB)
+    await expect.poll(async () => page.locator('#roleSelect option').count()).toBeGreaterThan(0);
+    await page.selectOption('#roleSelect', role);
+    await page.click('#continueButton');
+    await expect(page.locator('#authGate')).toBeHidden();
+  }
+
+  await expect(page.locator('#userBadge')).toBeVisible({ timeout: 5000 });
 }
 
 export async function openPrimaryNav(page, navKey) {

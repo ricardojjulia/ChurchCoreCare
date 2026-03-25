@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { csrfHeaders } from '../lib/csrf.js';
 import ClientModal from './ClientModal';
 
 export default function WorkspaceGrid({ clientsData, onClientsUpdated }) {
@@ -26,6 +27,7 @@ export default function WorkspaceGrid({ clientsData, onClientsUpdated }) {
     try {
       const response = await fetch(`/api/v1/clients/${client.id}`, {
         method: 'DELETE',
+        headers: csrfHeaders(),
       });
       if (response.ok) {
         onClientsUpdated();

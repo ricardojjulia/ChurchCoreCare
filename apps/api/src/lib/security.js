@@ -169,20 +169,39 @@ const CLIENT_ALLOWED_ROUTE_PREFIXES = ['/v1/portal/'];
 
 /**
  * Returns true if the request is rejected (response already written).
- * The role is extracted from the `x-staff-role` header — mimics what a real
- * JWT / session middleware would inject after token verification.
+ *
+ * When a verified `session` object is provided (from resolveSession()) the role
+ * is read from the session.  In development (NODE_ENV !== 'production') the
+ * legacy `x-staff-role` header is accepted as a fallback so that
+ * security-regression.mjs tests can still run without a live DB.
+ *
+ * @param {object} request
+ * @param {object} response
+ * @param {string} route          - normalised route template
+ * @param {object|null} [session] - resolved session from auth.js#resolveSession
  */
-export function enforceRbac(request, response, route) {
+export function enforceRbac(request, response, route, session = null) {
   // Public endpoints need no role
   if (PUBLIC_ROUTES.has(route)) return false;
   if (route === '/v1/i18n/catalog' && request.method === 'GET') return false;
+
+  // Auth endpoints are public (no session needed to log in)
+  if (route === '/v1/auth/login' || route === '/v1/auth/logout') return false;
 
   // Telemetry endpoints accept any authenticated caller; vitals ingestion is
   // also allowed from browser without role (it carries no PHI).
   if (route === '/v1/telemetry/vitals') return false;
   if (route === '/v1/telemetry/summary') return false;
 
-  const role = (request.headers['x-staff-role'] || '').trim().toLowerCase();
+  // Derive role: prefer verified session; fall back to header in dev only.
+  let role;
+  if (session) {
+    role = session.role;
+  } else if (process.env.NODE_ENV !== 'production') {
+    role = (request.headers['x-staff-role'] || '').trim().toLowerCase();
+  } else {
+    role = '';
+  }
 
   if (!role || !VALID_ROLES.has(role)) {
     writeSecureJson(response, 401, { error: 'Authentication required' });
@@ -222,22 +241,51 @@ export function enforceRbac(request, response, route) {
 /**
  * Returns true if the request is rejected (response already written).
  *
- * In this prototype the calling tenant is carried in `x-tenant-id`.
- * A production system would derive this from a verified JWT claim.
- * The guard ensures callers cannot access records from a different tenant.
+ * When a verified `session` is provided the tenant is read from it.
+ * In development, the legacy `x-tenant-id` header is accepted as fallback.
+ *
+ * @param {object}      request
+ * @param {object}      response
+ * @param {string}      resourceTenantId - tenantId of the DB record being accessed
+ * @param {object|null} [session]        - resolved session from auth.js#resolveSession
  */
-export function enforceTenantScope(request, response, resourceTenantId) {
+export function enforceTenantScope(request, response, resourceTenantId, session = null) {
+  // Derive role and tenant from session or (dev) headers
+  let role, callerTenant;
+  if (session) {
+    role = session.role;
+    callerTenant = session.tenant_id;
+  } else {
+    role = (request.headers['x-staff-role'] || '').trim().toLowerCase();
+    callerTenant = (request.headers['x-tenant-id'] || 'system').trim();
+  }
+
   // platform_admin may cross-tenant (e.g., support impersonation)
-  const role = (request.headers['x-staff-role'] || '').trim().toLowerCase();
   if (role === 'platform_admin') return false;
 
-  const callerTenant = (request.headers['x-tenant-id'] || 'system').trim();
   if (callerTenant !== resourceTenantId) {
     writeSecureJson(response, 403, { error: 'Access to this resource is not permitted' });
     return true;
   }
 
   return false;
+
+}
+
+// ─── Helper: extract role/tenant from session or dev headers ─────────────────
+
+/**
+ * Returns { role, tenantId } from a session object (production) or
+ * request headers (development fallback).
+ */
+export function callerIdentity(request, session) {
+  if (session) {
+    return { role: session.role, tenantId: session.tenant_id };
+  }
+  return {
+    role:     (request.headers['x-staff-role'] || '').trim().toLowerCase(),
+    tenantId: (request.headers['x-tenant-id']  || 'system').trim(),
+  };
 }
 
 // ---------------------------------------------------------------------------

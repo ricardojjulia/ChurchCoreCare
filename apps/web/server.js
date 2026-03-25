@@ -1,4 +1,5 @@
 import http from 'node:http';
+import crypto from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -56,8 +57,62 @@ function applyWebSecurityHeaders(response) {
   }
 }
 
+// ─── CSRF helpers (double-submit cookie pattern) ──────────────────────────────
+
+const CSRF_COOKIE_NAME = 'csrf_token';
+const CSRF_HEADER_NAME = 'x-csrf-token';
+const CSRF_SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+function parseCookies(cookieHeader) {
+  if (!cookieHeader) return {};
+  return Object.fromEntries(
+    cookieHeader.split(';').map((p) => {
+      const eq = p.indexOf('=');
+      return eq === -1 ? [p.trim(), ''] : [p.slice(0, eq).trim(), p.slice(eq + 1).trim()];
+    }),
+  );
+}
+
+/**
+ * Ensure a CSRF token cookie is set.  Returns the current token.
+ * The cookie is NOT HttpOnly so JS can read it for the X-CSRF-Token header.
+ */
+function ensureCsrfCookie(request, response) {
+  const cookies = parseCookies(request.headers.cookie);
+  if (cookies[CSRF_COOKIE_NAME]) return cookies[CSRF_COOKIE_NAME];
+  const token = crypto.randomBytes(32).toString('hex');
+  const cookieFlags = ['SameSite=Strict', 'Path=/'];
+  if (process.env.NODE_ENV === 'production') cookieFlags.push('Secure');
+  response.setHeader('Set-Cookie', `${CSRF_COOKIE_NAME}=${token}; ${cookieFlags.join('; ')}`);
+  return token;
+}
+
+/**
+ * Validate CSRF on state-changing requests.
+ * Returns true (and writes 403) if the check fails.
+ */
+function csrfCheckFailed(request, response) {
+  if (CSRF_SAFE_METHODS.has(request.method ?? 'GET')) return false;
+  // Auth login is allowed without CSRF (browser needs to POST before getting cookie)
+  if (request.url?.replace('/api', '') === '/v1/auth/login') return false;
+  const cookies = parseCookies(request.headers.cookie);
+  const cookieToken  = cookies[CSRF_COOKIE_NAME];
+  const headerToken  = request.headers[CSRF_HEADER_NAME];
+  if (!cookieToken || !headerToken || cookieToken !== headerToken) {
+    response.writeHead(403, { 'content-type': 'application/json; charset=utf-8' });
+    response.end(JSON.stringify({ error: 'CSRF validation failed' }));
+    return true;
+  }
+  return false;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 const server = http.createServer(async (request, response) => {
   applyWebSecurityHeaders(response);
+
+  // Ensure CSRF cookie on every request so the browser has a token to use
+  ensureCsrfCookie(request, response);
 
   const requestScope = telemetry.beginRequest({
     method: request.method ?? 'GET',
@@ -65,6 +120,11 @@ const server = http.createServer(async (request, response) => {
   });
 
   if (request.url?.startsWith('/api/')) {
+    // CSRF check before proxying
+    if (csrfCheckFailed(request, response)) {
+      requestScope.end(403);
+      return;
+    }
     try {
       await proxyApiRequest(request, response);
       return;
@@ -155,14 +215,15 @@ async function proxyApiRequest(request, response) {
   try {
     const start = performance.now();
     const body = await readRequestBody(request);
-    // Forward auth and tenant headers so the API RBAC / tenant-scope guards work
+
+    // Forward session cookie and correlation headers to the API.
+    // Do NOT forward x-staff-role / x-tenant-id — identity comes from the session cookie.
     const forwardHeaders = {
-      accept: request.headers.accept ?? 'application/json',
+      accept:         request.headers.accept ?? 'application/json',
       'content-type': request.headers['content-type'] ?? 'application/json; charset=utf-8',
     };
-    for (const hdr of ['x-staff-role', 'x-tenant-id', 'x-actor-id', 'x-request-id']) {
-      if (request.headers[hdr]) forwardHeaders[hdr] = request.headers[hdr];
-    }
+    if (request.headers.cookie)       forwardHeaders.cookie       = request.headers.cookie;
+    if (request.headers['x-request-id']) forwardHeaders['x-request-id'] = request.headers['x-request-id'];
 
     const upstreamResponse = await fetch(upstreamUrl, {
       method: request.method,
@@ -172,10 +233,16 @@ async function proxyApiRequest(request, response) {
 
     const responseText = await upstreamResponse.text();
     telemetry.recordProxy(performance.now() - start, upstreamPath);
-    response.writeHead(upstreamResponse.status, {
+
+    const responseHeaders = {
       'content-type': upstreamResponse.headers.get('content-type') ?? 'application/json; charset=utf-8',
       'cache-control': 'no-cache',
-    });
+    };
+    // Forward Set-Cookie from API to browser (session cookie)
+    const setCookie = upstreamResponse.headers.get('set-cookie');
+    if (setCookie) responseHeaders['set-cookie'] = setCookie;
+
+    response.writeHead(upstreamResponse.status, responseHeaders);
     response.end(responseText);
   } catch {
     response.writeHead(502, {

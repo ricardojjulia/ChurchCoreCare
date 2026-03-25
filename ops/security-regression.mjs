@@ -1,4 +1,37 @@
+/**
+ * Security regression tests.
+ *
+ * In development (NODE_ENV !== 'production') the API accepts x-staff-role /
+ * x-tenant-id headers as a fallback, so these tests run without a live DB.
+ *
+ * In production the API only recognises session cookies.  Use `loginAs()` to
+ * obtain a cookie and pass it in `headers.cookie` instead.
+ *
+ * Example for production testing:
+ *   const cookie = await loginAs('admin@faithcounseling.local', 'ChangeMe!Dev2024#');
+ *   await req('/v1/clients', { headers: { cookie, 'content-type': 'application/json' } });
+ */
+
 const base = process.env.API_BASE_URL || 'http://localhost:3001';
+
+/**
+ * Log in and return the raw Set-Cookie header value (for use in subsequent
+ * requests).  Used in production-mode testing.
+ */
+async function loginAs(email, password) {
+  const resp = await fetch(`${base}/v1/auth/login`, {
+    method:  'POST',
+    headers: { 'content-type': 'application/json' },
+    body:    JSON.stringify({ email, password }),
+  });
+  if (!resp.ok) throw new Error(`loginAs(${email}) failed: ${resp.status}`);
+  return resp.headers.get('set-cookie') ?? '';
+}
+
+// Export for use by other test scripts.  Not called in this file unless
+// NODE_ENV === 'production' and SECURITY_TEST_EMAIL / SECURITY_TEST_PASSWORD
+// are set.
+export { loginAs };
 
 const headersByRole = {
   practiceAdmin: {

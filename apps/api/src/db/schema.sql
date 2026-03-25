@@ -1,0 +1,734 @@
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Faith Counseling — Core Schema  (Phase 1: core tables)
+-- Run via:  node apps/api/src/db/migrate.js
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- Character set and collation chosen for full Unicode support.
+-- All timestamps stored as UTC (pool configured with timezone: 'Z').
+
+-- ─── Tenants ─────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS tenants (
+  id           VARCHAR(64)  NOT NULL,
+  name         VARCHAR(255) NOT NULL,
+  plan_type    VARCHAR(64)  NOT NULL DEFAULT 'standard',
+  created_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Practices ───────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS practices (
+  id            VARCHAR(64)  NOT NULL,
+  tenant_id     VARCHAR(64)  NOT NULL,
+  name          VARCHAR(255) NOT NULL,
+  practice_type VARCHAR(64)  NOT NULL DEFAULT 'solo',
+  timezone      VARCHAR(64)  NOT NULL DEFAULT 'America/New_York',
+  created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_practices_tenant (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Locations ───────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS locations (
+  id             VARCHAR(64)   NOT NULL,
+  tenant_id      VARCHAR(64)   NOT NULL,
+  practice_id    VARCHAR(64),
+  name           VARCHAR(255)  NOT NULL,
+  address_enc    TEXT,                    -- AES-256-GCM encrypted (iv:tag:ct base64)
+  capacity       INT           NOT NULL DEFAULT 1,
+  remote_enabled TINYINT(1)    NOT NULL DEFAULT 0,
+  created_at     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_locations_tenant (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Staff members ───────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS staff_members (
+  id                  VARCHAR(64)  NOT NULL,
+  tenant_id           VARCHAR(64)  NOT NULL,
+  role                VARCHAR(64)  NOT NULL,
+  first_name_enc      TEXT         NOT NULL,   -- encrypted PHI
+  last_name_enc       TEXT         NOT NULL,   -- encrypted PHI
+  license_type        VARCHAR(64),
+  license_number_enc  TEXT,                    -- encrypted PHI
+  supervision_status  VARCHAR(64)  NOT NULL DEFAULT 'not_required',
+  supervising_staff_id VARCHAR(64),
+  bio_enc             TEXT,                    -- encrypted PHI
+  created_at          TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at          TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_staff_tenant (tenant_id),
+  INDEX idx_staff_role   (tenant_id, role)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Staff accounts (credentials) ────────────────────────────────────────────
+-- email is stored as plaintext to enable fast lookup during login.
+-- All other PHI lives in staff_members.
+
+CREATE TABLE IF NOT EXISTS staff_accounts (
+  id               VARCHAR(64)   NOT NULL,
+  staff_member_id  VARCHAR(64)   NOT NULL,
+  tenant_id        VARCHAR(64)   NOT NULL,
+  email            VARCHAR(320)  NOT NULL,    -- plaintext for lookup
+  password_hash    VARCHAR(255)  NOT NULL,    -- argon2id
+  failed_attempts  INT           NOT NULL DEFAULT 0,
+  locked_until     TIMESTAMP     NULL,
+  last_login_at    TIMESTAMP     NULL,
+  mfa_enabled      TINYINT(1)    NOT NULL DEFAULT 0,
+  created_at       TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at       TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_staff_accounts_email (email),
+  INDEX idx_staff_accounts_tenant (tenant_id),
+  CONSTRAINT fk_staff_accounts_member FOREIGN KEY (staff_member_id) REFERENCES staff_members (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Sessions ────────────────────────────────────────────────────────────────
+-- id stores the SHA-256 hash of the raw session token (never the token itself).
+
+CREATE TABLE IF NOT EXISTS sessions (
+  id               VARCHAR(64)  NOT NULL,   -- SHA-256(token) hex
+  staff_account_id VARCHAR(64)  NOT NULL,
+  tenant_id        VARCHAR(64)  NOT NULL,
+  role             VARCHAR(64)  NOT NULL,
+  created_at       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_active_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expires_at       TIMESTAMP    NOT NULL,
+  revoked          TINYINT(1)   NOT NULL DEFAULT 0,
+  PRIMARY KEY (id),
+  INDEX idx_sessions_account  (staff_account_id),
+  INDEX idx_sessions_expires  (expires_at),
+  CONSTRAINT fk_sessions_account FOREIGN KEY (staff_account_id) REFERENCES staff_accounts (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Clients ─────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS clients (
+  id               VARCHAR(64)  NOT NULL,
+  tenant_id        VARCHAR(64)  NOT NULL,
+  first_name_enc   TEXT         NOT NULL,   -- encrypted PHI
+  last_name_enc    TEXT         NOT NULL,   -- encrypted PHI
+  status           VARCHAR(64)  NOT NULL DEFAULT 'active',
+  faith_background VARCHAR(255),            -- non-PHI label, kept plaintext
+  created_at       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_clients_tenant        (tenant_id),
+  INDEX idx_clients_tenant_status (tenant_id, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Client lifecycles ───────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS client_lifecycles (
+  id                    VARCHAR(64) NOT NULL,
+  client_id             VARCHAR(64) NOT NULL,
+  tenant_id             VARCHAR(64) NOT NULL,
+  case_status           VARCHAR(64) NOT NULL DEFAULT 'active',
+  referral_source       VARCHAR(255),
+  emergency_contact_enc TEXT,               -- encrypted PHI (JSON blob)
+  discharge_record      TEXT,               -- JSON blob (non-PHI metadata)
+  updated_at            TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_lifecycle_client (client_id),
+  INDEX idx_lifecycle_tenant (tenant_id),
+  CONSTRAINT fk_lifecycle_client FOREIGN KEY (client_id) REFERENCES clients (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Appointments ────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS appointments (
+  id                  VARCHAR(64)  NOT NULL,
+  tenant_id           VARCHAR(64)  NOT NULL,
+  client_id           VARCHAR(64),
+  counselor_id        VARCHAR(64),
+  client_name_enc     TEXT,                  -- encrypted PHI
+  counselor_name_enc  TEXT,                  -- encrypted PHI
+  appointment_type    VARCHAR(64)  NOT NULL,
+  status              VARCHAR(64)  NOT NULL DEFAULT 'scheduled',
+  scheduled_at        TIMESTAMP    NULL,
+  duration_minutes    INT          NOT NULL DEFAULT 50,
+  location_id         VARCHAR(64),
+  remote_session      TINYINT(1)   NOT NULL DEFAULT 0,
+  created_at          TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at          TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_appointments_tenant       (tenant_id),
+  INDEX idx_appointments_client       (tenant_id, client_id),
+  INDEX idx_appointments_counselor    (tenant_id, counselor_id),
+  INDEX idx_appointments_scheduled_at (tenant_id, scheduled_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Audit events ────────────────────────────────────────────────────────────
+-- Append-only. Never UPDATE or DELETE rows in this table.
+-- PHI values must NEVER appear in any column.
+
+CREATE TABLE IF NOT EXISTS audit_events (
+  id          VARCHAR(64)  NOT NULL,
+  tenant_id   VARCHAR(64)  NOT NULL,
+  actor_id    VARCHAR(255) NOT NULL,
+  actor_role  VARCHAR(64)  NOT NULL,
+  action      VARCHAR(128) NOT NULL,
+  target_type VARCHAR(64)  NOT NULL,
+  target_id   VARCHAR(255) NOT NULL,
+  occurred_at TIMESTAMP    NOT NULL,
+  request_id  VARCHAR(128),
+  PRIMARY KEY (id),
+  INDEX idx_audit_tenant     (tenant_id),
+  INDEX idx_audit_occurred   (tenant_id, occurred_at),
+  INDEX idx_audit_actor      (tenant_id, actor_id),
+  INDEX idx_audit_action     (tenant_id, action)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Consent records ─────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS consent_records (
+  id              VARCHAR(64)  NOT NULL,
+  tenant_id       VARCHAR(64)  NOT NULL,
+  client_id       VARCHAR(64)  NOT NULL,
+  consent_type    VARCHAR(64)  NOT NULL,
+  signature_state VARCHAR(64)  NOT NULL DEFAULT 'pending',
+  version         VARCHAR(32)  NOT NULL DEFAULT 'v1',
+  effective_from  TIMESTAMP    NULL,
+  effective_to    TIMESTAMP    NULL,
+  signed_at       TIMESTAMP    NULL,
+  created_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_consent_tenant_client (tenant_id, client_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Intake packets ───────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS intake_packets (
+  id             VARCHAR(64) NOT NULL,
+  tenant_id      VARCHAR(64) NOT NULL,
+  client_id      VARCHAR(64) NOT NULL,
+  status         VARCHAR(64) NOT NULL DEFAULT 'assigned',
+  assigned_forms JSON,
+  submitted_at   TIMESTAMP   NULL,
+  created_at     TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at     TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_intake_tenant_client (tenant_id, client_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Treatment plans ─────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS treatment_plans (
+  id               VARCHAR(64) NOT NULL,
+  tenant_id        VARCHAR(64) NOT NULL,
+  client_id        VARCHAR(64) NOT NULL,
+  status           VARCHAR(64) NOT NULL DEFAULT 'draft',
+  goals_enc        TEXT,                  -- encrypted PHI (JSON array)
+  interventions_enc TEXT,                 -- encrypted PHI (JSON array)
+  review_cadence   VARCHAR(64),
+  reviewed_at      TIMESTAMP   NULL,
+  created_at       TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at       TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_plan_tenant_client (tenant_id, client_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Progress notes ───────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS progress_notes (
+  id               VARCHAR(64)  NOT NULL,
+  tenant_id        VARCHAR(64)  NOT NULL,
+  client_id        VARCHAR(64)  NOT NULL,
+  note_type        VARCHAR(64)  NOT NULL,
+  summary_enc      TEXT,                  -- encrypted PHI
+  interventions_enc TEXT,                 -- encrypted PHI (JSON array)
+  locked           TINYINT(1)   NOT NULL DEFAULT 0,
+  signed_by        VARCHAR(64),
+  signed_at        TIMESTAMP    NULL,
+  created_at       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_note_tenant_client (tenant_id, client_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Document templates ───────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS document_templates (
+  id             VARCHAR(64)  NOT NULL,
+  tenant_id      VARCHAR(64)  NOT NULL,
+  title          VARCHAR(255) NOT NULL,
+  template_type  VARCHAR(64)  NOT NULL,
+  audience       VARCHAR(64)  NOT NULL,
+  template_key   VARCHAR(128) NOT NULL,
+  version_number INT          NOT NULL DEFAULT 1,
+  content_blocks JSON,
+  created_at     TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at     TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_doc_template_tenant (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Document assignments ─────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS document_assignments (
+  id                 VARCHAR(64) NOT NULL,
+  tenant_id          VARCHAR(64) NOT NULL,
+  template_id        VARCHAR(64) NOT NULL,
+  assignee_type      VARCHAR(64) NOT NULL,
+  assignee_id        VARCHAR(64) NOT NULL,
+  status             VARCHAR(64) NOT NULL DEFAULT 'assigned',
+  requires_signature TINYINT(1)  NOT NULL DEFAULT 0,
+  due_at             TIMESTAMP   NULL,
+  completed_at       TIMESTAMP   NULL,
+  access_history     JSON,
+  created_at         TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at         TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_doc_assign_tenant    (tenant_id),
+  INDEX idx_doc_assign_assignee  (tenant_id, assignee_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Inventory definitions ────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS inventory_definitions (
+  id              VARCHAR(64)  NOT NULL,
+  tenant_id       VARCHAR(64)  NOT NULL,
+  name            VARCHAR(255) NOT NULL,
+  category        VARCHAR(64)  NOT NULL,
+  scoring_method  VARCHAR(64)  NOT NULL DEFAULT 'sum',
+  version_number  INT          NOT NULL DEFAULT 1,
+  question_schema JSON,
+  created_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_inv_def_tenant (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Inventory assignments ────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS inventory_assignments (
+  id           VARCHAR(64) NOT NULL,
+  tenant_id    VARCHAR(64) NOT NULL,
+  inventory_id VARCHAR(64) NOT NULL,
+  client_id    VARCHAR(64) NOT NULL,
+  status       VARCHAR(64) NOT NULL DEFAULT 'assigned',
+  responses    JSON,
+  score        DECIMAL(10,4),
+  scored_at    TIMESTAMP   NULL,
+  completed_at TIMESTAMP   NULL,
+  created_at   TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at   TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_inv_assign_tenant_client (tenant_id, client_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Reminders ────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS reminders (
+  id               VARCHAR(64)  NOT NULL,
+  tenant_id        VARCHAR(64)  NOT NULL,
+  appointment_id   VARCHAR(64),
+  client_id        VARCHAR(64),
+  reminder_type    VARCHAR(64)  NOT NULL,
+  delivery_channel VARCHAR(64)  NOT NULL,
+  reminder_at      TIMESTAMP    NULL,
+  status           VARCHAR(64)  NOT NULL DEFAULT 'pending',
+  sent_at          TIMESTAMP    NULL,
+  created_at       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_reminder_tenant      (tenant_id),
+  INDEX idx_reminder_appointment (appointment_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Waitlist metadata ────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS waitlist_metadata (
+  id                     VARCHAR(64)  NOT NULL,
+  client_id              VARCHAR(64)  NOT NULL,
+  tenant_id              VARCHAR(64)  NOT NULL,
+  priority_rank          INT          NOT NULL DEFAULT 0,
+  requested_service      VARCHAR(255),
+  preferred_session_type VARCHAR(64),
+  notes                  TEXT,
+  updated_at             TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_waitlist_client (client_id),
+  INDEX idx_waitlist_tenant (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Staff availability templates ─────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS availability_templates (
+  id          VARCHAR(64) NOT NULL,
+  staff_id    VARCHAR(64) NOT NULL,
+  tenant_id   VARCHAR(64) NOT NULL,
+  slots       JSON,         -- array of { day, start, end }
+  updated_at  TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_avail_staff (staff_id),
+  INDEX idx_avail_tenant (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Service codes ────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS service_codes (
+  id                       VARCHAR(64)  NOT NULL,
+  tenant_id                VARCHAR(64)  NOT NULL,
+  code                     VARCHAR(32)  NOT NULL,
+  name                     VARCHAR(255) NOT NULL,
+  category                 VARCHAR(128),
+  default_duration_minutes INT          NOT NULL DEFAULT 50,
+  status                   VARCHAR(64)  NOT NULL DEFAULT 'active',
+  created_at               TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at               TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_service_code_tenant (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Fee schedules ────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS fee_schedules (
+  id         VARCHAR(64)  NOT NULL,
+  tenant_id  VARCHAR(64)  NOT NULL,
+  name       VARCHAR(255) NOT NULL,
+  status     VARCHAR(64)  NOT NULL DEFAULT 'active',
+  currency   CHAR(3)      NOT NULL DEFAULT 'USD',
+  schedule_lines JSON,
+  updated_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  created_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_fee_schedule_tenant (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Invoices ─────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS invoices (
+  id                VARCHAR(64)    NOT NULL,
+  tenant_id         VARCHAR(64)    NOT NULL,
+  client_id         VARCHAR(64),
+  appointment_id    VARCHAR(64),
+  issued_at         TIMESTAMP      NULL,
+  due_at            TIMESTAMP      NULL,
+  status            VARCHAR(64)    NOT NULL DEFAULT 'draft',
+  line_items        JSON,
+  insurance_enc     TEXT,                   -- encrypted PHI (JSON)
+  claim_status      VARCHAR(64)    NOT NULL DEFAULT 'not_submitted',
+  subtotal          DECIMAL(10,2)  NOT NULL DEFAULT 0,
+  adjustments       DECIMAL(10,2)  NOT NULL DEFAULT 0,
+  total             DECIMAL(10,2)  NOT NULL DEFAULT 0,
+  amount_paid       DECIMAL(10,2)  NOT NULL DEFAULT 0,
+  balance           DECIMAL(10,2)  NOT NULL DEFAULT 0,
+  updated_at        TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  created_at        TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_invoice_tenant        (tenant_id),
+  INDEX idx_invoice_tenant_client (tenant_id, client_id),
+  INDEX idx_invoice_status        (tenant_id, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Payments ─────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS payments (
+  id          VARCHAR(64)   NOT NULL,
+  tenant_id   VARCHAR(64)   NOT NULL,
+  invoice_id  VARCHAR(64),
+  client_id   VARCHAR(64),
+  amount      DECIMAL(10,2) NOT NULL DEFAULT 0,
+  method      VARCHAR(64)   NOT NULL,
+  received_at TIMESTAMP     NULL,
+  reference   VARCHAR(255),
+  notes       TEXT,
+  created_at  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_payment_tenant   (tenant_id),
+  INDEX idx_payment_invoice  (invoice_id),
+  INDEX idx_payment_client   (client_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Superbills ───────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS superbills (
+  id               VARCHAR(64) NOT NULL,
+  tenant_id        VARCHAR(64) NOT NULL,
+  invoice_id       VARCHAR(64),
+  client_id        VARCHAR(64),
+  generated_at     TIMESTAMP   NULL,
+  diagnosis_codes  JSON,
+  service_lines    JSON,
+  created_at       TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_superbill_tenant  (tenant_id),
+  INDEX idx_superbill_client  (client_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Claims ───────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS claims (
+  id                 VARCHAR(64)  NOT NULL,
+  tenant_id          VARCHAR(64)  NOT NULL,
+  invoice_id         VARCHAR(64),
+  status             VARCHAR(64)  NOT NULL DEFAULT 'not_submitted',
+  external_reference VARCHAR(255),
+  submitted_at       TIMESTAMP    NULL,
+  notes              TEXT,
+  updated_at         TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  created_at         TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_claim_tenant  (tenant_id),
+  INDEX idx_claim_invoice (invoice_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Portal accounts ─────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS portal_accounts (
+  id          VARCHAR(64)  NOT NULL,
+  tenant_id   VARCHAR(64)  NOT NULL,
+  client_id   VARCHAR(64)  NOT NULL,
+  email_enc   TEXT         NOT NULL,   -- encrypted PHI
+  status      VARCHAR(64)  NOT NULL DEFAULT 'active',
+  mfa_enabled TINYINT(1)   NOT NULL DEFAULT 0,
+  last_login  TIMESTAMP    NULL,
+  created_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_portal_client (client_id),
+  INDEX idx_portal_account_tenant (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Portal resources ─────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS portal_resources (
+  id            VARCHAR(64)  NOT NULL,
+  tenant_id     VARCHAR(64)  NOT NULL,
+  title         VARCHAR(255) NOT NULL,
+  content       TEXT,
+  resource_type VARCHAR(64)  NOT NULL,
+  audience      VARCHAR(64)  NOT NULL DEFAULT 'all',
+  published_at  TIMESTAMP    NULL,
+  created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_portal_resource_tenant (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Portal message threads ───────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS portal_message_threads (
+  id          VARCHAR(64)  NOT NULL,
+  tenant_id   VARCHAR(64)  NOT NULL,
+  client_id   VARCHAR(64)  NOT NULL,
+  subject     VARCHAR(255),
+  status      VARCHAR(64)  NOT NULL DEFAULT 'open',
+  created_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_portal_thread_tenant_client (tenant_id, client_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Portal messages ─────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS portal_messages (
+  id          VARCHAR(64) NOT NULL,
+  tenant_id   VARCHAR(64) NOT NULL,
+  thread_id   VARCHAR(64) NOT NULL,
+  sender_id   VARCHAR(64) NOT NULL,
+  sender_role VARCHAR(64) NOT NULL,
+  content_enc TEXT,                 -- encrypted PHI
+  sent_at     TIMESTAMP   NULL,
+  created_at  TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_portal_message_thread (thread_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Portal appointment requests ─────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS portal_appointment_requests (
+  id               VARCHAR(64)  NOT NULL,
+  tenant_id        VARCHAR(64)  NOT NULL,
+  client_id        VARCHAR(64)  NOT NULL,
+  requested_type   VARCHAR(64)  NOT NULL,
+  preferred_times  JSON,
+  notes            TEXT,
+  status           VARCHAR(64)  NOT NULL DEFAULT 'pending',
+  resolved_at      TIMESTAMP    NULL,
+  created_at       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_portal_appt_req_tenant_client (tenant_id, client_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Faith: note templates ────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS faith_note_templates (
+  id                VARCHAR(64)  NOT NULL,
+  tenant_id         VARCHAR(64)  NOT NULL,
+  name              VARCHAR(255) NOT NULL,
+  focus_area        VARCHAR(120),
+  integration_level VARCHAR(64)  NOT NULL DEFAULT 'balanced',
+  sections          JSON,
+  created_at        TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at        TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_faith_note_tmpl_tenant (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Faith: treatment goal templates ─────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS faith_goal_templates (
+  id                VARCHAR(64)  NOT NULL,
+  tenant_id         VARCHAR(64)  NOT NULL,
+  title             VARCHAR(255) NOT NULL,
+  integration_level VARCHAR(64)  NOT NULL DEFAULT 'balanced',
+  scriptures        JSON,
+  milestones        JSON,
+  created_at        TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_faith_goal_tmpl_tenant (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Faith: consent language variants ────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS faith_consent_variants (
+  id                VARCHAR(64)  NOT NULL,
+  tenant_id         VARCHAR(64)  NOT NULL,
+  title             VARCHAR(255) NOT NULL,
+  body              TEXT,
+  audience          VARCHAR(20)  NOT NULL DEFAULT 'client',
+  integration_level VARCHAR(64)  NOT NULL DEFAULT 'balanced',
+  created_at        TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_faith_consent_var_tenant (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Faith: resource library ──────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS faith_resources (
+  id                  VARCHAR(64)  NOT NULL,
+  tenant_id           VARCHAR(64)  NOT NULL,
+  title               VARCHAR(255) NOT NULL,
+  resource_type       VARCHAR(64)  NOT NULL,
+  content             TEXT,
+  scripture_reference VARCHAR(255),
+  created_at          TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_faith_resource_tenant (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Faith: spiritual formation inventories ───────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS faith_inventories (
+  id         VARCHAR(64)  NOT NULL,
+  tenant_id  VARCHAR(64)  NOT NULL,
+  name       VARCHAR(255) NOT NULL,
+  cadence    VARCHAR(64)  NOT NULL DEFAULT 'weekly',
+  prompts    JSON,
+  created_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_faith_inv_tenant (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Faith: church referral coordinations ─────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS faith_church_referrals (
+  id                    VARCHAR(64)  NOT NULL,
+  tenant_id             VARCHAR(64)  NOT NULL,
+  client_id             VARCHAR(64)  NOT NULL,
+  church_name           VARCHAR(255),
+  contact_name          VARCHAR(160),
+  contact_method        VARCHAR(200),
+  status                VARCHAR(64)  NOT NULL DEFAULT 'proposed',
+  consent_to_coordinate TINYINT(1)   NOT NULL DEFAULT 0,
+  notes                 TEXT,
+  updated_at            TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  created_at            TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_faith_referral_tenant_client (tenant_id, client_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Faith: language preferences ─────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS faith_language_preferences (
+  id                      VARCHAR(64)  NOT NULL,
+  tenant_id               VARCHAR(64)  NOT NULL,
+  practice_id             VARCHAR(64),
+  integration_level       VARCHAR(64)  NOT NULL DEFAULT 'moderate',
+  explicit_faith_language TINYINT(1)   NOT NULL DEFAULT 1,
+  include_prayer_language TINYINT(1)   NOT NULL DEFAULT 1,
+  include_scripture_refs  TINYINT(1)   NOT NULL DEFAULT 1,
+  preferred_terminology   VARCHAR(255),
+  updated_at              TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_faith_lang_pref_tenant (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Platform: tenant provisioning ───────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS tenant_provisioning (
+  id                    VARCHAR(64)  NOT NULL,
+  tenant_id             VARCHAR(64)  NOT NULL,
+  requested_tenant_id   VARCHAR(64)  NOT NULL,
+  requested_practice_name VARCHAR(255) NOT NULL,
+  owner_email           VARCHAR(320) NOT NULL,   -- plaintext; no PHI lookup needed
+  status                VARCHAR(64)  NOT NULL DEFAULT 'queued',
+  requested_at          TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  completed_at          TIMESTAMP    NULL,
+  PRIMARY KEY (id),
+  INDEX idx_tenant_prov_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Platform: impersonation sessions ────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS impersonation_sessions (
+  id               VARCHAR(64)  NOT NULL,
+  tenant_id        VARCHAR(64)  NOT NULL,
+  target_tenant_id VARCHAR(64)  NOT NULL,
+  target_role      VARCHAR(64)  NOT NULL,
+  requested_by     VARCHAR(64)  NOT NULL,
+  reason           TEXT,
+  status           VARCHAR(64)  NOT NULL DEFAULT 'active',
+  started_at       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  ended_at         TIMESTAMP    NULL,
+  PRIMARY KEY (id),
+  INDEX idx_impersonation_tenant (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Platform: data export jobs ──────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS data_export_jobs (
+  id                 VARCHAR(64)  NOT NULL,
+  tenant_id          VARCHAR(64)  NOT NULL,
+  export_type        VARCHAR(64)  NOT NULL,
+  status             VARCHAR(64)  NOT NULL DEFAULT 'queued',
+  requested_by_role  VARCHAR(64)  NOT NULL,
+  requested_at       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  completed_at       TIMESTAMP    NULL,
+  format             VARCHAR(16)  NOT NULL DEFAULT 'json',
+  PRIMARY KEY (id),
+  INDEX idx_export_job_tenant (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Platform: retention policies ────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS retention_policies (
+  id                       VARCHAR(64)  NOT NULL,
+  tenant_id                VARCHAR(64)  NOT NULL,
+  clinical_records_schedule VARCHAR(64) NOT NULL DEFAULT '10_years',
+  billing_schedule          VARCHAR(64) NOT NULL DEFAULT '7_years',
+  audit_log_schedule        VARCHAR(64) NOT NULL DEFAULT 'indefinite',
+  include_document_versions TINYINT(1)  NOT NULL DEFAULT 1,
+  legal_hold_enabled        TINYINT(1)  NOT NULL DEFAULT 0,
+  updated_at                TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_retention_tenant (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Practices (extended) — add columns missing from initial definition ────────
+-- practices table was created earlier; these ALTER statements are idempotent-safe
+-- via the IF NOT EXISTS DDL for tables above. When running on a fresh DB the
+-- full CREATE TABLE below is used.  If upgrading an existing install, run:
+--   ALTER TABLE practices ADD COLUMN IF NOT EXISTS faith_tradition VARCHAR(128);
+--   ALTER TABLE practices ADD COLUMN IF NOT EXISTS contact_email VARCHAR(320);
+--   ALTER TABLE practices ADD COLUMN IF NOT EXISTS contact_phone VARCHAR(64);
