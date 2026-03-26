@@ -50,10 +50,49 @@ try {
   await connection.query(cleaned);
   console.log('Migration complete — all core tables created.');
 
+  // Column migrations — add new columns to existing tables when the schema
+  // has already been created. Each check is idempotent via INFORMATION_SCHEMA.
+  await applyColumnMigrations(connection);
+
   // Seed a default tenant + system practice for local dev
   await seedDevData(connection);
 } finally {
   await connection.end();
+}
+
+async function applyColumnMigrations(conn) {
+  const dbName = process.env.DB_NAME;
+
+  // Helper: add a column if it doesn't already exist
+  async function addColumnIfMissing(table, column, definition) {
+    const [[{ cnt }]] = await conn.query(
+      `SELECT COUNT(*) AS cnt FROM information_schema.columns
+       WHERE table_schema = ? AND table_name = ? AND column_name = ?`,
+      [dbName, table, column],
+    );
+    if (cnt === 0) {
+      await conn.query(`ALTER TABLE \`${table}\` ADD COLUMN \`${column}\` ${definition}`);
+      console.log(`  + ${table}.${column} added`);
+    }
+  }
+
+  // Helper: add an index if it doesn't already exist
+  async function addIndexIfMissing(table, indexName, definition) {
+    const [[{ cnt }]] = await conn.query(
+      `SELECT COUNT(*) AS cnt FROM information_schema.statistics
+       WHERE table_schema = ? AND table_name = ? AND index_name = ?`,
+      [dbName, table, indexName],
+    );
+    if (cnt === 0) {
+      await conn.query(`ALTER TABLE \`${table}\` ADD INDEX \`${indexName}\` ${definition}`);
+      console.log(`  + index ${indexName} on ${table} added`);
+    }
+  }
+
+  console.log('Applying column migrations…');
+  await addColumnIfMissing('clients', 'primary_counselor_id', 'VARCHAR(64) NULL');
+  await addIndexIfMissing('clients', 'idx_clients_counselor', '(primary_counselor_id)');
+  console.log('Column migrations done.');
 }
 
 async function seedDevData(conn) {

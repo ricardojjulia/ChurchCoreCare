@@ -1124,6 +1124,5 @@ CREATE TABLE IF NOT EXISTS staff_faith_profiles (
 --   ALTER TABLE practices ADD COLUMN IF NOT EXISTS contact_phone VARCHAR(64);
 
 -- ─── Clients (extended) ───────────────────────────────────────────────────────
--- Add primary_counselor_id for existing installs (fresh installs get it via CREATE TABLE).
-ALTER TABLE clients ADD COLUMN IF NOT EXISTS primary_counselor_id VARCHAR(64) NULL;
-ALTER TABLE clients ADD INDEX IF NOT EXISTS idx_clients_counselor (primary_counselor_id);
+-- primary_counselor_id is included in the CREATE TABLE above for fresh installs.
+-- Existing installs: migrate.js handles the ALTER TABLE via INFORMATION_SCHEMA check.
