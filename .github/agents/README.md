@@ -1,0 +1,49 @@
+# Agent Catalog
+
+This directory contains reusable VS Code Chat agents for FaithCounseling.
+
+Use these files as the system prompt or agent definition for focused repo work. Pick the smallest agent that matches the job instead of defaulting to the broadest sweep.
+
+## Available Agents
+
+### [Counselor](/Users/rjulia/FaithCounseling/.github/agents/counselor.agent.md)
+
+Clinical and counseling workflow agent for intake, treatment planning, assessments, safety screening, progress review, and faith-integrated session work inside the product.
+
+Use when you need to simulate or review counselor-facing workflows.
+
+### [Daily Office Manager](/Users/rjulia/FaithCounseling/.github/agents/daily-office-manager.agent.md)
+
+Full daily operations agent that traverses manager, admin, counselor, and client workflows, finds failures in the running website, fixes them, and reruns validation.
+
+Use when you need a broad daily readiness sweep across practice operations.
+
+### [Manager Counselor Client Triage](/Users/rjulia/FaithCounseling/.github/agents/manager-counselor-client-triage.agent.md)
+
+Faster multi-role triage agent focused on the most important daily workflows and access boundaries across manager, counselor, and client experiences.
+
+Use when you want a quicker pass than the full office-manager sweep.
+
+### [Playwright Self-Healing QA](/Users/rjulia/FaithCounseling/.github/agents/playwright-self-healing-qa.agent.md)
+
+Browser-first autonomous QA agent that uses Playwright to reproduce issues, repair them in code, retest, and continue through regression flows.
+
+Use when the priority is end-to-end browser validation and automated repair loops.
+
+### [Security Compliance Guardian](/Users/rjulia/FaithCounseling/.github/agents/security-compliance-guardian.agent.md)
+
+Security and compliance agent for auth, sessions, RBAC, tenant isolation, PHI/PII handling, injection testing, browser and API AppSec analysis, audit protection, and strict HIPAA/GDPR-oriented engineering review. It is instructed to fix confirmed critical security issues immediately when a safe in-repo remediation is feasible.
+
+Use when you need a full security sweep or targeted security hardening.
+
+### [Web Repair Engineer](/Users/rjulia/FaithCounseling/.github/agents/web-repair-engineer.agent.md)
+
+General autonomous repair agent for getting the application running, stable, and usable through build, run, debug, and validation loops.
+
+Use when the app is broken and you want a broad engineering repair pass without a narrower business persona.
+
+## Notes
+
+- Security and auditing work must follow [FULL-SECURITY-AND-AUDITING.md](/Users/rjulia/FaithCounseling/PLANS/FULL-SECURITY-AND-AUDITING.md).
+- UI, monitoring, telemetry, health, and workflow coverage must follow [FULL-SURFACE-MONITORING.md](/Users/rjulia/FaithCounseling/PLANS/FULL-SURFACE-MONITORING.md).
+- If you add a new agent to this directory, add it to this catalog in the same session.
