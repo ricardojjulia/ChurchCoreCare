@@ -480,6 +480,18 @@ export default function PortalTab({ onSchedulePortalRequest }) {
 
   return (
     <Stack gap="lg" maw={900}>
+      <Alert color="teal" title="Client Portal Access" variant="light">
+        <Group justify="space-between" align="center" wrap="wrap" gap="xs">
+          <Text fz="sm">
+            Public client portal entry is available at <strong>/portal</strong>. New request submissions are captured by the system,
+            and standard onboarding forms are auto-assigned when a portal account is created.
+          </Text>
+          <Button component="a" href="/portal" target="_blank" rel="noreferrer" size="xs" variant="outline">
+            Open Portal Page
+          </Button>
+        </Group>
+      </Alert>
+
       {/* Client picker */}
       <Select
         label="Select Client"

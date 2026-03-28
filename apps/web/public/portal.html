@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Client Portal | FaithCounseling</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <style>
+      body.portal-page {
+        margin: 0;
+        min-height: 100vh;
+        background: linear-gradient(135deg, #f8f4ec 0%, #eef5f8 55%, #faf8f2 100%);
+        font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+        color: #1f2933;
+      }
+      .portal-shell {
+        max-width: 1040px;
+        margin: 0 auto;
+        padding: 32px 20px 48px;
+      }
+      .portal-hero {
+        background: #ffffffcc;
+        border: 1px solid #d8e0e8;
+        border-radius: 20px;
+        padding: 28px;
+        backdrop-filter: blur(4px);
+      }
+      .portal-hero h1 {
+        margin: 0;
+        font-size: clamp(1.6rem, 2vw, 2.2rem);
+      }
+      .portal-hero p {
+        margin-top: 8px;
+        color: #52606d;
+      }
+      .portal-grid {
+        display: grid;
+        gap: 16px;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        margin-top: 18px;
+      }
+      .portal-card {
+        background: #fff;
+        border: 1px solid #dde6ee;
+        border-radius: 16px;
+        padding: 18px;
+      }
+      .portal-card h2 {
+        margin: 0 0 8px;
+        font-size: 1.1rem;
+      }
+      .portal-card p {
+        margin: 0 0 12px;
+        color: #52606d;
+        font-size: 0.95rem;
+      }
+      .portal-input {
+        width: 100%;
+        border: 1px solid #c8d2dc;
+        border-radius: 10px;
+        padding: 10px 12px;
+        margin-bottom: 10px;
+        font-size: 0.95rem;
+        box-sizing: border-box;
+        background: #fff;
+      }
+      .portal-services {
+        display: grid;
+        gap: 8px;
+        margin: 8px 0 10px;
+        grid-template-columns: repeat(2, minmax(120px, 1fr));
+      }
+      .portal-services label {
+        font-size: 0.86rem;
+        color: #334e68;
+      }
+      .portal-btn {
+        border: 0;
+        border-radius: 10px;
+        padding: 10px 14px;
+        font-size: 0.95rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .portal-btn-primary {
+        background: #1f7a8c;
+        color: #fff;
+      }
+      .portal-btn-secondary {
+        background: #f0f4f8;
+        color: #243b53;
+        border: 1px solid #c9d4df;
+      }
+      .portal-note {
+        margin-top: 14px;
+        color: #486581;
+        font-size: 0.85rem;
+      }
+      .portal-status {
+        margin-top: 8px;
+        font-size: 0.88rem;
+      }
+      .portal-status.success { color: #147d64; }
+      .portal-status.error { color: #c81e1e; }
+    </style>
+  </head>
+  <body class="portal-page">
+    <main class="portal-shell">
+      <section class="portal-hero">
+        <h1>FaithCounseling Client Portal</h1>
+        <p>
+          Current clients can sign in to their account. New or possible clients can submit a secure request
+          for account setup and intake onboarding.
+        </p>
+
+        <div class="portal-grid">
+          <article class="portal-card">
+            <h2>I already have an account</h2>
+            <p>Use your invited credentials to access appointments, forms, and secure messages.</p>
+            <a href="/" class="portal-btn portal-btn-primary" style="display:inline-block;text-decoration:none;">Go to Sign In</a>
+            <div class="portal-note">If your account is locked or not yet invited, contact your counselor.</div>
+          </article>
+
+          <article class="portal-card">
+            <h2>I am a new or possible client</h2>
+            <p>Submit a request and our team will review and follow up with next steps.</p>
+            <form id="portalRequestForm" novalidate>
+              <input class="portal-input" id="firstName" name="firstName" placeholder="First name" required />
+              <input class="portal-input" id="lastName" name="lastName" placeholder="Last name" required />
+              <input class="portal-input" id="email" name="email" type="email" placeholder="Email" required />
+              <input class="portal-input" id="phone" name="phone" placeholder="Phone (optional)" />
+              <div class="portal-services">
+                <label><input type="checkbox" value="individual" /> Individual</label>
+                <label><input type="checkbox" value="couples" /> Couples</label>
+                <label><input type="checkbox" value="family" /> Family</label>
+                <label><input type="checkbox" value="faith_integrated" /> Faith-integrated</label>
+              </div>
+              <textarea class="portal-input" id="notes" name="notes" rows="3" placeholder="Briefly share what kind of support you are looking for (optional)"></textarea>
+              <button type="submit" class="portal-btn portal-btn-primary">Submit Request</button>
+            </form>
+            <div id="portalRequestStatus" class="portal-status" aria-live="polite"></div>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <script src="/portal.js" type="module"></script>
+  </body>
+</html>

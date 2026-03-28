@@ -894,6 +894,92 @@ CREATE TABLE IF NOT EXISTS portal_appointment_requests (
   INDEX idx_portal_appt_req_tenant_client (tenant_id, client_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- ─── Workspace Studio form catalog ───────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS form_catalog (
+  id                     VARCHAR(64)  NOT NULL,
+  tenant_id              VARCHAR(64)  NOT NULL,
+  form_key               VARCHAR(128) NOT NULL,
+  title                  VARCHAR(255) NOT NULL,
+  category               VARCHAR(64)  NOT NULL,
+  is_standard_on_signup  TINYINT(1)   NOT NULL DEFAULT 0,
+  is_active              TINYINT(1)   NOT NULL DEFAULT 1,
+  version_number         INT          NOT NULL DEFAULT 1,
+  created_at             TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at             TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_form_catalog_tenant_form_key (tenant_id, form_key),
+  INDEX idx_form_catalog_tenant_category (tenant_id, category)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Workspace Studio form assignments ───────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS form_assignments (
+  id                     VARCHAR(64)  NOT NULL,
+  tenant_id              VARCHAR(64)  NOT NULL,
+  client_id              VARCHAR(64)  NOT NULL,
+  form_key               VARCHAR(128) NOT NULL,
+  form_title             VARCHAR(255) NOT NULL,
+  assignment_type        VARCHAR(64)  NOT NULL DEFAULT 'next_session',
+  scheduled_for          TIMESTAMP    NULL,
+  recurrence_rule        VARCHAR(255) NULL,
+  status                 VARCHAR(64)  NOT NULL DEFAULT 'assigned',
+  assigned_by            VARCHAR(64)  NULL,
+  notes                  VARCHAR(500) NULL,
+  due_at                 TIMESTAMP    NULL,
+  completed_at           TIMESTAMP    NULL,
+  created_at             TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at             TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_form_assign_tenant_client (tenant_id, client_id),
+  INDEX idx_form_assign_tenant_status (tenant_id, status),
+  INDEX idx_form_assign_tenant_form_key (tenant_id, form_key),
+  CONSTRAINT fk_form_assign_client FOREIGN KEY (client_id) REFERENCES clients (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Workspace Studio form submissions (append-only, encrypted payload) ─────
+
+CREATE TABLE IF NOT EXISTS form_submissions (
+  id                     VARCHAR(64)  NOT NULL,
+  tenant_id              VARCHAR(64)  NOT NULL,
+  assignment_id          VARCHAR(64)  NULL,
+  client_id              VARCHAR(64)  NOT NULL,
+  form_key               VARCHAR(128) NOT NULL,
+  form_title             VARCHAR(255) NOT NULL,
+  submission_version     INT          NOT NULL,
+  submitted_by_type      VARCHAR(32)  NOT NULL DEFAULT 'client',
+  responses_enc          MEDIUMTEXT   NOT NULL,
+  score_label            VARCHAR(128) NULL,
+  score_value            DECIMAL(10,2) NULL,
+  interpretation_label   VARCHAR(128) NULL,
+  submitted_at           TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_at             TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_form_submit_tenant_client (tenant_id, client_id),
+  INDEX idx_form_submit_tenant_form_key (tenant_id, form_key),
+  INDEX idx_form_submit_tenant_submitted_at (tenant_id, submitted_at),
+  CONSTRAINT fk_form_submit_client FOREIGN KEY (client_id) REFERENCES clients (id),
+  CONSTRAINT fk_form_submit_assignment FOREIGN KEY (assignment_id) REFERENCES form_assignments (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Public portal registration requests ─────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS portal_registration_requests (
+  id                     VARCHAR(64)  NOT NULL,
+  tenant_id              VARCHAR(64)  NOT NULL,
+  first_name_enc         TEXT         NOT NULL,
+  last_name_enc          TEXT         NOT NULL,
+  email_enc              TEXT         NOT NULL,
+  phone_enc              TEXT         NULL,
+  requested_services     JSON,
+  notes_enc              TEXT         NULL,
+  status                 VARCHAR(64)  NOT NULL DEFAULT 'requested',
+  created_at             TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at             TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_portal_reg_tenant_status (tenant_id, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ─── Faith: note templates ────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS faith_note_templates (

@@ -4,9 +4,106 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## Version
 
-- Current release: `2.2.0`
-- Current release: `3.0.0`
+- Current release: `3.0.5`
 - Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI + revamped ops/monitoring + explicit health probes + OTEL health export + full Scheduling module with Waitlist, Reminders & Calendar DB support + waitlist-to-appointment promotion + audit UUID hardening + deep DB engine monitoring dashboard + full Audit Intelligence UI redesign + structured PHI-safe API logging + live dashboard appointment and audit metrics + full Reporting tab UI redesign + repaired Swagger UI proxy/docs delivery + redesigned About experience + static file server query-string fix + operations header/session card refresh + versioned web asset delivery + UI enhancements across main shell, monitoring, and operations surfaces + desktop sidebar toggle fix + sidebar options icon refresh + schema fixes for availability_overrides and appointment_series + utilization GROUP BY fix + appointment identity integrity for renamed counselors and clients + **full Electronic Documents module with four clinical forms, GAD-7 auto-scoring, C-SSRS risk stratification, Christian counseling faith dimensions, and a generic form renderer**)
+
+## v3.0.5 — Workspace Studio Documents/Portal Workflow Completion (March 2026)
+
+### v3.0.5 Overview
+
+This minor revision completes the operational workflow for Workspace Studio Documents & Inventories and Portal account onboarding.
+
+The system now supports assigning one or more forms to a selected client, scheduling assignments for next session, future sessions, or recurring cadence, persisting repeated submissions over time for progress tracking, and showing prior completion history on the same screen.
+
+The Portal area now supports standard-on-signup form auto-assignment and includes a public `/portal` entry page for existing and prospective clients.
+
+### v3.0.5 — New Planning Artifact
+
+- Added canonical implementation plan:
+  - `PLANS/WORKSPACE-STUDIO-FORMS-PORTAL-WORKFLOW.md`
+
+### v3.0.5 — Backend Data Model
+
+Added new schema tables in `apps/api/src/db/schema.sql`:
+
+- `form_catalog`
+  - tenant-scoped catalog of available forms
+  - includes `is_standard_on_signup` and active/version fields
+- `form_assignments`
+  - counselor assignment records with assignment type and schedule metadata
+  - supports `next_session`, `future_session`, `scheduled_recurring`, and `account_signup`
+- `form_submissions`
+  - append-only form completion records
+  - includes `submission_version` for repeated completions
+  - stores response payload encrypted (`responses_enc`)
+- `portal_registration_requests`
+  - stores public prospective-client account requests
+
+### v3.0.5 — Backend Query/API Layer
+
+- Added new DB query module:
+  - `apps/api/src/db/queries/formWorkflows.js`
+
+- Extended API in `apps/api/src/index.js` with:
+  - `GET/POST/PATCH /v1/forms/catalog`
+  - `GET/POST/PATCH /v1/forms/assignments`
+  - `GET/POST /v1/forms/submissions`
+  - `GET /v1/forms/client-overview`
+  - `GET/POST /v1/portal/public-requests`
+
+- Added automatic standard-form assignment during portal account creation:
+  - when portal account is created, active catalog forms flagged `is_standard_on_signup = true` are auto-assigned to the client
+
+### v3.0.5 — Workspace Studio UI
+
+- Added new operational tab content:
+  - `apps/web/src/components/WorkspaceStudio/tabs/DocumentsStudioTab.jsx`
+
+Features:
+
+- Client picker for assignment scope
+- Form assignment composer (multi-form support via repeated assignment actions)
+- Timing controls for next session, future session, and recurring schedule
+- Assignment table with status and launch action
+- Completed-history table with submission count, latest version, last submitted timestamp, and latest score summary
+- Integrated form completion save flow to persist submissions
+
+- Wired into Workspace Studio shell:
+  - `apps/web/src/components/WorkspaceStudio/WorkspaceStudioPage.jsx`
+
+### v3.0.5 — Form Runtime Integration
+
+- Updated `apps/web/src/components/Documents/FormRunner.jsx`:
+  - Added completion callback support (`onComplete`)
+  - Added score-summary extraction helper so persisted submissions include score metadata when available
+  - Maintains existing print behavior when no callback is provided
+
+- Added shared forms registry module:
+  - `apps/web/src/components/Documents/formRegistry.js`
+
+- Updated `apps/web/src/components/Documents/DocumentsPage.jsx`:
+  - Refactored to consume shared registry constants
+
+### v3.0.5 — Portal Public Access
+
+- Added public portal page and script:
+  - `apps/web/public/portal.html`
+  - `apps/web/public/portal.js`
+
+- Added `/portal` static route mapping:
+  - `apps/web/server.js`
+
+- Added portal tab entry-point notice/button:
+  - `apps/web/src/components/WorkspaceStudio/tabs/PortalTab.jsx`
+
+### v3.0.5 — Validation
+
+- Web build validated successfully (`pnpm --filter @faith/web build`)
+- API syntax validated successfully (`pnpm --filter @faith/api exec node --check src/index.js`)
+
+### v3.0.5 Breaking Changes
+
+None. Changes are additive and backward-compatible with existing documents/forms workflows.
 
 ## v3.0.0 — Expanded Clinical Forms Library (March 2026)
 

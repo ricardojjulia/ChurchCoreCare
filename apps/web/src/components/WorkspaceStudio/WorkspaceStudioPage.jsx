@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Tabs, Text, Stack, Title, Paper } from '@mantine/core';
 import PortalTab from './tabs/PortalTab.jsx';
+import DocumentsStudioTab from './tabs/DocumentsStudioTab.jsx';
 import { useSurfaceTelemetry } from '../../lib/useSurfaceTelemetry.js';
 
 const STUDIO_TABS = [
@@ -42,6 +43,8 @@ export default function WorkspaceStudioPage({ onSchedulePortalRequest }) {
             <Tabs.Panel key={t.id} value={t.id} pt="md">
               {t.id === 'portal' ? (
                 <PortalTab onSchedulePortalRequest={onSchedulePortalRequest} />
+              ) : t.id === 'documentsStudio' ? (
+                <DocumentsStudioTab />
               ) : (
                 <Text c="dimmed" fz="sm">Content for {t.label} tab</Text>
               )}

@@ -213,6 +213,35 @@ function ScoreBanner({ form, answers }) {
   return null;
 }
 
+function buildScoreSummary(form, answers) {
+  if (!form?.scorable) return null;
+
+  if (form.scoreFields) {
+    const total = form.scoreFields.reduce((sum, id) => sum + (parseInt(answers[id] ?? '0', 10) || 0), 0);
+    const interp = typeof form.scoreInterpretation === 'function' ? form.scoreInterpretation(total) : null;
+    return {
+      scoreLabel: form.scoreLabel ?? 'Score',
+      scoreValue: total,
+      interpretationLabel: interp?.label ?? null,
+      interpretationDescription: interp?.description ?? null,
+      interpretationColor: interp?.color ?? null,
+    };
+  }
+
+  if (typeof form.scoreInterpretation === 'function') {
+    const interp = form.scoreInterpretation(answers);
+    return {
+      scoreLabel: form.scoreLabel ?? 'Assessment',
+      scoreValue: Number.isFinite(interp?.score) ? interp.score : null,
+      interpretationLabel: interp?.label ?? null,
+      interpretationDescription: interp?.description ?? null,
+      interpretationColor: interp?.color ?? null,
+    };
+  }
+
+  return null;
+}
+
 // ─── Print styles injection ───────────────────────────────────────────────────
 const PRINT_STYLE = `
 @media print {
@@ -223,7 +252,7 @@ const PRINT_STYLE = `
 `;
 
 // ─── Main FormRunner  ─────────────────────────────────────────────────────────
-export default function FormRunner({ formDef, onClose }) {
+export default function FormRunner({ formDef, onClose, onComplete }) {
   const [answers, setAnswers] = useState({});
   const [activeStep, setActiveStep] = useState(0);
 
@@ -291,6 +320,18 @@ export default function FormRunner({ formDef, onClose }) {
       setAnswers({});
       setActiveStep(0);
     }
+  };
+
+  const handleComplete = () => {
+    if (typeof onComplete === 'function') {
+      onComplete({
+        form: formDef,
+        answers,
+        scoreSummary: buildScoreSummary(formDef, answers),
+      });
+      return;
+    }
+    handlePrint();
   };
 
   return (
@@ -440,8 +481,8 @@ export default function FormRunner({ formDef, onClose }) {
                   Next →
                 </Button>
               ) : (
-                <Button color="green" onClick={handlePrint}>
-                  Complete & Print
+                <Button color="green" onClick={handleComplete}>
+                  {typeof onComplete === 'function' ? 'Complete & Save' : 'Complete & Print'}
                 </Button>
               )}
             </Group>

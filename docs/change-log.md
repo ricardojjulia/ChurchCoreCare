@@ -1,5 +1,111 @@
 # Change Log
 
+## v3.0.5 — Workspace Studio Forms + Portal Workflow Completion
+
+**Date:** March 2026  
+**Type:** Minor revision
+
+### Summary
+
+Completes the Workspace Studio Documents & Inventories workflow so counselors can assign forms, schedule them by timing mode, and review historical repeated submissions for each client. Adds protected submission persistence, standard-on-signup auto-assignment, and a public portal onboarding page.
+
+---
+
+### Added
+
+#### Planning and specification
+
+- `PLANS/WORKSPACE-STUDIO-FORMS-PORTAL-WORKFLOW.md`
+  - Canonical implementation plan and acceptance criteria for this workflow.
+
+#### API DB schema (`apps/api/src/db/schema.sql`)
+
+- Added `form_catalog` table.
+- Added `form_assignments` table.
+- Added `form_submissions` table with encrypted payload storage (`responses_enc`) and `submission_version`.
+- Added `portal_registration_requests` table.
+
+#### API query layer
+
+- New file: `apps/api/src/db/queries/formWorkflows.js`
+  - Catalog list/create/update and lookup by `form_key`
+  - Assignment list/create/update and by-id read
+  - Submission list/create plus next-version calculation
+  - Portal public registration request create/list
+
+#### API endpoints (`apps/api/src/index.js`)
+
+- Added form workflow routes:
+  - `GET/POST/PATCH /v1/forms/catalog`
+  - `GET/POST/PATCH /v1/forms/assignments`
+  - `GET/POST /v1/forms/submissions`
+  - `GET /v1/forms/client-overview`
+- Added portal public request route:
+  - `GET/POST /v1/portal/public-requests`
+- Added default catalog bootstrap behavior (seed-on-read if empty).
+- Added automatic standard-on-signup assignment when a portal account is created.
+
+#### Workspace UI
+
+- New file: `apps/web/src/components/WorkspaceStudio/tabs/DocumentsStudioTab.jsx`
+  - Client picker
+  - Assignment composer with timing modes (`next_session`, `future_session`, `scheduled_recurring`, `account_signup`)
+  - Active assignment table
+  - Completion history table with version and score summary
+  - Integrated form launch and save flow
+
+- `apps/web/src/components/WorkspaceStudio/WorkspaceStudioPage.jsx`
+  - Replaced placeholder for Documents & Inventories tab with operational DocumentsStudioTab.
+
+- New shared registry:
+  - `apps/web/src/components/Documents/formRegistry.js`
+
+- `apps/web/src/components/Documents/DocumentsPage.jsx`
+  - Refactored to use shared form registry module.
+
+- `apps/web/src/components/Documents/FormRunner.jsx`
+  - Added `onComplete` callback support.
+  - Added score-summary extraction helper for persisted submissions.
+  - Kept existing print behavior when callback not provided.
+
+- `apps/web/src/components/WorkspaceStudio/tabs/PortalTab.jsx`
+  - Added public portal access notice and launch button.
+
+#### Public portal surface
+
+- New files:
+  - `apps/web/public/portal.html`
+  - `apps/web/public/portal.js`
+- `apps/web/server.js`
+  - Added route resolution for `/portal` → `portal.html`.
+
+---
+
+### Version bump
+
+Updated package versions from `3.0.0` to `3.0.5`:
+
+- `package.json`
+- `apps/api/package.json`
+- `apps/web/package.json`
+- `apps/worker/package.json`
+- `packages/domain/package.json`
+- `packages/i18n/package.json`
+- `packages/telemetry/package.json`
+
+---
+
+### Validation
+
+- `pnpm --filter @faith/web build` completed successfully.
+- `pnpm --filter @faith/api exec node --check src/index.js` completed successfully.
+
+---
+
+### Breaking changes
+
+None. Changes are additive and preserve existing behavior.
+
 ## v3.0.0 — Expanded Clinical Forms Library (19 Instruments)
 
 **Date:** March 2026

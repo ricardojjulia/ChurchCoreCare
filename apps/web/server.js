@@ -213,6 +213,7 @@ function resolvePublicUrl(requestUrl) {
   const pathname = requestUrl.split('?')[0];
   if (pathname === '/about' || pathname === '/about/') return '/about.html';
   if (pathname === '/monitor' || pathname === '/monitor/') return '/monitor.html';
+  if (pathname === '/portal' || pathname === '/portal/') return '/portal.html';
   return pathname;
 }
 

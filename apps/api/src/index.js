@@ -111,6 +111,12 @@ import {
   listPortalAppointmentRequests, createPortalAppointmentRequest, updatePortalAppointmentRequest,
 } from './db/queries/portal.js';
 import {
+  listFormCatalog, createFormCatalogItem, updateFormCatalogItem, getFormCatalogItemByKey,
+  listFormAssignments, createFormAssignment, updateFormAssignment, getFormAssignmentById,
+  listFormSubmissions, createFormSubmission, getNextSubmissionVersion,
+  createPortalRegistrationRequest,
+} from './db/queries/formWorkflows.js';
+import {
   listFaithNoteTemplates, createFaithNoteTemplate, updateFaithNoteTemplate,
   listFaithGoalTemplates, createFaithGoalTemplate, updateFaithGoalTemplate,
   listFaithConsentVariants, createFaithConsentVariant, updateFaithConsentVariant,
@@ -378,6 +384,60 @@ const inventoryAssignments = [
   }) },
 ];
 
+const formCatalogRecords = DEFAULT_FORM_CATALOG.map((entry, idx) => ({
+  id: `fc-${String(idx + 1).padStart(3, '0')}`,
+  tenantId: 'system',
+  formKey: entry.formKey,
+  title: entry.title,
+  category: entry.category,
+  isStandardOnSignup: Boolean(entry.isStandardOnSignup),
+  isActive: true,
+  versionNumber: 1,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+}));
+
+const formWorkflowAssignments = [
+  {
+    id: 'fa-001',
+    tenantId: 'system',
+    clientId: 'c-001',
+    formKey: 'PHQ9',
+    formTitle: 'PHQ-9 Depression Screener',
+    assignmentType: 'next_session',
+    scheduledFor: null,
+    recurrenceRule: null,
+    status: 'completed',
+    assignedBy: 's-001',
+    notes: 'Complete before next counseling visit.',
+    dueAt: null,
+    completedAt: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+];
+
+const formWorkflowSubmissions = [
+  {
+    id: 'fs-001',
+    tenantId: 'system',
+    assignmentId: 'fa-001',
+    clientId: 'c-001',
+    formKey: 'PHQ9',
+    formTitle: 'PHQ-9 Depression Screener',
+    submissionVersion: 1,
+    submittedByType: 'client',
+    responses: { phq_1: '2', phq_2: '1', phq_3: '1' },
+    scoreLabel: 'PHQ-9 Total',
+    scoreValue: 9,
+    interpretationLabel: 'Mild Depression',
+    submittedAt: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
+  },
+];
+
+const portalRegistrationRequests = [];
+
 const appointments = [
   { id: 'a-001', tenantId: 'system', clientId: 'c-001', clientName: 'Sarah Kim', counselorName: 'Rachel Jordan', startsAt: atToday(9, 0), endsAt: atToday(9, 50), status: 'scheduled', appointmentType: 'individual_therapy', locationName: 'Cedar Room', remoteSession: false },
   { id: 'a-002', tenantId: 'system', clientId: 'c-002', clientName: 'David Miller', counselorName: 'Michael Park', startsAt: atToday(10, 30), endsAt: atToday(11, 20), status: 'scheduled', appointmentType: 'couples_therapy', locationName: 'Remote Session', remoteSession: true },
@@ -503,6 +563,31 @@ const portalAccountStatuses = Object.freeze(['invited', 'active', 'locked']);
 const portalMessageThreadStatuses = Object.freeze(['open', 'closed']);
 const portalAppointmentRequestStatuses = Object.freeze(['requested', 'approved', 'declined', 'scheduled']);
 const portalResourceTypes = Object.freeze(['document', 'education', 'devotional', 'form']);
+const formAssignmentTypes = Object.freeze(['next_session', 'future_session', 'scheduled_recurring', 'account_signup']);
+const formAssignmentWorkflowStatuses = Object.freeze(['assigned', 'in_progress', 'completed', 'cancelled']);
+const portalRegistrationStatuses = Object.freeze(['requested', 'reviewing', 'approved', 'declined']);
+
+const DEFAULT_FORM_CATALOG = Object.freeze([
+  { formKey: 'ShortIntakeForm', title: 'Short Intake Form', category: 'intake', isStandardOnSignup: true },
+  { formKey: 'LongIntakeForm', title: 'Long Intake Form', category: 'intake', isStandardOnSignup: false },
+  { formKey: 'AnxietyAssessment', title: 'GAD-7 Anxiety Assessment', category: 'anxiety', isStandardOnSignup: true },
+  { formKey: 'SelfHarmAssessment', title: 'Self-Harm Safety Assessment', category: 'clinical', isStandardOnSignup: false },
+  { formKey: 'PHQ9', title: 'PHQ-9 Depression Screener', category: 'depression', isStandardOnSignup: true },
+  { formKey: 'BeckAnxietyInventory', title: 'Beck Anxiety Inventory', category: 'anxiety', isStandardOnSignup: false },
+  { formKey: 'PCL5', title: 'PCL-5 PTSD Checklist', category: 'trauma', isStandardOnSignup: false },
+  { formKey: 'RosenbergSelfEsteem', title: 'Rosenberg Self-Esteem Scale', category: 'self', isStandardOnSignup: false },
+  { formKey: 'ASRSv1', title: 'ASRS v1.1 Adult ADHD Screener', category: 'adhd', isStandardOnSignup: false },
+  { formKey: 'OCIRevised', title: 'OCI-R OCD Inventory', category: 'anxiety', isStandardOnSignup: false },
+  { formKey: 'AUDIT', title: 'AUDIT Alcohol Use Screening', category: 'substance', isStandardOnSignup: false },
+  { formKey: 'DASS21', title: 'DASS-21 Distress Scale', category: 'depression', isStandardOnSignup: false },
+  { formKey: 'ACEQuestionnaire', title: 'ACE Questionnaire', category: 'trauma', isStandardOnSignup: false },
+  { formKey: 'InsomniaSeverityIndex', title: 'Insomnia Severity Index', category: 'sleep', isStandardOnSignup: false },
+  { formKey: 'CouplesAssessment', title: 'Couples Assessment', category: 'relationship', isStandardOnSignup: false },
+  { formKey: 'GriefAssessment', title: 'Grief Assessment', category: 'grief', isStandardOnSignup: false },
+  { formKey: 'BurnoutAssessment', title: 'Burnout Assessment', category: 'burnout', isStandardOnSignup: false },
+  { formKey: 'SpiritualWellnessInventory', title: 'Spiritual Wellness Inventory', category: 'faith', isStandardOnSignup: false },
+  { formKey: 'FamilySystemsAssessment', title: 'Family Systems Assessment', category: 'family', isStandardOnSignup: false },
+]);
 const faithIntegrationLevels = Object.freeze(['explicit', 'balanced', 'light']);
 const faithResourceTypes = Object.freeze(['scripture', 'devotional', 'prayer', 'worksheet']);
 const faithCoordinationStatuses = Object.freeze(['proposed', 'active', 'paused', 'closed']);
@@ -1075,6 +1160,26 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (requestUrl.pathname === '/v1/forms/catalog') {
+      await handleFormsCatalog(request, response, requestUrl, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/forms/assignments') {
+      await handleFormWorkflowAssignments(request, response, requestUrl, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/forms/submissions') {
+      await handleFormWorkflowSubmissions(request, response, requestUrl, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/forms/client-overview') {
+      await handleClientFormOverview(request, response, requestUrl, session);
+      return;
+    }
+
     if (requestUrl.pathname === '/v1/appointment-types') {
       await handleAppointmentTypes(request, response);
       return;
@@ -1187,6 +1292,11 @@ const server = http.createServer(async (request, response) => {
 
     if (requestUrl.pathname === '/v1/portal/resources') {
       await handlePortalResources(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/portal/public-requests') {
+      await handlePortalPublicRequests(request, response, requestUrl, session);
       return;
     }
 
@@ -3455,6 +3565,564 @@ async function handleInventoryAssignments(request, response, requestUrl, session
   writeJson(response, 200, { item });
 }
 
+async function handleFormsCatalog(request, response, requestUrl, session) {
+  const tenantId = callerTenant(request, session);
+
+  if (request.method === 'GET') {
+    const includeInactive = (requestUrl.searchParams.get('includeInactive') ?? '').toLowerCase() === 'true';
+    await ensureFormCatalogSeeded(tenantId);
+    if (process.env.DB_NAME) {
+      const items = await listFormCatalog(tenantId, { includeInactive });
+      emitAudit(request, 'forms.catalog.read', 'form_catalog', 'collection', session);
+      writeJson(response, 200, { items });
+      return;
+    }
+    let items = formCatalogRecords.filter((item) => item.tenantId === tenantId);
+    if (!includeInactive) items = items.filter((item) => item.isActive !== false);
+    emitAudit(request, 'forms.catalog.read', 'form_catalog', 'collection');
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method !== 'POST' && request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (requirePracticeAdmin(request, response, session)) return;
+  const payload = await readJsonBody(request);
+
+  if (request.method === 'POST') {
+    const formKey = sanitizeStr(payload.formKey, 128);
+    const title = sanitizeStr(payload.title, 255);
+    const category = sanitizeStr(payload.category, 64);
+    if (!formKey || !title || !category) {
+      writeJson(response, 400, { error: 'formKey, title, and category are required' });
+      return;
+    }
+
+    if (process.env.DB_NAME) {
+      const existing = await getFormCatalogItemByKey(tenantId, formKey);
+      if (existing) {
+        writeJson(response, 409, { error: 'formKey already exists for this tenant' });
+        return;
+      }
+      const id = genId('fc');
+      await createFormCatalogItem({
+        id,
+        tenantId,
+        formKey,
+        title,
+        category,
+        isStandardOnSignup: Boolean(payload.isStandardOnSignup),
+        isActive: payload.isActive !== false,
+        versionNumber: Number.isFinite(Number(payload.versionNumber)) ? Number(payload.versionNumber) : 1,
+      });
+      const item = await getFormCatalogItemByKey(tenantId, formKey);
+      telemetry.recordMutation('forms.catalog.create');
+      emitAudit(request, 'forms.catalog.create', 'form_catalog', id, session);
+      writeJson(response, 201, { item });
+      return;
+    }
+
+    const exists = formCatalogRecords.some((item) => item.tenantId === tenantId && item.formKey === formKey);
+    if (exists) {
+      writeJson(response, 409, { error: 'formKey already exists for this tenant' });
+      return;
+    }
+    const now = new Date().toISOString();
+    const item = {
+      id: createId('fc', formCatalogRecords),
+      tenantId,
+      formKey,
+      title,
+      category,
+      isStandardOnSignup: Boolean(payload.isStandardOnSignup),
+      isActive: payload.isActive !== false,
+      versionNumber: Number.isFinite(Number(payload.versionNumber)) ? Number(payload.versionNumber) : 1,
+      createdAt: now,
+      updatedAt: now,
+    };
+    formCatalogRecords.push(item);
+    telemetry.recordMutation('forms.catalog.create');
+    emitAudit(request, 'forms.catalog.create', 'form_catalog', item.id);
+    writeJson(response, 201, { item });
+    return;
+  }
+
+  const id = sanitizeStr(payload.id, 64);
+  const formKey = sanitizeStr(payload.formKey, 128);
+  if (!id && !formKey) {
+    writeJson(response, 400, { error: 'id or formKey is required for PATCH' });
+    return;
+  }
+
+  if (process.env.DB_NAME) {
+    const all = await listFormCatalog(tenantId, { includeInactive: true });
+    const existing = all.find((item) => item.id === id || item.formKey === formKey);
+    if (!existing) {
+      writeJson(response, 404, { error: 'Form catalog item not found' });
+      return;
+    }
+    await updateFormCatalogItem(existing.id, tenantId, {
+      title: typeof payload.title === 'string' ? sanitizeStr(payload.title, 255) : undefined,
+      category: typeof payload.category === 'string' ? sanitizeStr(payload.category, 64) : undefined,
+      isStandardOnSignup: payload.isStandardOnSignup !== undefined ? Boolean(payload.isStandardOnSignup) : undefined,
+      isActive: payload.isActive !== undefined ? Boolean(payload.isActive) : undefined,
+      versionNumber: payload.versionNumber !== undefined ? Number(payload.versionNumber) : undefined,
+    });
+    const item = (await listFormCatalog(tenantId, { includeInactive: true })).find((row) => row.id === existing.id);
+    telemetry.recordMutation('forms.catalog.update');
+    emitAudit(request, 'forms.catalog.update', 'form_catalog', existing.id, session);
+    writeJson(response, 200, { item });
+    return;
+  }
+
+  const existing = formCatalogRecords.find((item) => item.tenantId === tenantId && (item.id === id || item.formKey === formKey));
+  if (!existing) {
+    writeJson(response, 404, { error: 'Form catalog item not found' });
+    return;
+  }
+  if (typeof payload.title === 'string') existing.title = sanitizeStr(payload.title, 255) ?? existing.title;
+  if (typeof payload.category === 'string') existing.category = sanitizeStr(payload.category, 64) ?? existing.category;
+  if (payload.isStandardOnSignup !== undefined) existing.isStandardOnSignup = Boolean(payload.isStandardOnSignup);
+  if (payload.isActive !== undefined) existing.isActive = Boolean(payload.isActive);
+  if (payload.versionNumber !== undefined && Number.isFinite(Number(payload.versionNumber))) {
+    existing.versionNumber = Number(payload.versionNumber);
+  }
+  existing.updatedAt = new Date().toISOString();
+  telemetry.recordMutation('forms.catalog.update');
+  emitAudit(request, 'forms.catalog.update', 'form_catalog', existing.id);
+  writeJson(response, 200, { item: existing });
+}
+
+async function handleFormWorkflowAssignments(request, response, requestUrl, session) {
+  const tenantId = callerTenant(request, session);
+  await ensureFormCatalogSeeded(tenantId);
+
+  if (request.method === 'GET') {
+    const clientId = sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 64);
+    const status = sanitizeStr(requestUrl.searchParams.get('status') ?? '', 64);
+    if (process.env.DB_NAME) {
+      const items = await listFormAssignments(tenantId, { clientId: clientId || undefined, status: status || undefined });
+      emitAudit(request, 'forms.assignment.read', 'form_assignment', 'collection', session);
+      writeJson(response, 200, { items });
+      return;
+    }
+    let items = formWorkflowAssignments.filter((item) => item.tenantId === tenantId);
+    if (clientId) items = items.filter((item) => item.clientId === clientId);
+    if (status) items = items.filter((item) => item.status === status);
+    emitAudit(request, 'forms.assignment.read', 'form_assignment', 'collection');
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method !== 'POST' && request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+
+  if (request.method === 'POST') {
+    const clientId = sanitizeStr(payload.clientId, 64);
+    const formKey = sanitizeStr(payload.formKey, 128);
+    const formTitle = sanitizeStr(payload.formTitle, 255);
+    if (!clientId || !formKey) {
+      writeJson(response, 400, { error: 'clientId and formKey are required' });
+      return;
+    }
+    const assignmentType = normalizeFormAssignmentType(payload.assignmentType ?? 'next_session');
+    if (!assignmentType) {
+      writeJson(response, 400, { error: 'assignmentType must be valid' });
+      return;
+    }
+    const status = normalizeFormAssignmentWorkflowStatus(payload.status ?? 'assigned');
+    if (!status) {
+      writeJson(response, 400, { error: 'status must be valid' });
+      return;
+    }
+    const scheduledFor = payload.scheduledFor ? normalizeIsoDate(payload.scheduledFor) : null;
+    const dueAt = payload.dueAt ? normalizeIsoDate(payload.dueAt) : null;
+    const recurrenceRule = sanitizeStr(payload.recurrenceRule, 255);
+    const notes = sanitizeStr(payload.notes, 500);
+    const assignedBy = sanitizeStr(payload.assignedBy, 64) ?? callerIdentity(request, session)?.staffId ?? null;
+
+    if (process.env.DB_NAME) {
+      await createFormAssignment({
+        id: genId('fa'),
+        tenantId,
+        clientId,
+        formKey,
+        formTitle: formTitle ?? formKey,
+        assignmentType,
+        scheduledFor,
+        recurrenceRule,
+        status,
+        assignedBy,
+        notes,
+        dueAt,
+      });
+      const items = await listFormAssignments(tenantId, { clientId });
+      const item = items[0] ?? null;
+      telemetry.recordMutation('forms.assignment.create');
+      emitAudit(request, 'forms.assignment.create', 'form_assignment', item?.id ?? 'unknown', session);
+      writeJson(response, 201, { item });
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const item = {
+      id: createId('fa', formWorkflowAssignments),
+      tenantId,
+      clientId,
+      formKey,
+      formTitle: formTitle ?? formKey,
+      assignmentType,
+      scheduledFor,
+      recurrenceRule,
+      status,
+      assignedBy,
+      notes,
+      dueAt,
+      completedAt: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    formWorkflowAssignments.unshift(item);
+    telemetry.recordMutation('forms.assignment.create');
+    emitAudit(request, 'forms.assignment.create', 'form_assignment', item.id);
+    writeJson(response, 201, { item });
+    return;
+  }
+
+  const assignmentId = sanitizeStr(payload.assignmentId, 64);
+  if (!assignmentId) {
+    writeJson(response, 400, { error: 'assignmentId is required for PATCH' });
+    return;
+  }
+
+  const nextStatus = typeof payload.status === 'string'
+    ? normalizeFormAssignmentWorkflowStatus(payload.status)
+    : null;
+  if (typeof payload.status === 'string' && !nextStatus) {
+    writeJson(response, 400, { error: 'status must be valid' });
+    return;
+  }
+  const assignmentType = typeof payload.assignmentType === 'string'
+    ? normalizeFormAssignmentType(payload.assignmentType)
+    : null;
+  if (typeof payload.assignmentType === 'string' && !assignmentType) {
+    writeJson(response, 400, { error: 'assignmentType must be valid' });
+    return;
+  }
+
+  if (process.env.DB_NAME) {
+    const existing = await getFormAssignmentById(assignmentId, tenantId);
+    if (!existing) {
+      writeJson(response, 404, { error: 'Form assignment not found' });
+      return;
+    }
+    await updateFormAssignment(assignmentId, tenantId, {
+      assignmentType: assignmentType ?? undefined,
+      scheduledFor: payload.scheduledFor !== undefined ? normalizeIsoDate(payload.scheduledFor) : undefined,
+      recurrenceRule: payload.recurrenceRule !== undefined ? sanitizeStr(payload.recurrenceRule, 255) : undefined,
+      status: nextStatus ?? undefined,
+      notes: payload.notes !== undefined ? sanitizeStr(payload.notes, 500) : undefined,
+      dueAt: payload.dueAt !== undefined ? normalizeIsoDate(payload.dueAt) : undefined,
+      completedAt: nextStatus === 'completed' ? new Date().toISOString() : undefined,
+    });
+    const item = await getFormAssignmentById(assignmentId, tenantId);
+    telemetry.recordMutation('forms.assignment.update');
+    emitAudit(request, 'forms.assignment.update', 'form_assignment', assignmentId, session);
+    writeJson(response, 200, { item });
+    return;
+  }
+
+  const item = formWorkflowAssignments.find((record) => record.tenantId === tenantId && record.id === assignmentId);
+  if (!item) {
+    writeJson(response, 404, { error: 'Form assignment not found' });
+    return;
+  }
+  if (assignmentType) item.assignmentType = assignmentType;
+  if (payload.scheduledFor !== undefined) item.scheduledFor = normalizeIsoDate(payload.scheduledFor);
+  if (payload.recurrenceRule !== undefined) item.recurrenceRule = sanitizeStr(payload.recurrenceRule, 255);
+  if (nextStatus) {
+    item.status = nextStatus;
+    if (nextStatus === 'completed') item.completedAt = new Date().toISOString();
+  }
+  if (payload.notes !== undefined) item.notes = sanitizeStr(payload.notes, 500);
+  if (payload.dueAt !== undefined) item.dueAt = normalizeIsoDate(payload.dueAt);
+  item.updatedAt = new Date().toISOString();
+  telemetry.recordMutation('forms.assignment.update');
+  emitAudit(request, 'forms.assignment.update', 'form_assignment', assignmentId);
+  writeJson(response, 200, { item });
+}
+
+async function handleFormWorkflowSubmissions(request, response, requestUrl, session) {
+  const tenantId = callerTenant(request, session);
+
+  if (request.method === 'GET') {
+    const clientId = sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 64);
+    const formKey = sanitizeStr(requestUrl.searchParams.get('formKey') ?? '', 128);
+    if (process.env.DB_NAME) {
+      const items = await listFormSubmissions(tenantId, { clientId: clientId || undefined, formKey: formKey || undefined });
+      emitAudit(request, 'forms.submission.read', 'form_submission', 'collection', session);
+      writeJson(response, 200, { items });
+      return;
+    }
+    let items = formWorkflowSubmissions.filter((item) => item.tenantId === tenantId);
+    if (clientId) items = items.filter((item) => item.clientId === clientId);
+    if (formKey) items = items.filter((item) => item.formKey === formKey);
+    emitAudit(request, 'forms.submission.read', 'form_submission', 'collection');
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const clientId = sanitizeStr(payload.clientId, 64);
+  const formKey = sanitizeStr(payload.formKey, 128);
+  const formTitle = sanitizeStr(payload.formTitle, 255);
+  const assignmentId = sanitizeStr(payload.assignmentId, 64);
+  const submittedByType = ['client', 'counselor', 'system'].includes(payload.submittedByType)
+    ? payload.submittedByType
+    : 'client';
+  const scoreLabel = sanitizeStr(payload.scoreLabel, 128);
+  const scoreValue = payload.scoreValue === null || payload.scoreValue === undefined
+    ? null
+    : Number(payload.scoreValue);
+  const interpretationLabel = sanitizeStr(payload.interpretationLabel, 128);
+  const responses = payload.responses && typeof payload.responses === 'object' ? payload.responses : null;
+
+  if (!clientId || !formKey || !responses) {
+    writeJson(response, 400, { error: 'clientId, formKey, and responses object are required' });
+    return;
+  }
+
+  if (process.env.DB_NAME) {
+    const submissionVersion = await getNextSubmissionVersion(tenantId, clientId, formKey);
+    await createFormSubmission({
+      id: genId('fs'),
+      tenantId,
+      assignmentId: assignmentId || null,
+      clientId,
+      formKey,
+      formTitle: formTitle ?? formKey,
+      submissionVersion,
+      submittedByType,
+      responses,
+      scoreLabel,
+      scoreValue: Number.isFinite(scoreValue) ? scoreValue : null,
+      interpretationLabel,
+      submittedAt: new Date().toISOString(),
+    });
+    if (assignmentId) {
+      await updateFormAssignment(assignmentId, tenantId, {
+        status: 'completed',
+        completedAt: new Date().toISOString(),
+      });
+    }
+    const items = await listFormSubmissions(tenantId, { clientId, formKey });
+    const item = items[0] ?? null;
+    telemetry.recordMutation('forms.submission.create');
+    emitAudit(request, 'forms.submission.create', 'form_submission', item?.id ?? 'unknown', session);
+    writeJson(response, 201, { item });
+    return;
+  }
+
+  const currentVersion = formWorkflowSubmissions
+    .filter((item) => item.tenantId === tenantId && item.clientId === clientId && item.formKey === formKey)
+    .reduce((max, item) => Math.max(max, Number(item.submissionVersion) || 0), 0);
+  const submissionVersion = currentVersion + 1;
+  const now = new Date().toISOString();
+  const item = {
+    id: createId('fs', formWorkflowSubmissions),
+    tenantId,
+    assignmentId: assignmentId || null,
+    clientId,
+    formKey,
+    formTitle: formTitle ?? formKey,
+    submissionVersion,
+    submittedByType,
+    responses,
+    scoreLabel,
+    scoreValue: Number.isFinite(scoreValue) ? scoreValue : null,
+    interpretationLabel,
+    submittedAt: now,
+    createdAt: now,
+  };
+  formWorkflowSubmissions.unshift(item);
+  if (assignmentId) {
+    const assignment = formWorkflowAssignments.find((entry) => entry.tenantId === tenantId && entry.id === assignmentId);
+    if (assignment) {
+      assignment.status = 'completed';
+      assignment.completedAt = now;
+      assignment.updatedAt = now;
+    }
+  }
+  telemetry.recordMutation('forms.submission.create');
+  emitAudit(request, 'forms.submission.create', 'form_submission', item.id);
+  writeJson(response, 201, { item });
+}
+
+async function handleClientFormOverview(request, response, requestUrl, session) {
+  if (request.method !== 'GET') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const tenantId = callerTenant(request, session);
+  const clientId = sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 64);
+  if (!clientId) {
+    writeJson(response, 400, { error: 'clientId is required' });
+    return;
+  }
+
+  await ensureFormCatalogSeeded(tenantId);
+
+  const catalog = process.env.DB_NAME
+    ? await listFormCatalog(tenantId, { includeInactive: false })
+    : formCatalogRecords.filter((item) => item.tenantId === tenantId && item.isActive !== false);
+
+  const assignments = process.env.DB_NAME
+    ? await listFormAssignments(tenantId, { clientId })
+    : formWorkflowAssignments.filter((item) => item.tenantId === tenantId && item.clientId === clientId);
+
+  const submissions = process.env.DB_NAME
+    ? await listFormSubmissions(tenantId, { clientId })
+    : formWorkflowSubmissions.filter((item) => item.tenantId === tenantId && item.clientId === clientId);
+
+  const byForm = new Map();
+  for (const submission of submissions) {
+    const key = submission.formKey;
+    const existing = byForm.get(key) ?? {
+      formKey: key,
+      formTitle: submission.formTitle ?? key,
+      submissions: 0,
+      latestVersion: 0,
+      lastSubmittedAt: null,
+      lastScoreLabel: null,
+      lastScoreValue: null,
+      lastInterpretationLabel: null,
+    };
+    existing.submissions += 1;
+    existing.latestVersion = Math.max(existing.latestVersion, Number(submission.submissionVersion) || 0);
+    if (!existing.lastSubmittedAt || String(submission.submittedAt) > String(existing.lastSubmittedAt)) {
+      existing.lastSubmittedAt = submission.submittedAt;
+      existing.lastScoreLabel = submission.scoreLabel ?? null;
+      existing.lastScoreValue = submission.scoreValue ?? null;
+      existing.lastInterpretationLabel = submission.interpretationLabel ?? null;
+      existing.formTitle = submission.formTitle ?? existing.formTitle;
+    }
+    byForm.set(key, existing);
+  }
+
+  const history = [...byForm.values()].sort((left, right) => String(right.lastSubmittedAt || '').localeCompare(String(left.lastSubmittedAt || '')));
+
+  emitAudit(request, 'forms.client_overview.read', 'form_submission', clientId, session);
+  writeJson(response, 200, { catalog, assignments, submissions, history });
+}
+
+async function handlePortalPublicRequests(request, response, requestUrl, session) {
+  if (request.method === 'GET') {
+    if (requirePracticeAdmin(request, response, session)) return;
+    const tenantId = callerTenant(request, session);
+    if (process.env.DB_NAME) {
+      const [rows] = await pool.query(
+        'SELECT id, tenant_id, status, created_at, updated_at FROM portal_registration_requests WHERE tenant_id = ? ORDER BY created_at DESC LIMIT 200',
+        [tenantId],
+      );
+      emitAudit(request, 'portal.public_request.read', 'portal_registration_request', 'collection', session);
+      writeJson(response, 200, { items: rows.map((row) => ({
+        id: row.id,
+        tenantId: row.tenant_id,
+        status: row.status,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      })) });
+      return;
+    }
+    const items = portalRegistrationRequests
+      .filter((item) => item.tenantId === tenantId)
+      .map((item) => ({
+        id: item.id,
+        tenantId: item.tenantId,
+        status: item.status,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+      }));
+    emitAudit(request, 'portal.public_request.read', 'portal_registration_request', 'collection');
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const firstName = sanitizeStr(payload.firstName, 120);
+  const lastName = sanitizeStr(payload.lastName, 120);
+  const email = sanitizeStr(payload.email, 200);
+  const phone = sanitizeStr(payload.phone, 40);
+  const notes = sanitizeStr(payload.notes, 500);
+  const requestedServices = Array.isArray(payload.requestedServices)
+    ? payload.requestedServices.map((entry) => sanitizeStr(String(entry), 120)).filter(Boolean)
+    : [];
+  const tenantId = sanitizeStr(payload.tenantId, 64) ?? callerTenant(request, session) ?? 'system';
+
+  if (!firstName || !lastName || !email) {
+    writeJson(response, 400, { error: 'firstName, lastName, and email are required' });
+    return;
+  }
+
+  const status = normalizePortalRegistrationStatus(payload.status ?? 'requested') ?? 'requested';
+
+  if (process.env.DB_NAME) {
+    const id = genId('pr');
+    await createPortalRegistrationRequest({
+      id,
+      tenantId,
+      firstName,
+      lastName,
+      email,
+      phone,
+      requestedServices,
+      notes,
+      status,
+    });
+    telemetry.recordMutation('portal.public_request.create');
+    emitAudit(request, 'portal.public_request.create', 'portal_registration_request', id, session);
+    writeJson(response, 201, { item: { id, status } });
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const item = {
+    id: createId('pr', portalRegistrationRequests),
+    tenantId,
+    firstName,
+    lastName,
+    email,
+    phone,
+    requestedServices,
+    notes,
+    status,
+    createdAt: now,
+    updatedAt: now,
+  };
+  portalRegistrationRequests.push(item);
+  telemetry.recordMutation('portal.public_request.create');
+  emitAudit(request, 'portal.public_request.create', 'portal_registration_request', item.id);
+  writeJson(response, 201, { item: { id: item.id, status: item.status } });
+}
+
 async function handleAppointmentsCollection(request, response, session) {
   if (request.method === 'GET') {
     let items;
@@ -5166,9 +5834,14 @@ async function handlePortalAccounts(request, response, requestUrl, session) {
         status,
         mfaEnabled: Boolean(payload.mfaEnabled),
       });
+      const assignedForms = await autoAssignStandardSignupForms({
+        tenantId,
+        clientId,
+        assignedBy: callerIdentity(request, session)?.staffId ?? 'system',
+      });
       telemetry.recordMutation('portal.account.create');
       emitAudit(request, 'portal.account.create', 'portal_account', item.id, session);
-      writeJson(response, 201, { item });
+      writeJson(response, 201, { item, assignedForms });
       return;
     }
 
@@ -5223,9 +5896,14 @@ async function handlePortalAccounts(request, response, requestUrl, session) {
     };
 
     portalAccounts.push(item);
+    const assignedForms = await autoAssignStandardSignupForms({
+      tenantId: client.tenantId,
+      clientId: client.id,
+      assignedBy: callerIdentity(request, session)?.staffId ?? 'system',
+    });
     telemetry.recordMutation('portal.account.create');
     emitAudit(request, 'portal.account.create', 'portal_account', item.id);
-    writeJson(response, 201, { item });
+    writeJson(response, 201, { item, assignedForms });
     return;
   }
 
@@ -8204,6 +8882,105 @@ function normalizePortalMessageThreadStatus(value) {
 
 function normalizePortalAppointmentRequestStatus(value) {
   return portalAppointmentRequestStatuses.includes(value) ? value : null;
+}
+
+function normalizeFormAssignmentType(value) {
+  return formAssignmentTypes.includes(value) ? value : null;
+}
+
+function normalizeFormAssignmentWorkflowStatus(value) {
+  return formAssignmentWorkflowStatuses.includes(value) ? value : null;
+}
+
+function normalizePortalRegistrationStatus(value) {
+  return portalRegistrationStatuses.includes(value) ? value : null;
+}
+
+function buildDefaultCatalogRows(tenantId) {
+  return DEFAULT_FORM_CATALOG.map((entry, idx) => ({
+    id: `fc-${tenantId}-${String(idx + 1).padStart(3, '0')}`,
+    tenantId,
+    formKey: entry.formKey,
+    title: entry.title,
+    category: entry.category,
+    isStandardOnSignup: Boolean(entry.isStandardOnSignup),
+    isActive: true,
+    versionNumber: 1,
+  }));
+}
+
+async function ensureFormCatalogSeeded(tenantId) {
+  if (!tenantId) return [];
+  if (process.env.DB_NAME) {
+    const existing = await listFormCatalog(tenantId, { includeInactive: true });
+    if (existing.length) return existing;
+    const defaults = buildDefaultCatalogRows(tenantId);
+    for (const row of defaults) {
+      await createFormCatalogItem(row);
+    }
+    return listFormCatalog(tenantId, { includeInactive: true });
+  }
+
+  const existing = formCatalogRecords.filter((item) => item.tenantId === tenantId);
+  if (existing.length) return existing;
+  const defaults = buildDefaultCatalogRows(tenantId);
+  formCatalogRecords.push(...defaults.map((item) => ({
+    ...item,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  })));
+  return formCatalogRecords.filter((item) => item.tenantId === tenantId);
+}
+
+async function autoAssignStandardSignupForms({ tenantId, clientId, assignedBy }) {
+  if (!tenantId || !clientId) return [];
+  const catalog = await ensureFormCatalogSeeded(tenantId);
+  const defaults = (catalog || []).filter((item) => item.isStandardOnSignup && item.isActive !== false);
+  if (!defaults.length) return [];
+
+  if (process.env.DB_NAME) {
+    const created = [];
+    for (const item of defaults) {
+      await createFormAssignment({
+        id: genId('fa'),
+        tenantId,
+        clientId,
+        formKey: item.formKey,
+        formTitle: item.title,
+        assignmentType: 'account_signup',
+        scheduledFor: null,
+        recurrenceRule: null,
+        status: 'assigned',
+        assignedBy: assignedBy ?? 'system',
+        notes: 'Automatically assigned at portal account creation.',
+        dueAt: null,
+      });
+      created.push(item.formKey);
+    }
+    return created;
+  }
+
+  const now = new Date().toISOString();
+  for (const item of defaults) {
+    formWorkflowAssignments.push({
+      id: createId('fa', formWorkflowAssignments),
+      tenantId,
+      clientId,
+      formKey: item.formKey,
+      formTitle: item.title,
+      assignmentType: 'account_signup',
+      scheduledFor: null,
+      recurrenceRule: null,
+      status: 'assigned',
+      assignedBy: assignedBy ?? 'system',
+      notes: 'Automatically assigned at portal account creation.',
+      dueAt: null,
+      completedAt: null,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+  return defaults.map((item) => item.formKey);
 }
 
 function normalizePortalResourceType(value) {
