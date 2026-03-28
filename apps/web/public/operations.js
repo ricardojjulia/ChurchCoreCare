@@ -27,6 +27,19 @@ function clearStatus(statusId) {
   if (bar) bar.className = 'status-bar';
 }
 
+function getCsrfToken() {
+  const match = document.cookie.split(';').find((c) => c.trim().startsWith('csrf_token='));
+  return match ? match.trim().slice('csrf_token='.length) : '';
+}
+
+function csrfHeaders(extra = {}) {
+  return {
+    'Content-Type': 'application/json',
+    'x-csrf-token': getCsrfToken(),
+    ...extra,
+  };
+}
+
 function setBusy(btn, busy) {
   if (!btn) return;
   btn.disabled = busy;
@@ -40,7 +53,10 @@ function setBusy(btn, busy) {
 
 async function apiGet(path) {
   return window.faithTelemetry?.instrumentRequest(`/api${path}`, 'GET', async () => {
-    const res = await fetch(`/api${path}`, { credentials: 'include' });
+    const res = await fetch(`/api${path}`, {
+      credentials: 'include',
+      headers: csrfHeaders(),
+    });
     const payload = await res.json().catch(() => ({}));
     if (!res.ok) {
       const error = new Error(payload.error || `${res.status} ${res.statusText}`);
@@ -57,7 +73,7 @@ async function apiPost(path, body) {
     const res = await fetch(`/api${path}`, {
       method: 'POST',
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
+      headers: csrfHeaders(),
       body: JSON.stringify(body),
     });
     const payload = await res.json().catch(() => ({}));
@@ -76,7 +92,7 @@ async function apiPatch(path, body) {
     const res = await fetch(`/api${path}`, {
       method: 'PATCH',
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
+      headers: csrfHeaders(),
       body: JSON.stringify(body),
     });
     const payload = await res.json().catch(() => ({}));
@@ -95,7 +111,7 @@ async function apiPut(path, body) {
     const res = await fetch(`/api${path}`, {
       method: 'PUT',
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
+      headers: csrfHeaders(),
       body: JSON.stringify(body),
     });
     const payload = await res.json().catch(() => ({}));

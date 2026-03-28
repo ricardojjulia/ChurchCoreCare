@@ -384,18 +384,7 @@ const inventoryAssignments = [
   }) },
 ];
 
-const formCatalogRecords = DEFAULT_FORM_CATALOG.map((entry, idx) => ({
-  id: `fc-${String(idx + 1).padStart(3, '0')}`,
-  tenantId: 'system',
-  formKey: entry.formKey,
-  title: entry.title,
-  category: entry.category,
-  isStandardOnSignup: Boolean(entry.isStandardOnSignup),
-  isActive: true,
-  versionNumber: 1,
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString(),
-}));
+const formCatalogRecords = [];
 
 const formWorkflowAssignments = [
   {
@@ -588,6 +577,19 @@ const DEFAULT_FORM_CATALOG = Object.freeze([
   { formKey: 'SpiritualWellnessInventory', title: 'Spiritual Wellness Inventory', category: 'faith', isStandardOnSignup: false },
   { formKey: 'FamilySystemsAssessment', title: 'Family Systems Assessment', category: 'family', isStandardOnSignup: false },
 ]);
+
+formCatalogRecords.push(...DEFAULT_FORM_CATALOG.map((entry, idx) => ({
+  id: `fc-${String(idx + 1).padStart(3, '0')}`,
+  tenantId: 'system',
+  formKey: entry.formKey,
+  title: entry.title,
+  category: entry.category,
+  isStandardOnSignup: Boolean(entry.isStandardOnSignup),
+  isActive: true,
+  versionNumber: 1,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+})));
 const faithIntegrationLevels = Object.freeze(['explicit', 'balanced', 'light']);
 const faithResourceTypes = Object.freeze(['scripture', 'devotional', 'prayer', 'worksheet']);
 const faithCoordinationStatuses = Object.freeze(['proposed', 'active', 'paused', 'closed']);

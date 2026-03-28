@@ -29,7 +29,7 @@ export default function TopBar({ opened, onMenuToggle, onSignOut }) {
         </Box>
         <Box className="workspace-topbar-copy">
           <Text className="workspace-topbar-kicker">Faith Counseling Workspace</Text>
-          <Text className="workspace-topbar-title">Practice Operations Center</Text>
+          <Text component="h1" className="workspace-topbar-title" style={{ margin: 0 }}>Practice Operations Center</Text>
           <Text className="workspace-topbar-subtitle">
             Care delivery, scheduling, billing, reporting, and oversight in one flow.
           </Text>

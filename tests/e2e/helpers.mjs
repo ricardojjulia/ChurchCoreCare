@@ -50,8 +50,17 @@ export async function signInAs(page, role) {
 }
 
 export async function openPrimaryNav(page, navKey) {
+  // Open the nav drawer if the item is not yet in the viewport (collapsed sidebar).
   const target = page.locator(`[data-nav-key="${navKey}"]`);
-  await expect(target).toBeVisible();
+  const inViewport = await target.isVisible({ timeout: 500 }).catch(() => false)
+    && await target.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return r.left >= 0 && r.top >= 0 && r.right <= window.innerWidth && r.bottom <= window.innerHeight;
+    }).catch(() => false);
+  if (!inViewport) {
+    await page.click('[aria-label="Toggle navigation"]');
+    await expect(target).toBeVisible();
+  }
   await target.click();
 }
 
@@ -91,7 +100,7 @@ export async function readLaunchMetrics(page) {
   return page.evaluate(() => {
     const navigationEntry = performance.getEntriesByType('navigation')[0];
     const resources = performance.getEntriesByType('resource');
-    const appAsset = resources.find((entry) => entry.name.includes('/assets/app.js'));
+    const appAsset = resources.find((entry) => entry.name.includes('/assets/index') || entry.name.includes('/assets/app.js'));
 
     return {
       domContentLoadedMs: Math.round(navigationEntry?.domContentLoadedEventEnd ?? 0),

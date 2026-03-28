@@ -63,9 +63,43 @@ async function apiFetch(url, options = {}) {
     } catch {
       // ignore json parse failure
     }
-    throw new Error(message);
+    const error = new Error(message);
+    error.status = res.status;
+    throw error;
   }
   return res.json();
+}
+
+function isNotFoundError(error) {
+  return error?.status === 404 || /not found/i.test(String(error?.message || ''));
+}
+
+function deriveHistoryFromSubmissions(submissions) {
+  const byForm = new Map();
+  for (const submission of submissions) {
+    const key = submission.formKey;
+    const existing = byForm.get(key) ?? {
+      formKey: key,
+      formTitle: submission.formTitle ?? key,
+      submissions: 0,
+      latestVersion: 0,
+      lastSubmittedAt: null,
+      lastScoreLabel: null,
+      lastScoreValue: null,
+      lastInterpretationLabel: null,
+    };
+    existing.submissions += 1;
+    existing.latestVersion = Math.max(existing.latestVersion, Number(submission.submissionVersion) || 0);
+    if (!existing.lastSubmittedAt || String(submission.submittedAt) > String(existing.lastSubmittedAt)) {
+      existing.lastSubmittedAt = submission.submittedAt;
+      existing.lastScoreLabel = submission.scoreLabel ?? null;
+      existing.lastScoreValue = submission.scoreValue ?? null;
+      existing.lastInterpretationLabel = submission.interpretationLabel ?? null;
+      existing.formTitle = submission.formTitle ?? existing.formTitle;
+    }
+    byForm.set(key, existing);
+  }
+  return [...byForm.values()].sort((left, right) => String(right.lastSubmittedAt || '').localeCompare(String(left.lastSubmittedAt || '')));
 }
 
 function AssignmentComposer({ clientId, onCreated }) {
@@ -174,6 +208,32 @@ export default function DocumentsStudioTab() {
   const [overview, setOverview] = useState({ assignments: [], history: [], submissions: [] });
   const [activeAssignment, setActiveAssignment] = useState(null);
 
+  const loadOverviewFallback = useCallback(async (currentClientId) => {
+    const [assignmentsResult, submissionsResult] = await Promise.allSettled([
+      apiFetch(`/api/v1/forms/assignments?clientId=${encodeURIComponent(currentClientId)}`),
+      apiFetch(`/api/v1/forms/submissions?clientId=${encodeURIComponent(currentClientId)}`),
+    ]);
+
+    if (assignmentsResult.status === 'rejected' && !isNotFoundError(assignmentsResult.reason)) {
+      throw assignmentsResult.reason;
+    }
+    if (submissionsResult.status === 'rejected' && !isNotFoundError(submissionsResult.reason)) {
+      throw submissionsResult.reason;
+    }
+
+    const assignmentsPayload = assignmentsResult.status === 'fulfilled' ? assignmentsResult.value : null;
+    const submissionsPayload = submissionsResult.status === 'fulfilled' ? submissionsResult.value : null;
+
+    const assignments = Array.isArray(assignmentsPayload?.items) ? assignmentsPayload.items : [];
+    const submissions = Array.isArray(submissionsPayload?.items) ? submissionsPayload.items : [];
+
+    setOverview({
+      assignments,
+      submissions,
+      history: deriveHistoryFromSubmissions(submissions),
+    });
+  }, []);
+
   useEffect(() => {
     apiFetch('/api/v1/clients?limit=200')
       .then((payload) => {
@@ -203,9 +263,22 @@ export default function DocumentsStudioTab() {
           submissions: Array.isArray(payload?.submissions) ? payload.submissions : [],
         });
       })
-      .catch((err) => setError(err.message))
+      .catch(async (err) => {
+        const notFound = isNotFoundError(err);
+        if (notFound) {
+          try {
+            await loadOverviewFallback(currentClientId);
+            setError('');
+            return;
+          } catch (fallbackError) {
+            setError(fallbackError.message);
+            return;
+          }
+        }
+        setError(err.message);
+      })
       .finally(() => setLoading(false));
-  }, []);
+  }, [loadOverviewFallback]);
 
   useEffect(() => {
     loadOverview(clientId);

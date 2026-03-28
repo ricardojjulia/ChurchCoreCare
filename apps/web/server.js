@@ -109,6 +109,10 @@ function csrfCheckFailed(request, response) {
   if (CSRF_SAFE_METHODS.has(request.method ?? 'GET')) return false;
   // Auth login is allowed without CSRF (browser needs to POST before getting cookie)
   if (request.url?.replace('/api', '') === '/v1/auth/login') return false;
+  // Telemetry ingestion endpoints are exempt: they carry no harmful state changes
+  // and are already protected by session-cookie authentication.
+  const urlWithoutApi = request.url?.replace('/api', '');
+  if (urlWithoutApi === '/v1/telemetry/events' || urlWithoutApi === '/v1/telemetry/vitals') return false;
   const cookies = parseCookies(request.headers.cookie);
   const cookieToken  = cookies[CSRF_COOKIE_NAME];
   const headerToken  = request.headers[CSRF_HEADER_NAME];
@@ -255,9 +259,15 @@ async function proxyApiRequest(request, response) {
       'content-type': upstreamResponse.headers.get('content-type') ?? 'application/json; charset=utf-8',
       'cache-control': 'no-cache',
     };
-    // Forward Set-Cookie from API to browser (session cookie)
-    const setCookie = upstreamResponse.headers.get('set-cookie');
-    if (setCookie) responseHeaders['set-cookie'] = setCookie;
+    // Preserve any cookies set before proxying (for example CSRF cookie)
+    // and merge with upstream Set-Cookie values (for example session cookie).
+    const priorSetCookie = response.getHeader('Set-Cookie');
+    const upstreamSetCookie = upstreamResponse.headers.get('set-cookie');
+    const mergedSetCookies = [
+      ...(Array.isArray(priorSetCookie) ? priorSetCookie : priorSetCookie ? [priorSetCookie] : []),
+      ...(upstreamSetCookie ? [upstreamSetCookie] : []),
+    ];
+    if (mergedSetCookies.length) responseHeaders['set-cookie'] = mergedSetCookies;
 
     response.writeHead(upstreamResponse.status, responseHeaders);
     response.end(responseText);

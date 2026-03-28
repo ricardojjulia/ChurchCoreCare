@@ -82,6 +82,7 @@ export default function AuthGate({ onContinue }) {
             <form onSubmit={handleSubmit} noValidate>
               <Stack gap="sm">
                 <TextInput
+                  id="loginEmail"
                   label="Email"
                   type="email"
                   autoComplete="username"
@@ -92,6 +93,7 @@ export default function AuthGate({ onContinue }) {
                   disabled={loading}
                 />
                 <PasswordInput
+                  id="loginPassword"
                   label="Password"
                   autoComplete="current-password"
                   placeholder="Enter your password"

@@ -61,6 +61,7 @@ export default function Sidebar({ currentUser, currentView, onNavigate, onOpenCl
         </Group>
 
         <Text
+          id="userBadge"
           fz="xs"
           c="dimmed"
           px="xs"
@@ -91,6 +92,7 @@ export default function Sidebar({ currentUser, currentView, onNavigate, onOpenCl
             item.href ? (
               <NavLink
                 key={item.key}
+                data-nav-key={item.key}
                 component="a"
                 href={item.href}
                 label={item.label}
@@ -99,6 +101,7 @@ export default function Sidebar({ currentUser, currentView, onNavigate, onOpenCl
             ) : (
               <NavLink
                 key={item.key}
+                data-nav-key={item.key}
                 label={item.label}
                 active={currentView === item.key}
                 onClick={() => onNavigate?.(item.key)}

@@ -4,6 +4,7 @@ import path from 'path';
 
 export default defineConfig({
   plugins: [react()],
+  publicDir: false,
   build: {
     outDir: path.resolve(__dirname, 'public'),
     emptyOutDir: false,
@@ -12,6 +13,27 @@ export default defineConfig({
         entryFileNames: 'assets/[name]-[hash].js',
         chunkFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash].[ext]',
+        manualChunks(id) {
+          // Use normalized separators to handle pnpm's content-addressable store paths.
+          const normalizedId = id.replace(/\\/g, '/');
+          if (
+            normalizedId.includes('/react/') ||
+            normalizedId.includes('/react-dom/') ||
+            normalizedId.includes('/react-is/') ||
+            normalizedId.includes('/scheduler/')
+          ) {
+            return 'vendor-react';
+          }
+          if (normalizedId.includes('/@mantine/')) {
+            return 'vendor-mantine';
+          }
+          if (
+            normalizedId.includes('/@opentelemetry/') ||
+            normalizedId.includes('/web-vitals/')
+          ) {
+            return 'vendor-otel';
+          }
+        },
       },
     },
   },
