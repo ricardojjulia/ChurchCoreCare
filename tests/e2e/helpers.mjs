@@ -8,11 +8,10 @@ const axeSource = readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
 /**
  * Test credentials used by E2E tests.
  * These accounts must exist in the DB (created by the migration seed).
- * Override via TEST_ADMIN_EMAIL / TEST_ADMIN_PASSWORD env vars.
+ * Override via env vars when additional seeded users exist.
  */
 const TEST_ACCOUNTS = {
-  // Default seeded account (practice_admin)
-  Administrator: {
+  practice_admin: {
     email:    process.env.TEST_ADMIN_EMAIL    || 'admin@faithcounseling.local',
     password: process.env.TEST_ADMIN_PASSWORD || 'ChangeMe!Dev2024#',
   },
@@ -28,12 +27,29 @@ const TEST_ACCOUNTS = {
 export async function signInAs(page, role) {
   await page.goto('/');
 
-  // Detect which auth UI is rendered
-  const isLoginForm = await page.locator('#loginEmail').isVisible({ timeout: 3000 }).catch(() => false);
+  const authMode = await expect.poll(async () => {
+    if (await page.locator('#userBadge').isVisible().catch(() => false)) return 'session';
+    if (await page.locator('#loginEmail').isVisible().catch(() => false)) return 'login';
+    if (await page.locator('#roleSelect').isVisible().catch(() => false)) return 'legacy';
+    return 'loading';
+  }, { timeout: 10000 }).not.toBe('loading').then(async () => {
+    if (await page.locator('#userBadge').isVisible().catch(() => false)) return 'session';
+    if (await page.locator('#loginEmail').isVisible().catch(() => false)) return 'login';
+    if (await page.locator('#roleSelect').isVisible().catch(() => false)) return 'legacy';
+    return 'loading';
+  });
 
-  if (isLoginForm) {
-    // Real login form
-    const account = TEST_ACCOUNTS[role] ?? TEST_ACCOUNTS.Administrator;
+  if (authMode === 'session') {
+    await expect(page.locator('#userBadge')).toBeVisible({ timeout: 5000 });
+    return;
+  }
+
+  if (authMode === 'login') {
+    const account = TEST_ACCOUNTS[role];
+    if (!account) {
+      throw new Error(`No seeded login account is configured for role "${role}". Use a real seeded account or a public-route workflow.`);
+    }
+
     await page.fill('#loginEmail', account.email);
     await page.fill('#loginPassword', account.password);
     await page.click('button[type="submit"]');
@@ -74,6 +90,58 @@ export function futureDateTimeLocal({ days = 1, hours = 10, minutes = 0 } = {}) 
 
 export async function injectAxe(page) {
   await page.addScriptTag({ content: axeSource });
+}
+
+export async function ensureCounselor(page, {
+  firstName = 'Journey',
+  lastName = 'Counselor',
+  email = `journey.${Date.now()}@example.test`,
+} = {}) {
+  return page.evaluate(async ({ firstName, lastName, email }) => {
+    function getCookie(name) {
+      const pairs = document.cookie.split(';').map((part) => part.trim());
+      for (const pair of pairs) {
+        if (!pair.startsWith(`${name}=`)) continue;
+        return decodeURIComponent(pair.slice(name.length + 1));
+      }
+      return '';
+    }
+
+    const existingResponse = await fetch('/api/v1/staff', { credentials: 'include' });
+    const existingBody = await existingResponse.json().catch(() => ({}));
+    if (!existingResponse.ok) {
+      throw new Error(existingBody?.error || 'Unable to load staff');
+    }
+
+    const existing = (existingBody.items ?? []).find((item) =>
+      item.role === 'counselor'
+      && item.firstName === firstName
+      && item.lastName === lastName);
+    if (existing) return existing;
+
+    const csrfToken = getCookie('csrf_token');
+    const createResponse = await fetch('/api/v1/staff', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'content-type': 'application/json',
+        'x-csrf-token': csrfToken,
+      },
+      body: JSON.stringify({
+        firstName,
+        lastName,
+        email,
+        role: 'counselor',
+        licenseType: 'lpc',
+        supervisionStatus: 'not_required',
+      }),
+    });
+    const createBody = await createResponse.json().catch(() => ({}));
+    if (!createResponse.ok) {
+      throw new Error(createBody?.error || 'Unable to create counselor fixture');
+    }
+    return createBody.item;
+  }, { firstName, lastName, email });
 }
 
 export async function runStructuralAxe(page) {

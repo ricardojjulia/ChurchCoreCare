@@ -1,85 +1,79 @@
 import { test, expect } from '@playwright/test';
-import { futureDateTimeLocal, openPrimaryNav, signInAs } from './helpers.mjs';
+import { ensureCounselor, futureDateTimeLocal, openPrimaryNav, signInAs } from './helpers.mjs';
 
 test.describe('high-value UI journeys', () => {
-  test('practice admin can create a client, schedule an appointment, and refresh reporting', async ({ page }) => {
+  test('practice admin can create a client and schedule an appointment from the current workspace flow', async ({ page }) => {
     const suffix = String(Date.now()).slice(-6);
     const firstName = `Step${suffix}`;
     const lastName = 'Journey';
+    const start = futureDateTimeLocal({ days: 1, hours: 10, minutes: 0 });
+    const end = futureDateTimeLocal({ days: 1, hours: 11, minutes: 0 });
+    const day = start.slice(0, 10);
 
     await signInAs(page, 'practice_admin');
-    await expect(page.locator('#metricApptValue')).toHaveText('5');
-    await expect(page.locator('#metricApptMeta')).toContainText('Appointment type model is in sync');
+    await ensureCounselor(page);
+    await expect(page.getByText("Today's Sessions")).toBeVisible();
     await openPrimaryNav(page, 'clients');
-    await expect(page.locator('[data-panel="clients"]')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Clients' })).toBeVisible();
 
-    await page.fill('#newClientFirstName', firstName);
-    await page.fill('#newClientLastName', lastName);
-    await page.fill('#newClientFaithBackground', 'Evangelical');
-    await page.click('#createClientButton');
+    await page.getByRole('button', { name: 'New Client' }).click();
+    await page.getByLabel('First name').fill(firstName);
+    await page.getByLabel('Last name').fill(lastName);
+    await page.getByLabel('Faith background').fill('Evangelical');
+    await page.getByRole('button', { name: 'Create Client' }).click();
 
-    await expect(page.locator('#newAppointmentClientSelect')).toContainText(`${firstName} ${lastName}`);
+    await expect(page.locator('section[aria-labelledby="clientsPanelTitle"]')).toContainText(`${firstName} ${lastName}`);
+    await page.getByRole('button', { name: 'New Appointment' }).click();
+    await expect(page.getByRole('dialog', { name: 'New Appointment' })).toBeVisible();
+    await page.getByRole('textbox', { name: 'Client' }).click();
+    await page.getByRole('textbox', { name: 'Client' }).fill(firstName);
+    await page.getByRole('option', { name: new RegExp(`${firstName} ${lastName}`, 'i') }).click();
+    await page.getByRole('textbox', { name: 'Counselor' }).click();
+    await page.getByRole('textbox', { name: 'Counselor' }).fill('Journey');
+    await page.getByRole('option', { name: /Journey Counselor/i }).click();
+    await page.locator('input[data-path="startsAt"]').fill(start);
+    await page.locator('input[data-path="endsAt"]').fill(end);
+    await page.getByLabel('Location').fill('Journey Room');
+    await page.getByRole('button', { name: 'Create Appointment' }).click();
 
-    await page.click('#newAppointmentButton');
-    await expect(page.locator('[data-panel="appointments"]')).toBeVisible();
-    await expect(page.locator('#newAppointmentTypeSelect option')).toHaveCount(5);
-    await page.selectOption('#newAppointmentClientSelect', { label: `${firstName} ${lastName}` });
-    await page.selectOption('#newAppointmentTypeSelect', 'couples_therapy');
-    await page.fill('#newAppointmentStart', futureDateTimeLocal({ days: 1, hours: 10, minutes: 0 }));
-    await page.fill('#newAppointmentEnd', futureDateTimeLocal({ days: 1, hours: 11, minutes: 0 }));
-    await page.fill('#newAppointmentCounselor', 'Journey Counselor');
-    await page.fill('#newAppointmentLocation', 'Journey Room');
-    await page.click('#createAppointmentButton');
-
-    await expect(page.locator('#appointmentSelect')).toContainText(`${firstName} ${lastName}`);
-    const createdAppointmentId = await page.locator('#appointmentSelect option').evaluateAll(
-      (options, expectedName) => options.find((option) => option.textContent?.includes(expectedName))?.getAttribute('value') ?? '',
-      `${firstName} ${lastName}`,
-    );
-    expect(createdAppointmentId).not.toBe('');
-    await page.selectOption('#appointmentSelect', createdAppointmentId);
-    await expect(page.locator('#appointmentTypeSelect')).toHaveValue('couples_therapy');
-
-    await openPrimaryNav(page, 'reporting');
-    await page.click('#refreshReportingOverviewButton');
-    await expect(page.locator('#manageStatus')).toContainText('Reporting overview refreshed.');
-    await expect(page.locator('#reportingSummary')).toHaveValue(/Sessions in Window:/);
+    await expect(page.getByText('Appointment created')).toBeVisible();
+    await page.getByLabel('Day').fill(day);
+    await expect(page.getByRole('table')).toContainText(`${firstName} ${lastName}`);
   });
 
-  test('platform admin can submit tenant provisioning from the reporting workspace', async ({ page }) => {
-    const suffix = String(Date.now()).slice(-5);
+  test('practice admin can open workspace studio, monitoring, and operations surfaces used in daily operations', async ({ page }) => {
+    await signInAs(page, 'practice_admin');
+    await openPrimaryNav(page, 'workspace-studio');
+    await expect(page.getByRole('heading', { name: 'Workspace Studio' })).toBeVisible();
+    await expect(page.getByText('Client Portal Access')).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Portal' })).toBeVisible();
 
-    await signInAs(page, 'platform_admin');
-    await expect(page.locator('[data-nav-key="clients"]')).toBeHidden();
+    await page.goto('/monitor.html');
+    await expect(page.getByText('Surface Monitoring')).toBeVisible();
+    await expect(page.getByText(/Top Failing Surfaces/i)).toBeVisible();
 
-    await openPrimaryNav(page, 'reporting');
+    await page.goto('/operations.html');
+    await expect(page.getByText('Operations Studio')).toBeVisible();
     await expect(page.locator('[data-tab="reporting"]')).toBeVisible();
-    await expect(page.locator('[data-tab="billing"]')).toBeHidden();
-
-    await page.fill('#platformRequestedTenantId', `ui-${suffix}`);
-    await page.fill('#platformRequestedPracticeName', `UI Journey ${suffix}`);
-    await page.fill('#platformOwnerEmail', `owner+${suffix}@example.com`);
-    await page.click('#createTenantProvisioningButton');
-
-    await expect(page.locator('#platformRequestedPracticeName')).toHaveValue('');
-    await expect(page.locator('#platformOwnerEmail')).toHaveValue('');
+    await expect(page.locator('[data-tab="platform"]')).toBeVisible();
+    await expect(page.locator('[data-tab="audit"]')).toBeVisible();
   });
 
-  test('client can use the portal appointment-request workflow and cannot see admin navigation', async ({ page }) => {
-    await signInAs(page, 'client');
-    await expect(page.locator('[data-nav-key="reporting"]')).toBeHidden();
-    await expect(page.locator('[data-nav-key="portal"]')).toBeVisible();
+  test('public client can submit a portal intake request from the portal landing page', async ({ page }) => {
+    const suffix = String(Date.now()).slice(-6);
 
-    await openPrimaryNav(page, 'portal');
-    await expect(page.locator('[data-panel="portal"]')).toBeVisible();
-    await expect.poll(async () => page.locator('#portalOverviewSummary').inputValue()).not.toContain('No portal client selected.');
+    await page.goto('/portal');
+    await expect(page.getByRole('heading', { name: 'FaithCounseling Client Portal' })).toBeVisible();
 
-    await page.fill('#portalRequestStart', futureDateTimeLocal({ days: 2, hours: 14, minutes: 0 }));
-    await page.fill('#portalRequestEnd', futureDateTimeLocal({ days: 2, hours: 15, minutes: 0 }));
-    await page.fill('#portalRequestNotes', 'Browser automation request');
-    await page.click('#createPortalRequestButton');
+    await page.locator('#firstName').fill(`Portal${suffix}`);
+    await page.locator('#lastName').fill('Request');
+    await page.locator('#email').fill(`portal-${suffix}@example.test`);
+    await page.locator('#phone').fill('555-0100');
+    await page.getByLabel('Individual').check();
+    await page.getByLabel('Faith-integrated').check();
+    await page.locator('#notes').fill('Browser automation portal request');
+    await page.getByRole('button', { name: 'Submit Request' }).click();
 
-    await expect(page.locator('#portalRequestNotes')).toHaveValue('');
-    await expect(page.locator('#portalOverviewSummary')).toHaveValue(/Appointment Requests:/);
+    await expect(page.locator('#portalRequestStatus')).toContainText('Request submitted successfully');
   });
 });

@@ -17,6 +17,7 @@ Updates the root documentation to reflect the recent Workspace Studio repair wor
 
 - Updated `README.md` with a new `v3.0.6` maintenance release section.
 - Added and normalized `docs/FUNCTIONAL-TESTING.md` as the detailed functional validation report for the recent repair cycle.
+- Added an inclusive-smoke testing addendum in `docs/FUNCTIONAL-TESTING.md` documenting new Playwright coverage, failure modes observed during stabilization, and final passing validation.
 - Added `docs/RELEASE_3.0.6.md` and `docs/v3.0.6-RELEASE-SUMMARY.md` for release tracking.
 - Updated `.gitignore` to ignore transient `test-results/*` folders while preserving `test-results/.last-run.json`, and to ignore `.claude/settings.local.json`.
 
@@ -42,6 +43,7 @@ Updated package versions from `3.0.5` to `3.0.6`:
 
 - `pnpm lint` completed successfully.
 - `pnpm --filter @faith/web build` completed successfully.
+- `npx playwright test tests/e2e/inclusive-smoke.spec.mjs` completed successfully (4/4).
 
 ### Breaking changes
 

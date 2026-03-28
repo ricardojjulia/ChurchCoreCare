@@ -18,13 +18,13 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: 'node apps/api/src/index.js',
+      command: 'pnpm start:api',
       url: 'http://127.0.0.1:3001/health',
       reuseExistingServer: true,
       timeout: 30_000,
     },
     {
-      command: 'node apps/web/build.js && node apps/web/server.js',
+      command: 'pnpm start:web',
       url: 'http://127.0.0.1:3002/',
       reuseExistingServer: true,
       timeout: 30_000,

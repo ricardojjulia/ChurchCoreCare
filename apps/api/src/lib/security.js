@@ -196,6 +196,7 @@ export function enforceRbac(request, response, route, session = null) {
 
   // Auth endpoints are public (no session needed to log in)
   if (route === '/v1/auth/login' || route === '/v1/auth/logout') return false;
+  if (route === '/v1/portal/public-requests' && request.method === 'POST') return false;
 
   // Telemetry endpoints accept any authenticated caller; vitals ingestion is
   // also allowed from browser without role (it carries no PHI).
