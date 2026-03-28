@@ -2,6 +2,51 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## v3.0.6 — Lint Cleanup, Docs Refresh, and Build Sync
+
+**Date:** March 2026  
+**Type:** Maintenance revision
+
+### Summary
+
+Updates the root documentation to reflect the recent Workspace Studio repair work, clears remaining markdown lint findings in repo-visible documentation artifacts, and refreshes tracked web build output so committed assets match the current source tree.
+
+---
+
+### Changed
+
+- Updated `README.md` with a new `v3.0.6` maintenance release section.
+- Added and normalized `docs/FUNCTIONAL-TESTING.md` as the detailed functional validation report for the recent repair cycle.
+- Added `docs/RELEASE_3.0.6.md` and `docs/v3.0.6-RELEASE-SUMMARY.md` for release tracking.
+- Updated `.gitignore` to ignore transient `test-results/*` folders while preserving `test-results/.last-run.json`, and to ignore `.claude/settings.local.json`.
+
+### Build artifact sync
+
+- Rebuilt the web app with `pnpm --filter @faith/web build`.
+- Updated tracked bundle references in `apps/web/public/index.html`.
+- Removed stale hashed assets from `apps/web/public/assets` and replaced them with the current bundle set.
+
+### Version bump
+
+Updated package versions from `3.0.5` to `3.0.6`:
+
+- `package.json`
+- `apps/api/package.json`
+- `apps/web/package.json`
+- `apps/worker/package.json`
+- `packages/domain/package.json`
+- `packages/i18n/package.json`
+- `packages/telemetry/package.json`
+
+### Validation
+
+- `pnpm lint` completed successfully.
+- `pnpm --filter @faith/web build` completed successfully.
+
+### Breaking changes
+
+None. This release is documentation, lint, and build-output alignment only.
+
 ## v3.0.5 — Workspace Studio Forms + Portal Workflow Completion
 
 **Date:** March 2026  

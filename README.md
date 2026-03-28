@@ -4,8 +4,45 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## Version
 
-- Current release: `3.0.5`
-- Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI + revamped ops/monitoring + explicit health probes + OTEL health export + full Scheduling module with Waitlist, Reminders & Calendar DB support + waitlist-to-appointment promotion + audit UUID hardening + deep DB engine monitoring dashboard + full Audit Intelligence UI redesign + structured PHI-safe API logging + live dashboard appointment and audit metrics + full Reporting tab UI redesign + repaired Swagger UI proxy/docs delivery + redesigned About experience + static file server query-string fix + operations header/session card refresh + versioned web asset delivery + UI enhancements across main shell, monitoring, and operations surfaces + desktop sidebar toggle fix + sidebar options icon refresh + schema fixes for availability_overrides and appointment_series + utilization GROUP BY fix + appointment identity integrity for renamed counselors and clients + **full Electronic Documents module with four clinical forms, GAD-7 auto-scoring, C-SSRS risk stratification, Christian counseling faith dimensions, and a generic form renderer**)
+- Current release: `3.0.6`
+- Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI + revamped ops/monitoring + explicit health probes + OTEL health export + full Scheduling module with Waitlist, Reminders & Calendar DB support + waitlist-to-appointment promotion + audit UUID hardening + deep DB engine monitoring dashboard + full Audit Intelligence UI redesign + structured PHI-safe API logging + live dashboard appointment and audit metrics + full Reporting tab UI redesign + repaired Swagger UI proxy/docs delivery + redesigned About experience + static file server query-string fix + operations header/session card refresh + versioned web asset delivery + UI enhancements across main shell, monitoring, and operations surfaces + desktop sidebar toggle fix + sidebar options icon refresh + schema fixes for availability_overrides and appointment_series + utilization GROUP BY fix + appointment identity integrity for renamed counselors and clients + repaired Workspace Studio document assignment workflow + synced tracked web build artifacts + lint-clean documentation and generated monitoring outputs + **full Electronic Documents module with four clinical forms, GAD-7 auto-scoring, C-SSRS risk stratification, Christian counseling faith dimensions, and a generic form renderer**)
+
+## v3.0.6 — Maintenance Release: Lint Cleanup, Docs Refresh, and Build Sync (March 2026)
+
+### v3.0.6 Overview
+
+This maintenance revision consolidates the recent Workspace Studio repair work into the public docs, clears the remaining markdown lint issues in the repo-visible reporting surfaces, and refreshes the tracked web build output so committed assets match the current application source.
+
+### v3.0.6 — Documentation
+
+- Updated `README.md` to reflect the new release and maintenance scope.
+- Added and normalized `docs/FUNCTIONAL-TESTING.md` as the detailed functional validation report for:
+  - launch-readiness fixes
+  - telemetry/CSRF repair
+  - Workspace Studio form-assignment recovery
+- Added release artifacts:
+  - `docs/RELEASE_3.0.6.md`
+  - `docs/v3.0.6-RELEASE-SUMMARY.md`
+
+### v3.0.6 — Lint and Repo Hygiene
+
+- Removed remaining markdown diagnostics from repo-visible documentation surfaces.
+- Normalized generated Playwright markdown outputs that were still surfacing editor lint warnings.
+- Updated `.gitignore` so transient `test-results` folders and local Claude settings do not reintroduce noise into the working tree.
+
+### v3.0.6 — Build Artifact Sync
+
+- Rebuilt the web app and refreshed tracked files under `apps/web/public/assets`.
+- Removed stale hashed asset generations so committed build output reflects the current Vite bundle set referenced by `apps/web/public/index.html`.
+
+### v3.0.6 — Validation
+
+- `pnpm lint`
+- `pnpm --filter @faith/web build`
+
+### v3.0.6 Breaking Changes
+
+None. This release is a maintenance and packaging revision.
 
 ## v3.0.5 — Workspace Studio Documents/Portal Workflow Completion (March 2026)
 
