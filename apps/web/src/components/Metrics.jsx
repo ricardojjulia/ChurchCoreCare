@@ -1,4 +1,5 @@
 import { SimpleGrid, Paper, Text, Badge } from '@mantine/core';
+import { useI18n } from '../lib/i18nContext.jsx';
 
 const META_COLOR = { positive: 'green', warning: 'orange', '': 'gray' };
 
@@ -21,17 +22,18 @@ function formatRoleLabel(role) {
 }
 
 export default function Metrics({ data, currentUser }) {
-  const sessionLabel = firstString(currentUser?.name, currentUser?.email) ?? 'Secure session';
+  const { t } = useI18n();
+  const sessionLabel = firstString(currentUser?.name, currentUser?.email) ?? t('metrics.secureSession');
   const sessionMeta = [
     formatRoleLabel(currentUser?.role),
-    'Server-managed session',
+    t('metrics.serverManagedSession'),
   ].filter(Boolean).join(' · ');
 
   const metrics = [
-    { label: "Today's Sessions", value: data.sessions || 0, meta: data.sessionsMeta || 'Scheduled for today', tone: 'positive' },
-    { label: 'Future Appointments', value: data.futureAppointments || 0, meta: data.futureAppointmentsMeta || 'Scheduled ahead', tone: '' },
-    { label: 'Audit Events', value: data.auditEvents || 0, meta: data.auditEventsMeta || 'Last 7 days', tone: '' },
-    { label: 'Current Session', value: sessionLabel, meta: sessionMeta || 'Server-managed session', tone: '' },
+    { label: t('metrics.sessions'), value: data.sessions || 0, meta: data.sessionsMeta || t('metrics.scheduledToday'), tone: 'positive' },
+    { label: t('metrics.futureAppointments'), value: data.futureAppointments || 0, meta: data.futureAppointmentsMeta || t('metrics.scheduledAhead'), tone: '' },
+    { label: t('metrics.auditEvents'), value: data.auditEvents || 0, meta: data.auditEventsMeta || t('metrics.last7Days'), tone: '' },
+    { label: t('metrics.currentSession'), value: sessionLabel, meta: sessionMeta || t('metrics.serverManagedSession'), tone: '' },
   ];
 
   return (

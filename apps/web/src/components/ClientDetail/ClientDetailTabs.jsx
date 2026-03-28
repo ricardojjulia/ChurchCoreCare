@@ -8,18 +8,20 @@ import DiagnosesTab       from './tabs/DiagnosesTab.jsx';
 import FaithProfileTab    from './tabs/FaithProfileTab.jsx';
 import LegalAdminTab      from './tabs/LegalAdminTab.jsx';
 import { useSurfaceTelemetry } from '../../lib/useSurfaceTelemetry.js';
+import { useI18n } from '../../lib/i18nContext.jsx';
 
 const TABS = [
-  { id: 'demographics', label: 'Demographics' },
-  { id: 'insurance',    label: 'Insurance' },
-  { id: 'contacts',     label: 'Contacts' },
-  { id: 'clinical',     label: 'Clinical History' },
-  { id: 'diagnoses',    label: 'Diagnoses & Meds' },
-  { id: 'faith',        label: 'Faith Profile' },
-  { id: 'legal',        label: 'Legal & Admin' },
+  { id: 'demographics', labelKey: 'client.tab.demographics' },
+  { id: 'insurance', labelKey: 'client.tab.insurance' },
+  { id: 'contacts', labelKey: 'client.tab.contacts' },
+  { id: 'clinical', labelKey: 'client.tab.clinical' },
+  { id: 'diagnoses', labelKey: 'client.tab.diagnoses' },
+  { id: 'faith', labelKey: 'client.tab.faith' },
+  { id: 'legal', labelKey: 'client.tab.legal' },
 ];
 
 export default function ClientDetailTabs({ client, clientId, currentUser }) {
+  const { t } = useI18n();
   const [activeTab, setActiveTab] = useState('demographics');
   const activeSurfaceId = {
     demographics: 'client.demographics',
@@ -36,7 +38,7 @@ export default function ClientDetailTabs({ client, clientId, currentUser }) {
   return (
     <Tabs value={activeTab} onChange={(value) => setActiveTab(value || 'demographics')} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
       <Tabs.List style={{ borderBottom: '1px solid var(--mantine-color-default-border)', flexShrink: 0, overflowX: 'auto', flexWrap: 'nowrap' }}>
-        {TABS.map((t) => <Tabs.Tab key={t.id} value={t.id} style={{ whiteSpace: 'nowrap' }}>{t.label}</Tabs.Tab>)}
+        {TABS.map((tab) => <Tabs.Tab key={tab.id} value={tab.id} style={{ whiteSpace: 'nowrap' }}>{t(tab.labelKey)}</Tabs.Tab>)}
       </Tabs.List>
       <Box style={{ flex: 1, overflowY: 'auto', background: '#f9fafb' }}>
         <Tabs.Panel value="demographics" p="md"><DemographicsTab    client={client} clientId={clientId} currentUser={currentUser} /></Tabs.Panel>

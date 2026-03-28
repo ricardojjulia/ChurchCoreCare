@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { fetchClient } from '../../lib/clientApi.js';
 import ClientDetailHeader from './ClientDetailHeader.jsx';
 import ClientDetailTabs from './ClientDetailTabs.jsx';
+import { useI18n } from '../../lib/i18nContext.jsx';
 
 export default function ClientDetailPage({ clientId, onBack, onScheduleClient }) {
+  const { t } = useI18n();
   const [client, setClient] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -45,7 +47,7 @@ export default function ClientDetailPage({ clientId, onBack, onScheduleClient })
           padding: '40px',
         }}
       >
-        Loading client record...
+        {t('clientDetail.loadingRecord')}
       </div>
     );
   }
@@ -53,7 +55,7 @@ export default function ClientDetailPage({ clientId, onBack, onScheduleClient })
   if (error) {
     return (
       <div style={{ padding: '40px', color: '#b42318', fontSize: '15px' }}>
-        <p>Failed to load client: {error}</p>
+        <p>{t('clientDetail.errorLoad', { error })}</p>
         <button
           type="button"
           onClick={onBack}
@@ -67,7 +69,7 @@ export default function ClientDetailPage({ clientId, onBack, onScheduleClient })
             fontSize: '14px',
           }}
         >
-          &#8592; Back to Clients
+          &#8592; {t('clientDetail.backToClients')}
         </button>
       </div>
     );

@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { fetchCounselor } from '../../lib/clientApi.js';
 import CounselorDetailHeader from './CounselorDetailHeader.jsx';
 import CounselorDetailTabs from './CounselorDetailTabs.jsx';
+import { useI18n } from '../../lib/i18nContext.jsx';
 
 export default function CounselorDetailPage({ staffId, onBack, currentUser }) {
+  const { t } = useI18n();
   const [counselor, setCounselor] = useState(null);
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState(null);
@@ -42,7 +44,7 @@ export default function CounselorDetailPage({ staffId, onBack, currentUser }) {
           padding: '40px',
         }}
       >
-        Loading counselor profile…
+        {t('counselorDetail.loadingProfile')}
       </div>
     );
   }
@@ -50,7 +52,7 @@ export default function CounselorDetailPage({ staffId, onBack, currentUser }) {
   if (error) {
     return (
       <div style={{ padding: '40px', color: '#b42318', fontSize: '15px' }}>
-        <p>Failed to load counselor: {error}</p>
+        <p>{t('counselorDetail.errorLoad', { error })}</p>
         <button
           type="button"
           onClick={onBack}
@@ -64,7 +66,7 @@ export default function CounselorDetailPage({ staffId, onBack, currentUser }) {
             fontSize: '14px',
           }}
         >
-          &#8592; Back to Counselors
+          &#8592; {t('counselorDetail.backToCounselors')}
         </button>
       </div>
     );

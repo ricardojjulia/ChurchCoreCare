@@ -1,20 +1,13 @@
-import { useState } from 'react';
 import { Burger, Group, Select, Text, Box, Button } from '@mantine/core';
-
-const LANGUAGES = [
-  { value: 'en', label: 'English' },
-  { value: 'es', label: 'Español' },
-  { value: 'fr', label: 'Français' },
-  { value: 'pt', label: 'Português' },
-];
+import { useI18n } from '../lib/i18nContext.jsx';
 
 export default function TopBar({ opened, onMenuToggle, onSignOut }) {
-  const [language, setLanguage] = useState('en');
+  const { locale, locales, setLocale, t, loading } = useI18n();
 
   return (
     <Group className="workspace-topbar" h="100%" px="md" justify="space-between" wrap="nowrap">
       <Group gap="md" wrap="nowrap" className="workspace-topbar-main">
-        <Burger opened={opened} onClick={onMenuToggle} aria-label="Toggle navigation" size="sm" />
+        <Burger opened={opened} onClick={onMenuToggle} aria-label={t('topbar.toggleNavigation')} size="sm" />
         <Box
           className="topbar-counseling-scene"
           aria-hidden="true"
@@ -28,25 +21,26 @@ export default function TopBar({ opened, onMenuToggle, onSignOut }) {
           <span className="topbar-bubble topbar-bubble--right"></span>
         </Box>
         <Box className="workspace-topbar-copy">
-          <Text className="workspace-topbar-kicker">Faith Counseling Workspace</Text>
-          <Text component="h1" className="workspace-topbar-title" style={{ margin: 0 }}>Practice Operations Center</Text>
+          <Text className="workspace-topbar-kicker">{t('topbar.kicker')}</Text>
+          <Text component="h1" className="workspace-topbar-title" style={{ margin: 0 }}>{t('topbar.title')}</Text>
           <Text className="workspace-topbar-subtitle">
-            Care delivery, scheduling, billing, reporting, and oversight in one flow.
+            {t('topbar.subtitle')}
           </Text>
         </Box>
       </Group>
 
       <Group gap="sm" wrap="nowrap" className="workspace-topbar-actions">
         <Select
-          data={LANGUAGES}
-          value={language}
-          onChange={setLanguage}
+          data={locales}
+          value={locale}
+          onChange={(value) => value && setLocale(value)}
+          disabled={loading}
           size="xs"
           w={120}
-          aria-label="Language"
+          aria-label={t('header.language')}
         />
         <Button size="xs" variant="default" onClick={onSignOut}>
-          Logout
+          {t('header.signOut')}
         </Button>
       </Group>
     </Group>

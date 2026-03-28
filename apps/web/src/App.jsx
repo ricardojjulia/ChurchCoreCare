@@ -17,6 +17,7 @@ import DocumentsPage from './components/Documents/DocumentsPage.jsx';
 import { csrfHeaders } from './lib/csrf.js';
 import { frontendTelemetry } from './lib/frontendTelemetry.js';
 import { useSurfaceTelemetry } from './lib/useSurfaceTelemetry.js';
+import { useI18n } from './lib/i18nContext.jsx';
 import './App.css';
 
 function firstString(...values) {
@@ -91,17 +92,18 @@ function summarizeAppointmentMetrics(items) {
 }
 
 export default function App() {
+  const { t } = useI18n();
   const [navOpened, { toggle: toggleNav, close: closeNav }] = useDisclosure(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [authBootstrapping, setAuthBootstrapping] = useState(true);
   const [metricsData, setMetricsData] = useState({
     sessions: 0,
-    sessionsMeta: 'Scheduled for today',
+    sessionsMeta: t('metrics.scheduledToday'),
     futureAppointments: 0,
-    futureAppointmentsMeta: 'Scheduled ahead',
+    futureAppointmentsMeta: t('metrics.scheduledAhead'),
     auditEvents: 0,
-    auditEventsMeta: 'Last 7 days',
+    auditEventsMeta: t('metrics.last7Days'),
   });
   const [connectionStatus, setConnectionStatus] = useState('loading');
   const [clientsData, setClientsData] = useState({ items: [], loading: true, error: null });
@@ -145,10 +147,10 @@ export default function App() {
       })
       .catch(() => {
         if (isCancelled) return;
-        setClientsData({ items: [], loading: false, error: 'Unable to load clients' });
+        setClientsData({ items: [], loading: false, error: t('clients.error.loadFailed') });
       });
     return () => { isCancelled = true; };
-  }, [refreshClientsKey, isAuthenticated]);
+  }, [refreshClientsKey, isAuthenticated, t]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -160,13 +162,13 @@ export default function App() {
         setMetricsData((prev) => ({
           ...prev,
           sessions,
-          sessionsMeta: 'Scheduled for today',
+          sessionsMeta: t('metrics.scheduledToday'),
           futureAppointments,
-          futureAppointmentsMeta: 'Scheduled ahead',
+          futureAppointmentsMeta: t('metrics.scheduledAhead'),
         }));
       })
       .catch(() => {});
-  }, [isAuthenticated]);
+  }, [isAuthenticated, t]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -176,7 +178,7 @@ export default function App() {
       setMetricsData((prev) => ({
         ...prev,
         auditEvents: 0,
-        auditEventsMeta: 'Admin visibility required',
+        auditEventsMeta: t('metrics.adminVisibilityRequired'),
       }));
       return;
     }
@@ -188,16 +190,16 @@ export default function App() {
         setMetricsData((prev) => ({
           ...prev,
           auditEvents: total,
-          auditEventsMeta: 'Last 7 days',
+          auditEventsMeta: t('metrics.last7Days'),
         }));
       })
       .catch(() => {
         setMetricsData((prev) => ({
           ...prev,
-          auditEventsMeta: 'Unable to load',
+          auditEventsMeta: t('state.unableToLoad'),
         }));
       });
-  }, [isAuthenticated, userRole]);
+  }, [isAuthenticated, userRole, t]);
 
   const handleAuthContinue = (profile) => {
     setCurrentUser(normalizeSessionUser(profile));
@@ -299,8 +301,8 @@ export default function App() {
       <Center h="100vh">
         <Paper p="xl" radius="lg" withBorder style={{ textAlign: 'center', minWidth: 300 }}>
           <Loader size="sm" mb="md" />
-          <Text fw={600}>Restoring session</Text>
-          <Text fz="sm" c="dimmed" mt={4}>Checking for an active session…</Text>
+          <Text fw={600}>{t('auth.restoringSession')}</Text>
+          <Text fz="sm" c="dimmed" mt={4}>{t('auth.checkingSession')}</Text>
         </Paper>
       </Center>
     );

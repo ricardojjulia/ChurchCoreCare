@@ -3,21 +3,23 @@ import { Tabs, Text, Stack, Title, Paper } from '@mantine/core';
 import PortalTab from './tabs/PortalTab.jsx';
 import DocumentsStudioTab from './tabs/DocumentsStudioTab.jsx';
 import { useSurfaceTelemetry } from '../../lib/useSurfaceTelemetry.js';
+import { useI18n } from '../../lib/i18nContext.jsx';
 
 const STUDIO_TABS = [
-  { id: 'practice',        label: 'Practice' },
-  { id: 'locations',       label: 'Locations' },
-  { id: 'staff',           label: 'Staff' },
-  { id: 'lifecycle',       label: 'Lifecycle' },
-  { id: 'chart',           label: 'Chart' },
-  { id: 'documentsStudio', label: 'Documents & Inventories' },
-  { id: 'clients',         label: 'Clients' },
-  { id: 'appointments',    label: 'Appointments' },
-  { id: 'billing',         label: 'Billing' },
-  { id: 'portal',          label: 'Portal' },
+  { id: 'practice', labelKey: 'studio.tab.practice' },
+  { id: 'locations', labelKey: 'studio.tab.locations' },
+  { id: 'staff', labelKey: 'studio.tab.staff' },
+  { id: 'lifecycle', labelKey: 'studio.tab.lifecycle' },
+  { id: 'chart', labelKey: 'studio.tab.chart' },
+  { id: 'documentsStudio', labelKey: 'studio.tab.documentsStudio' },
+  { id: 'clients', labelKey: 'studio.tab.clients' },
+  { id: 'appointments', labelKey: 'studio.tab.appointments' },
+  { id: 'billing', labelKey: 'studio.tab.billing' },
+  { id: 'portal', labelKey: 'studio.tab.portal' },
 ];
 
 export default function WorkspaceStudioPage({ onSchedulePortalRequest }) {
+  const { t } = useI18n();
   const [activeTab, setActiveTab] = useState('portal');
   const activeSurfaceId = `studio.${activeTab === 'documentsStudio' ? 'documents' : activeTab}`;
 
@@ -29,24 +31,24 @@ export default function WorkspaceStudioPage({ onSchedulePortalRequest }) {
 
   return (
     <Stack gap="md" p="md">
-      <Title order={2} fz="lg">Workspace Studio</Title>
+      <Title order={2} fz="lg">{t('studio.title')}</Title>
       <Paper withBorder radius="md" p="md">
         <Tabs value={activeTab} onChange={(value) => setActiveTab(value || 'portal')}>
           <Tabs.List style={{ overflowX: 'auto', flexWrap: 'nowrap' }}>
-            {STUDIO_TABS.map((t) => (
-              <Tabs.Tab key={t.id} value={t.id} style={{ whiteSpace: 'nowrap' }}>
-                {t.label}
+            {STUDIO_TABS.map((tab) => (
+              <Tabs.Tab key={tab.id} value={tab.id} style={{ whiteSpace: 'nowrap' }}>
+                {tab.id === 'documentsStudio' ? t('studio.tab.documents') : t(tab.labelKey)}
               </Tabs.Tab>
             ))}
           </Tabs.List>
-          {STUDIO_TABS.map((t) => (
-            <Tabs.Panel key={t.id} value={t.id} pt="md">
-              {t.id === 'portal' ? (
+          {STUDIO_TABS.map((tab) => (
+            <Tabs.Panel key={tab.id} value={tab.id} pt="md">
+              {tab.id === 'portal' ? (
                 <PortalTab onSchedulePortalRequest={onSchedulePortalRequest} />
-              ) : t.id === 'documentsStudio' ? (
+              ) : tab.id === 'documentsStudio' ? (
                 <DocumentsStudioTab />
               ) : (
-                <Text c="dimmed" fz="sm">Content for {t.label} tab</Text>
+                <Text c="dimmed" fz="sm">{t('studio.placeholderForTab', { tab: tab.id === 'documentsStudio' ? t('studio.tab.documents') : t(tab.labelKey) })}</Text>
               )}
             </Tabs.Panel>
           ))}

@@ -3,6 +3,7 @@ import { Paper, Group, Title, Button, Text, Stack, Loader, Box,
          UnstyledButton } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { csrfHeaders } from '../lib/csrf.js';
+import { useI18n } from '../lib/i18nContext.jsx';
 import ClientModal from './ClientModal';
 
 export default function WorkspaceGrid({
@@ -13,6 +14,7 @@ export default function WorkspaceGrid({
   onNewAppointment,
   onScheduleClient,
 }) {
+  const { t } = useI18n();
   const [modalOpen,     setModalOpen]     = useState(false);
   const [editingClient, setEditingClient] = useState(null);
 
@@ -24,15 +26,15 @@ export default function WorkspaceGrid({
   const handleViewClient = (client) => { if (onViewClient) onViewClient(client.id); };
 
   const handleDeleteClient = async (client) => {
-    if (!confirm(`Delete client ${client.firstName} ${client.lastName}?`)) return;
+    if (!confirm(t('clients.deleteConfirm', { name: `${client.firstName} ${client.lastName}` }))) return;
     try {
       const res = await fetch(`/api/v1/clients/${client.id}`, { method: 'DELETE', headers: csrfHeaders() });
       if (res.ok) {
         onClientsUpdated();
-        notifications.show({ title: 'Deleted', message: `${client.firstName} ${client.lastName} removed.`, color: 'green' });
+        notifications.show({ title: t('state.deleted'), message: t('clients.deletedMessage', { name: `${client.firstName} ${client.lastName}` }), color: 'green' });
       }
     } catch (err) {
-      notifications.show({ title: 'Error', message: err.message || 'Delete failed', color: 'red' });
+      notifications.show({ title: t('state.error'), message: err.message || t('clients.deleteFailed'), color: 'red' });
     }
   };
 
@@ -41,34 +43,34 @@ export default function WorkspaceGrid({
       {/* Today's Schedule */}
       <Paper withBorder radius="md" p="md">
         <Group justify="space-between" mb="sm">
-          <Title order={3} fz="md">Today's Schedule</Title>
+          <Title order={3} fz="md">{t('panels.schedule')}</Title>
           <Group gap="xs">
-            <Button variant="default" size="xs" onClick={() => onViewCalendar?.()}>View Calendar</Button>
-            <Button size="xs" onClick={() => onNewAppointment?.()}>New Appointment</Button>
+            <Button variant="default" size="xs" onClick={() => onViewCalendar?.()}>{t('buttons.viewCalendar')}</Button>
+            <Button size="xs" onClick={() => onNewAppointment?.()}>{t('header.newAppointment')}</Button>
           </Group>
         </Group>
-        <Text c="dimmed" fz="sm" py="sm">No appointments scheduled</Text>
+        <Text c="dimmed" fz="sm" py="sm">{t('scheduling.noneScheduled')}</Text>
       </Paper>
 
       <Group grow align="flex-start" gap="md">
         {/* Priority Queue */}
         <Paper withBorder radius="md" p="md" style={{ flex: 1 }}>
-          <Title order={3} fz="md" mb="sm">Priority Queue</Title>
-          <Text c="dimmed" fz="sm">All items cleared</Text>
+          <Title order={3} fz="md" mb="sm">{t('panels.priority')}</Title>
+          <Text c="dimmed" fz="sm">{t('priority.allCleared')}</Text>
         </Paper>
 
         {/* Compliance Watch */}
         <Paper withBorder radius="md" p="md" style={{ flex: 1 }}>
-          <Title order={3} fz="md" mb="sm">Compliance Watch</Title>
-          <Text c="dimmed" fz="sm">No issues detected</Text>
+          <Title order={3} fz="md" mb="sm">{t('panels.compliance')}</Title>
+          <Text c="dimmed" fz="sm">{t('compliance.noIssues')}</Text>
         </Paper>
       </Group>
 
       {/* Clients */}
       <Paper withBorder radius="md" p="md" component="section" aria-labelledby="clientsPanelTitle">
         <Group justify="space-between" mb="sm">
-          <Title order={3} fz="md" id="clientsPanelTitle">Clients</Title>
-          <Button size="xs" onClick={handleAddClient}>New Client</Button>
+          <Title order={3} fz="md" id="clientsPanelTitle">{t('nav.clients')}</Title>
+          <Button size="xs" onClick={handleAddClient}>{t('clients.newClient')}</Button>
         </Group>
 
         {clientsLoading ? (
@@ -76,7 +78,7 @@ export default function WorkspaceGrid({
         ) : clientsError ? (
           <Text c="red" fz="sm">{clientsError}</Text>
         ) : clients.length === 0 ? (
-          <Text c="dimmed" fz="sm">No clients available</Text>
+          <Text c="dimmed" fz="sm">{t('clients.noneAvailable')}</Text>
         ) : (
           <Stack gap={0}>
             {clients.map((client) => (
@@ -88,13 +90,13 @@ export default function WorkspaceGrid({
                 <UnstyledButton style={{ flex: 1 }} onClick={() => handleViewClient(client)}>
                   <Text fw={500} fz="sm">{client.firstName} {client.lastName}</Text>
                   <Text c="dimmed" fz="xs">
-                    Status: {client.status} · Faith: {client.faithBackground || 'Undeclared'}
+                    {t('clients.statusPrefix')}: {t(`status.${client.status || 'active'}`)} · {t('clients.faithPrefix')}: {client.faithBackground || t('clients.faithUndeclared')}
                   </Text>
                 </UnstyledButton>
                 <Group gap="xs">
-                  <Button size="xs" color="blue" variant="light" onClick={() => onScheduleClient?.(client.id)}>Schedule</Button>
-                  <Button size="xs" variant="default" onClick={() => handleViewClient(client)}>Edit</Button>
-                  <Button size="xs" color="red" variant="light" onClick={() => handleDeleteClient(client)}>Delete</Button>
+                  <Button size="xs" color="blue" variant="light" onClick={() => onScheduleClient?.(client.id)}>{t('clients.schedule')}</Button>
+                  <Button size="xs" variant="default" onClick={() => handleViewClient(client)}>{t('actions.edit')}</Button>
+                  <Button size="xs" color="red" variant="light" onClick={() => handleDeleteClient(client)}>{t('actions.delete')}</Button>
                 </Group>
               </Box>
             ))}

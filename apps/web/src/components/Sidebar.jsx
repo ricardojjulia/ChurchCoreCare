@@ -1,20 +1,21 @@
 import { NavLink, Stack, Text, Group, Button, Box, Divider, Badge } from '@mantine/core';
+import { useI18n } from '../lib/i18nContext.jsx';
 
 const NAV_ITEMS = [
-  { key: 'dashboard',   label: 'Dashboard' },
-  { key: 'users',       label: 'User Maintenance' },
-  { key: 'counselors',  label: 'Counselors' },
-  { key: 'clients',     label: 'Clients' },
-  { key: 'scheduling',  label: 'Scheduling' },
-  { key: 'clinical',    label: 'Clinical Chart' },
-  { key: 'documents',   label: 'Documents' },
-  { key: 'billing',     label: 'Billing' },
-  { key: 'portal',            label: 'Portal' },
-  { key: 'workspace-studio', label: 'Workspace Studio' },
-  { key: 'operations',       label: 'Operations Studio', href: '/operations.html' },
-  { key: 'faith',       label: 'Faith Workflows' },
-  { key: 'about',       label: 'About', href: '/about.html' },
-  { key: 'monitor',     label: 'Monitoring', href: '/monitor.html' },
+  { key: 'dashboard', labelKey: 'nav.dashboard' },
+  { key: 'users', labelKey: 'nav.users' },
+  { key: 'counselors', labelKey: 'nav.counselors' },
+  { key: 'clients', labelKey: 'nav.clients' },
+  { key: 'scheduling', labelKey: 'nav.scheduling' },
+  { key: 'clinical', labelKey: 'nav.clinical' },
+  { key: 'documents', labelKey: 'nav.documents' },
+  { key: 'billing', labelKey: 'nav.billing' },
+  { key: 'portal', labelKey: 'nav.portal' },
+  { key: 'workspace-studio', labelKey: 'nav.workspaceStudio' },
+  { key: 'operations', labelKey: 'nav.operationsStudio', href: '/operations.html' },
+  { key: 'faith', labelKey: 'nav.faithWorkflows' },
+  { key: 'about', labelKey: 'nav.about', href: '/about.html' },
+  { key: 'monitor', labelKey: 'nav.monitoring', href: '/monitor.html' },
 ];
 
 function canViewNavItem(item, role) {
@@ -25,25 +26,27 @@ function canViewNavItem(item, role) {
 }
 
 function resolveUserLabel(user, role) {
+  const normalizedRole = role ? role.replaceAll('_', ' ') : null;
   if (typeof user?.name === 'string' && user.name.trim()) {
-    return role ? `${user.name.trim()} • ${role}` : user.name.trim();
+    return normalizedRole ? `${user.name.trim()} • ${normalizedRole}` : user.name.trim();
   }
   if (typeof user?.email === 'string' && user.email.trim()) {
-    return role ? `${user.email.trim()} • ${role}` : user.email.trim();
+    return normalizedRole ? `${user.email.trim()} • ${normalizedRole}` : user.email.trim();
   }
-  return role ? `Signed in as ${role}` : 'Not signed in';
+  return null;
 }
 
-const CONNECTION_TONE = {
-  loading: { color: 'gray', label: 'Connecting…' },
-  connected: { color: 'green', label: 'API Connected' },
-  error: { color: 'red', label: 'Connection Error' },
-};
-
 export default function Sidebar({ currentUser, currentView, onNavigate, onOpenClientPicker, onSignOut, connectionStatus }) {
+  const { t } = useI18n();
   const userRole = currentUser?.role ?? null;
   const visibleNavItems = NAV_ITEMS.filter((item) => canViewNavItem(item, userRole));
+  const CONNECTION_TONE = {
+    loading: { color: 'gray', label: t('sidebar.connection.loading') },
+    connected: { color: 'green', label: t('sidebar.connection.connected') },
+    error: { color: 'red', label: t('sidebar.connection.error') },
+  };
   const connectionTone = CONNECTION_TONE[connectionStatus] ?? CONNECTION_TONE.loading;
+  const userLabel = resolveUserLabel(currentUser, userRole) ?? (userRole ? t('sidebar.user.signedInAs', { role: userRole.replaceAll('_', ' ') }) : t('sidebar.user.notSignedIn'));
 
   return (
     <Stack h="100%" gap={0} p="sm">
@@ -56,7 +59,7 @@ export default function Sidebar({ currentUser, currentView, onNavigate, onOpenCl
             <span className="sidebar-options-wave"></span>
           </Box>
           <Box>
-            <Text fw={800} fz="sm" lh={1.1}>Options</Text>
+            <Text fw={800} fz="sm" lh={1.1}>{t('sidebar.options')}</Text>
           </Box>
         </Group>
 
@@ -73,7 +76,7 @@ export default function Sidebar({ currentUser, currentView, onNavigate, onOpenCl
             display: 'inline-block',
           }}
         >
-          {resolveUserLabel(currentUser, userRole)}
+          {userLabel}
         </Text>
 
         <Box px="xs" mb="sm">
@@ -87,7 +90,7 @@ export default function Sidebar({ currentUser, currentView, onNavigate, onOpenCl
           </Badge>
         </Box>
 
-        <Stack gap={2} component="nav" aria-label="Primary">
+        <Stack gap={2} component="nav" aria-label={t('sidebar.primaryNav')}>
           {visibleNavItems.map((item) =>
             item.href ? (
               <NavLink
@@ -95,14 +98,14 @@ export default function Sidebar({ currentUser, currentView, onNavigate, onOpenCl
                 data-nav-key={item.key}
                 component="a"
                 href={item.href}
-                label={item.label}
+                label={t(item.labelKey)}
                 styles={{ root: { borderRadius: 8 } }}
               />
             ) : (
               <NavLink
                 key={item.key}
                 data-nav-key={item.key}
-                label={item.label}
+                label={t(item.labelKey)}
                 active={currentView === item.key}
                 onClick={() => onNavigate?.(item.key)}
                 styles={{ root: { borderRadius: 8 } }}
@@ -115,7 +118,7 @@ export default function Sidebar({ currentUser, currentView, onNavigate, onOpenCl
       <Box mt="sm">
         <Divider mb="sm" />
         <Button variant="default" fullWidth onClick={onSignOut}>
-          Sign out
+          {t('header.signOut')}
         </Button>
       </Box>
     </Stack>
