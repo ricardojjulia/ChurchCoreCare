@@ -149,6 +149,38 @@ No breaking changes. All existing API routes and in-memory fallback behavior are
 
 ## Hotfixes (March 2026)
 
+### Monitoring dashboard — DB dependency always shown as `unhealthy` (2026-03-28)
+
+**Timestamp:** 2026-03-28 · commit `503ee6b`
+
+**Problem:** The Health Probes & Dependencies section of the monitoring dashboard (`apps/web/public/monitor.html` + `monitor.js`) displayed every dependency as `unhealthy` regardless of actual DB status. This was misleading — the API and database were healthy but the badge always rendered red.
+
+**Root cause:** In `updateHealthChecks()` inside `monitor.js`, the dependencies block destructured `Object.entries(health.dependencies)` as `([name, status])`. Each value in `health.dependencies` is a full object (`{ status: 2, observedAt: "..." }`), not a raw numeric status code. The function then called `healthBadge(status)` with the entire object. Inside `healthLabel()`:
+
+```js
+function healthLabel(status) {
+  if (status === 2) return 'healthy';   // { status:2, ... } !== 2 → false
+  if (status === 1) return 'degraded';  // { status:2, ... } !== 1 → false
+  return 'unhealthy';                   // always reached
+}
+```
+
+Because a plain object never strict-equals a number, the function always fell through to `'unhealthy'`, even when `status.status === 2`.
+
+**Fix:** Renamed the destructured variable from `status` to `dep` to avoid shadowing confusion, and passed `dep?.status` (the numeric value) to `healthBadge()`:
+
+```js
+// Before
+dependencies.map(([name, status]) => healthBadge(status))
+
+// After
+dependencies.map(([name, dep]) => healthBadge(dep?.status))
+```
+
+**File changed:** `apps/web/public/monitor.js` — no rebuild required (served as a static file).
+
+---
+
 ### Appointments table — missing columns (`starts_at`, `ends_at`, `location_name`, `timezone`)
 
 **Problem:** The appointments DB table was created with a `scheduled_at` column, but the query layer (`apps/api/src/db/queries/appointments.js`) was written expecting `starts_at`, `ends_at`, `location_name`, and `timezone`. Any read or write to the scheduling feature threw `Unknown column 'starts_at' in 'order clause'`.
