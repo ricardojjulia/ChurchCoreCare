@@ -232,6 +232,98 @@
   justify-content: center;
 }
 
+.sidebar-options-head {
+  align-items: center;
+}
+
+.sidebar-options-mark {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  flex: 0 0 auto;
+  overflow: hidden;
+  background:
+    linear-gradient(155deg, rgba(255, 255, 255, 0.96), rgba(226, 227, 255, 0.9)),
+    linear-gradient(155deg, #818cf8, #4338ca);
+  box-shadow:
+    0 12px 24px rgba(79, 70, 229, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.sidebar-options-glow,
+.sidebar-options-person,
+.sidebar-options-wave {
+  position: absolute;
+  display: block;
+}
+
+.sidebar-options-glow {
+  inset: 5px;
+  border-radius: 12px;
+  background: radial-gradient(circle, rgba(129, 140, 248, 0.24), transparent 70%);
+  animation: topbarPulse 3.2s ease-in-out infinite;
+}
+
+.sidebar-options-person {
+  bottom: 8px;
+  width: 9px;
+  height: 14px;
+  border-radius: 6px 6px 4px 4px;
+  background: linear-gradient(180deg, rgba(79, 70, 229, 0.94), rgba(67, 56, 202, 0.78));
+}
+
+.sidebar-options-person::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  left: 1px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.98);
+}
+
+.sidebar-options-person--left {
+  left: 9px;
+  animation: counselorFloat 3.8s ease-in-out infinite;
+}
+
+.sidebar-options-person--right {
+  right: 9px;
+  animation: counselorFloat 3.8s ease-in-out infinite 0.45s;
+}
+
+.sidebar-options-wave {
+  left: 9px;
+  right: 9px;
+  top: 9px;
+  height: 8px;
+  border-top: 2px solid rgba(255, 255, 255, 0.94);
+  border-radius: 999px;
+  opacity: 0.92;
+  animation: bubbleDrift 3.1s ease-in-out infinite;
+}
+
+.sidebar-options-wave::before,
+.sidebar-options-wave::after {
+  content: "";
+  position: absolute;
+  top: -3px;
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.sidebar-options-wave::before {
+  left: -1px;
+}
+
+.sidebar-options-wave::after {
+  right: -1px;
+}
+
 .workspace-topbar {
   min-height: 96px;
   padding-top: 8px;

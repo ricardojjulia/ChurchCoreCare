@@ -48,18 +48,15 @@ export default function Sidebar({ currentUser, currentView, onNavigate, onOpenCl
   return (
     <Stack h="100%" justify="space-between" gap={0} p="sm">
       <Box>
-        <Group gap="sm" mb="md" px="xs">
-          <Box
-            w={38} h={38}
-            style={{
-              borderRadius: 10,
-              background: 'linear-gradient(150deg, #6366f1, #8b5cf6)',
-              flexShrink: 0,
-            }}
-          />
+        <Group gap="sm" mb="md" px="xs" className="sidebar-options-head">
+          <Box className="sidebar-options-mark" aria-hidden="true">
+            <span className="sidebar-options-glow"></span>
+            <span className="sidebar-options-person sidebar-options-person--left"></span>
+            <span className="sidebar-options-person sidebar-options-person--right"></span>
+            <span className="sidebar-options-wave"></span>
+          </Box>
           <Box>
-            <Text fw={700} fz="sm" lh={1.2}>Faith Counseling</Text>
-            <Text fz="xs" c="dimmed" lh={1.2}>Practice Workspace</Text>
+            <Text fw={800} fz="sm" lh={1.1}>Options</Text>
           </Box>
         </Group>
 

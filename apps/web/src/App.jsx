@@ -311,7 +311,7 @@ export default function App() {
   return (
     <AppShell
       header={{ height: 96 }}
-      navbar={{ width: 280, breakpoint: 'sm', collapsed: { mobile: !navOpened } }}
+      navbar={{ width: 280, breakpoint: 'sm', collapsed: { mobile: !navOpened, desktop: !navOpened } }}
       padding={0}
     >
       <AppShell.Header>

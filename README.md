@@ -4,8 +4,47 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## Version
 
-- Current release: `2.1.16`
-- Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI + revamped ops/monitoring + explicit health probes + OTEL health export + full Scheduling module with Waitlist, Reminders & Calendar DB support + waitlist-to-appointment promotion + audit UUID hardening + deep DB engine monitoring dashboard + full Audit Intelligence UI redesign + structured PHI-safe API logging + live dashboard appointment and audit metrics + full Reporting tab UI redesign + repaired Swagger UI proxy/docs delivery + redesigned About experience + static file server query-string fix + operations header/session card refresh + versioned web asset delivery + UI enhancements across main shell, monitoring, and operations surfaces)
+- Current release: `2.1.19`
+- Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI + revamped ops/monitoring + explicit health probes + OTEL health export + full Scheduling module with Waitlist, Reminders & Calendar DB support + waitlist-to-appointment promotion + audit UUID hardening + deep DB engine monitoring dashboard + full Audit Intelligence UI redesign + structured PHI-safe API logging + live dashboard appointment and audit metrics + full Reporting tab UI redesign + repaired Swagger UI proxy/docs delivery + redesigned About experience + static file server query-string fix + operations header/session card refresh + versioned web asset delivery + UI enhancements across main shell, monitoring, and operations surfaces + desktop sidebar toggle fix + sidebar options icon refresh + schema fixes for availability_overrides and appointment_series + utilization GROUP BY fix)
+
+## v2.1.18 — Sidebar Options Icon Refresh (March 2026)
+
+### v2.1.18 Overview
+
+Refreshes the hamburger-menu header area in the sidebar. The old solid purple box was a placeholder brand block, and the two-line `Faith Counseling` / `Practice Workspace` label was heavier than needed for a simple navigation heading. This update replaces the placeholder square with a compact animated counseling icon and simplifies the label to `Options`.
+
+### v2.1.18 Changes
+
+#### Main app sidebar (`apps/web/src/components/Sidebar.jsx`, `apps/web/src/App.css`)
+
+- Replaced the plain purple square in the sidebar heading with a compact animated counseling-style icon
+- Removed the `Faith Counseling` and `Practice Workspace` text from the sidebar heading
+- Simplified the sidebar heading label to `Options`
+- Kept the icon footprint aligned to the previous square so the surrounding layout remains stable
+
+### v2.1.18 Validation
+
+- `pnpm --filter @faith/web build`
+- Verified the sidebar heading now renders the animated icon and `Options` label in the rebuilt web bundle
+
+## v2.1.17 — Desktop Sidebar Toggle Fix (March 2026)
+
+### v2.1.17 Overview
+
+Fixes the main shell hamburger behavior on desktop. The burger state was updating, but the sidebar collapse configuration only targeted `mobile`, so clicking the hamburger on larger screens did not actually hide the side menu.
+
+### v2.1.17 Changes
+
+#### Main app shell (`apps/web/src/App.jsx`)
+
+- Extended the AppShell navbar collapse configuration to include both `mobile` and `desktop`
+- The hamburger menu now properly hides and restores the sidebar on desktop as well as mobile
+- No visual redesign was introduced in this patch; this is a shell behavior correction only
+
+### v2.1.17 Validation
+
+- `pnpm --filter @faith/web build`
+- Verified the AppShell config now collapses the navbar for both desktop and mobile breakpoints
 
 ## v2.1.16 — UI enhancements (March 2026)
 

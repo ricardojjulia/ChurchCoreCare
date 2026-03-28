@@ -1,5 +1,65 @@
 # Change Log
 
+## v2.1.19 — Schema and Query Bug Fixes
+
+**Date:** March 28, 2026
+**Type:** Patch
+
+### Overview
+
+Resolves three runtime errors that surfaced when scheduling and reporting features hit the live MySQL database for the first time: two missing tables that were implemented in the query layer but never added to `schema.sql`, one MySQL `only_full_group_by` violation in the utilization summary query, and a missing `--env-file` flag that caused the API to start without database credentials after a manual restart.
+
+### API (v2.1.19)
+
+- Added `availability_overrides` table to `schema.sql` — columns: `id`, `tenant_id`, `staff_id`, `override_date`, `override_type`, `reason`, `start_time`, `end_time`, `all_day`, `created_at`, `updated_at`; indexes on tenant, staff+date, and tenant+date
+- Added `appointment_series` table to `schema.sql` — columns: `id`, `tenant_id`, `counselor_id`, `client_id`, `client_name_enc`, `counselor_name_enc`, `appointment_type`, `recurrence_rule`, `start_date`, `end_date`, `duration_minutes`, `location_id`, `remote_session`, `status`, `created_at`, `updated_at`; indexes on tenant, counselor, client, and date range
+- Both tables applied directly to the live database via Docker
+- Fixed `GROUP BY` violation in `getUtilizationSummary()` — changed `GROUP BY location_name` (alias) to `GROUP BY a.location_name, l.name` to satisfy MySQL `only_full_group_by` strict mode
+- API must be started from the monorepo root with `node --env-file=.env apps/api/src/index.js` to load database credentials
+
+### Breaking changes
+
+None.
+
+## v2.1.18 — Sidebar Options Icon Refresh
+
+**Date:** March 28, 2026
+**Type:** Patch
+
+### Overview
+
+Refreshes the sidebar heading inside the hamburger menu. The previous header used a plain purple square plus the two-line `Faith Counseling` / `Practice Workspace` label. It now uses a compact animated counseling icon and a simpler `Options` heading.
+
+### Web (v2.1.18)
+
+- Replaced the placeholder purple square in `apps/web/src/components/Sidebar.jsx` with an animated counseling-style icon
+- Simplified the sidebar heading copy to `Options`
+- Added the supporting sidebar icon animation styles in `apps/web/src/App.css`
+- Preserved the original footprint so the nav layout stays stable
+
+### Breaking changes
+
+None.
+
+## v2.1.17 — Desktop Sidebar Toggle Fix
+
+**Date:** March 28, 2026
+**Type:** Patch
+
+### Overview
+
+Fixes the main application hamburger menu on desktop. The sidebar toggle state was wired correctly, but the Mantine AppShell configuration only applied collapse behavior to mobile layouts, so the side menu remained visible on desktop after clicking the burger.
+
+### Web (v2.1.17)
+
+- Updated `apps/web/src/App.jsx` so the AppShell navbar uses `collapsed: { mobile: !navOpened, desktop: !navOpened }`
+- Desktop and mobile now both respond to the same hamburger toggle state
+- The change affects shell behavior only; no visual redesign was introduced here
+
+### Breaking changes
+
+None.
+
 ## v2.1.16 — UI enhancements
 
 **Date:** March 28, 2026

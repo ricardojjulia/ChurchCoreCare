@@ -26,7 +26,9 @@ Default URL: `http://localhost:3000`
 - sidebar navigation shell
 - global search across today's schedule
 - redesigned `Practice Operations Center` header with an animated counseling mark and stronger operational hierarchy
+- sidebar heading now uses an animated counseling icon with a simplified `Options` label
 - sidebar identity block now carries both the signed-in user pill and the live API connection status
+- the hamburger menu now collapses and restores the sidebar on both desktop and mobile
 - key metric cards for today's sessions, future appointments, audit-event visibility, and current session identity/state
 - operations panels for schedule, priority queue, and compliance watch
 - care flow progress indicators
