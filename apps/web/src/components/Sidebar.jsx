@@ -1,4 +1,4 @@
-import { NavLink, Stack, Text, Group, Button, Box, Divider } from '@mantine/core';
+import { NavLink, Stack, Text, Group, Button, Box, Divider, Badge } from '@mantine/core';
 
 const NAV_ITEMS = [
   { key: 'dashboard',   label: 'Dashboard' },
@@ -34,9 +34,16 @@ function resolveUserLabel(user, role) {
   return role ? `Signed in as ${role}` : 'Not signed in';
 }
 
-export default function Sidebar({ currentUser, currentView, onNavigate, onOpenClientPicker, onSignOut }) {
+const CONNECTION_TONE = {
+  loading: { color: 'gray', label: 'Connecting…' },
+  connected: { color: 'green', label: 'API Connected' },
+  error: { color: 'red', label: 'Connection Error' },
+};
+
+export default function Sidebar({ currentUser, currentView, onNavigate, onOpenClientPicker, onSignOut, connectionStatus }) {
   const userRole = currentUser?.role ?? null;
   const visibleNavItems = NAV_ITEMS.filter((item) => canViewNavItem(item, userRole));
+  const connectionTone = CONNECTION_TONE[connectionStatus] ?? CONNECTION_TONE.loading;
 
   return (
     <Stack h="100%" justify="space-between" gap={0} p="sm">
@@ -60,7 +67,7 @@ export default function Sidebar({ currentUser, currentView, onNavigate, onOpenCl
           fz="xs"
           c="dimmed"
           px="xs"
-          mb="sm"
+          mb={6}
           style={{
             border: '1px solid var(--mantine-color-default-border)',
             borderRadius: 999,
@@ -70,6 +77,17 @@ export default function Sidebar({ currentUser, currentView, onNavigate, onOpenCl
         >
           {resolveUserLabel(currentUser, userRole)}
         </Text>
+
+        <Box px="xs" mb="sm">
+          <Badge
+            color={connectionTone.color}
+            variant="light"
+            radius="xl"
+            size="md"
+          >
+            {connectionTone.label}
+          </Badge>
+        </Box>
 
         <Stack gap={2} component="nav" aria-label="Primary">
           {visibleNavItems.map((item) =>

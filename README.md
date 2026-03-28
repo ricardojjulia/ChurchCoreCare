@@ -4,8 +4,123 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## Version
 
-- Current release: `2.1.11`
-- Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI + revamped ops/monitoring + explicit health probes + OTEL health export + full Scheduling module with Waitlist, Reminders & Calendar DB support + waitlist-to-appointment promotion + audit UUID hardening + deep DB engine monitoring dashboard + full Audit Intelligence UI redesign + structured PHI-safe API logging + live dashboard appointment and audit metrics + full Reporting tab UI redesign + repaired Swagger UI proxy/docs delivery + redesigned About experience + static file server query-string fix + operations header/session card refresh)
+- Current release: `2.1.16`
+- Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI + revamped ops/monitoring + explicit health probes + OTEL health export + full Scheduling module with Waitlist, Reminders & Calendar DB support + waitlist-to-appointment promotion + audit UUID hardening + deep DB engine monitoring dashboard + full Audit Intelligence UI redesign + structured PHI-safe API logging + live dashboard appointment and audit metrics + full Reporting tab UI redesign + repaired Swagger UI proxy/docs delivery + redesigned About experience + static file server query-string fix + operations header/session card refresh + versioned web asset delivery + UI enhancements across main shell, monitoring, and operations surfaces)
+
+## v2.1.16 — UI enhancements (March 2026)
+
+### v2.1.16 Overview
+
+Bundles the latest user-facing interface refinements into one release line. This set of changes reshapes the main shell, monitoring page, and Operations Studio so they feel like one product instead of a mix of old admin screens and newer branded surfaces. The work also improves delivery reliability for frontend assets so visual changes reach the browser more predictably.
+
+### v2.1.16 Changes
+
+#### Main application shell
+
+- Renamed the main workspace header to `Practice Operations Center`
+- Added a lightweight animated counseling scene to the header
+- Moved session identity out of the header and into the dashboard metric band as `Current Session`
+- Moved live API connection status out of the header and into the sidebar, directly below the signed-in user pill
+- Kept the header focused on navigation, workspace context, and language controls
+
+#### Monitoring and operations surfaces
+
+- Reworked `/monitor.html` to the same light indigo/blue brand system as the main app
+- Reworked `/operations.html` to the same light indigo/blue brand system as the main app
+- Updated top bars, cards, summary panels, forms, tables, audit/reporting blocks, and supporting visual treatments so these standalone pages now feel like part of the same product family
+
+#### Delivery and reliability
+
+- Switched the web build back to versioned hashed asset filenames so browser refreshes pick up the latest JS/CSS more reliably
+- Regenerated the production web bundle and current hashed asset references in `public/index.html`
+
+### v2.1.16 Validation
+
+- `pnpm --filter @faith/web build`
+- Verified `/monitor.html` uses the aligned branded palette
+- Verified `/operations.html` uses the aligned branded palette
+- Verified the main app bundle now points at the current hashed asset URL from `public/index.html`
+
+## v2.1.15 — Sidebar Connection Status Placement (March 2026)
+
+### v2.1.15 Overview
+
+Refines the main application shell by moving the live API connection state out of the top header and into the sidebar identity area. The `API Connected` badge is status information, not primary header content, so it now sits directly under the signed-in user bubble where session and environment state are easier to scan together.
+
+### v2.1.15 Changes
+
+#### Main app shell (`apps/web/src/components/TopBar.jsx`, `apps/web/src/components/Sidebar.jsx`, `apps/web/src/App.jsx`)
+
+- Removed the `API Connected` / connection-state badge from the top bar
+- Added the live connection-state badge directly below the signed-in user pill in the sidebar
+- Kept the same green/gray/red state mapping for connected, loading, and error conditions
+- Left the header focused on navigation, title, and language selection instead of runtime status
+
+### v2.1.15 Validation
+
+- `pnpm --filter @faith/web build`
+- Verified the generated app bundle includes the sidebar-based connection status and no longer renders the status badge in the top bar
+
+## v2.1.14 — Operations Page Brand Alignment (March 2026)
+
+### v2.1.14 Overview
+
+Brings the standalone Operations Studio page onto the same visual system as the main application shell, About page, and monitoring page. The workflows and content on `operations.html` were already strong, but the page still used an older darker utility-bar and neutral admin-panel palette that felt disconnected from the brighter indigo-forward product identity. This update keeps the structure and behavior intact while re-skinning the page into the shared workspace look.
+
+### v2.1.14 Changes
+
+#### Operations page styling (`apps/web/public/operations.html`)
+
+- Replaced the older neutral/utility palette with the same light indigo-blue product palette used by the main app
+- Updated the Operations Studio top bar to the brighter branded treatment with softer borders, glass-like surfaces, and the same brand mark style used on other refreshed pages
+- Retuned cards, tabs, form controls, audit/reporting panels, stat tiles, and policy blocks so they read clearly on the lighter shared background
+- Added layered page gradients, brighter panel surfaces, softer indigo borders, and lighter shadows so the page feels like part of the same product family
+- Left the page content, workflows, telemetry hooks, and JavaScript behavior unchanged
+
+### v2.1.14 Validation
+
+- Verified `/operations.html` is served with the updated light indigo theme styles
+- Confirmed the existing Operations Studio sections and controls remain in place after the styling refresh
+
+## v2.1.13 — Monitoring Page Brand Alignment (March 2026)
+
+### v2.1.13 Overview
+
+Brings the monitoring page into the same visual language as the main application shell. The monitoring UI was functionally rich but still used an older dark dashboard treatment that felt visually disconnected from the lighter indigo-forward experience used in the main app and the refreshed About page. This update keeps the monitoring content intact while reworking the page into the shared product palette.
+
+### v2.1.13 Changes
+
+#### Monitoring page styling (`apps/web/public/monitor.html`)
+
+- Replaced the old dark monitoring palette with the same light indigo/blue brand family used by the main app
+- Added layered page gradients, brighter glass-like cards, softer indigo borders, and lighter surfaces so the monitor view feels part of the same workspace
+- Updated the monitor top bar to use the same brighter branded treatment rather than the older dark utility bar
+- Retuned KPI cards, summary pills, issue rows, health checks, database tiles, and form inputs so they remain readable on the lighter background
+- Corrected the donut-chart center text color for the new light theme so the percentage label remains legible
+
+### v2.1.13 Validation
+
+- Verified `/monitor.html` is served with the updated light theme styles
+- Confirmed the page still renders the existing monitoring structure and telemetry sections after the styling refresh
+
+## v2.1.12 — Versioned Web Asset Delivery (March 2026)
+
+### v2.1.12 Overview
+
+Fixes a deployment/update visibility problem in the web app. The React build had been forcing stable output names like `/assets/app.js` and `/assets/index.css`. Even with conservative cache headers, that makes UI refreshes less reliable because the browser can continue using an older asset longer than expected. This patch switches the build back to versioned asset filenames so UI changes like the new `Practice Operations Center` header land predictably after a normal reload.
+
+### v2.1.12 Changes
+
+#### Web build output (`apps/web/vite.config.js`)
+
+- Replaced fixed Rollup output names with hashed filenames for entry chunks, secondary chunks, and CSS/assets
+- `index.html` now points to versioned asset URLs generated by Vite instead of the fixed `/assets/app.js` and `/assets/index.css` paths
+- This makes normal browser reloads pick up new UI bundles more reliably after deploys and local rebuilds
+
+### v2.1.12 Validation
+
+- `pnpm --filter @faith/web build`
+- Verified generated `public/index.html` references hashed asset filenames instead of fixed asset paths
 
 ## v2.1.11 — Operations Header And Session Card Refresh (March 2026)
 

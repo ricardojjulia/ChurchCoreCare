@@ -318,7 +318,6 @@ export default function App() {
         <TopBar
           opened={navOpened}
           onMenuToggle={toggleNav}
-          connectionStatus={connectionStatus}
         />
       </AppShell.Header>
 
@@ -326,6 +325,7 @@ export default function App() {
         <Sidebar
           currentUser={currentUser}
           currentView={currentView}
+          connectionStatus={connectionStatus}
           onNavigate={handleNavigate}
           onOpenClientPicker={() => { setClientPickerOpen(true); closeNav(); }}
           onSignOut={handleSignOut}

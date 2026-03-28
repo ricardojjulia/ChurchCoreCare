@@ -1,5 +1,108 @@
 # Change Log
 
+## v2.1.16 — UI enhancements
+
+**Date:** March 28, 2026
+**Type:** Minor Release
+
+### Overview
+
+Consolidates the current UI refresh work into a single top-level release entry. The main application shell, monitoring page, and Operations Studio have all been brought into a more cohesive branded experience, and the web bundle delivery path now uses versioned asset filenames so those UI changes reach the browser more reliably.
+
+### Web (v2.1.16)
+
+- Renamed the main header to `Practice Operations Center` and added the animated counseling scene
+- Moved session identity into the dashboard metric band and moved API connection status into the sidebar identity area
+- Reworked `/monitor.html` into the shared light indigo/blue product palette
+- Reworked `/operations.html` into the shared light indigo/blue product palette
+- Switched the web build back to hashed asset filenames and regenerated the current `public/index.html` bundle references
+
+### Breaking changes
+
+None.
+
+## v2.1.15 — Sidebar Connection Status Placement
+
+**Date:** March 28, 2026
+**Type:** Patch
+
+### Overview
+
+Moves the live API connection badge out of the main header and into the sidebar identity section. The header is now reserved for navigation, title, and language controls, while the connection state sits directly below the signed-in user bubble where session context already lives.
+
+### Web (v2.1.15)
+
+- Removed the connection-state badge from `apps/web/src/components/TopBar.jsx`
+- Added the connection-state badge to `apps/web/src/components/Sidebar.jsx` directly under the user identity pill
+- Continued using the same state mapping for `Connecting…`, `API Connected`, and `Connection Error`
+- Wired the shared `connectionStatus` app state into the sidebar instead of the top bar
+
+### Breaking changes
+
+None.
+
+## v2.1.14 — Operations Page Brand Alignment
+
+**Date:** March 28, 2026
+**Type:** Minor Release
+
+### Overview
+
+Refreshes the standalone Operations Studio page so it matches the main app’s lighter indigo-forward visual system instead of reading like an older admin utility surface. The functionality on `operations.html` was already substantial, but its darker top bar, flatter white cards, and more generic neutral styling made it feel visually behind the rest of the product.
+
+### Web (v2.1.14)
+
+- Reworked `apps/web/public/operations.html` to use the same light indigo/blue palette as the main app and monitoring page
+- Updated the Operations Studio top bar, brand mark, buttons, and status indicators to the shared branded treatment
+- Retuned tab navigation, cards, forms, audit panels, reporting blocks, and platform/data sections for the lighter workspace background
+- Added brighter gradients, softer indigo borders, and lighter shadows so the page feels consistent with the rest of the refreshed product
+- Kept the page structure, controls, and existing JavaScript behavior unchanged
+
+### Breaking changes
+
+None.
+
+## v2.1.13 — Monitoring Page Brand Alignment
+
+**Date:** March 28, 2026
+**Type:** Minor Release
+
+### Overview
+
+Refreshes the monitoring page so it visually matches the main application instead of reading like a separate dark-theme utility. The existing monitor page already exposed the right telemetry and health data, but its older dark palette, harsher borders, and heavier surfaces made it feel detached from the lighter indigo-forward product experience used elsewhere in the app.
+
+### Web (v2.1.13)
+
+- Reworked `apps/web/public/monitor.html` from the older dark monitor palette to the shared light indigo/blue brand palette
+- Added layered gradient page backgrounds and brighter glass-like cards to match the main workspace and About page direction
+- Updated the monitor top bar styling, logo mark, buttons, and status chip treatment to fit the main app color system
+- Retuned KPI cards, summary panels, issue lists, health rows, DB metric tiles, and OTEL settings inputs for the lighter theme
+- Corrected the donut chart center text color so the percentage label remains readable after the palette shift
+
+### Breaking changes
+
+None.
+
+## v2.1.12 — Versioned Web Asset Delivery
+
+**Date:** March 28, 2026
+**Type:** Patch
+
+### Overview
+
+Fixes the web bundle delivery path so browser refreshes reliably pick up the latest UI. The build had been emitting fixed filenames like `assets/app.js`, which made it possible for an older dashboard bundle to keep showing after a UI change even though the source and server were already updated. The build now emits hashed asset filenames so each rebuild gets a new URL and the browser is forced onto the current bundle.
+
+### Web (v2.1.12)
+
+- Updated `apps/web/vite.config.js` so Rollup emits hashed entry, chunk, and asset filenames
+- Stopped pinning the React bundle to `assets/app.js`
+- Stopped pinning CSS/assets to fixed non-versioned names
+- `public/index.html` now points to build-specific asset URLs after each web build
+
+### Breaking changes
+
+None.
+
 ## v2.1.11 — Operations Header And Session Card Refresh
 
 **Date:** March 28, 2026

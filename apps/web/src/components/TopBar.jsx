@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Burger, Group, Select, Badge, Text, Box } from '@mantine/core';
+import { Burger, Group, Select, Text, Box } from '@mantine/core';
 
 const LANGUAGES = [
   { value: 'en', label: 'English' },
@@ -8,15 +8,8 @@ const LANGUAGES = [
   { value: 'pt', label: 'Português' },
 ];
 
-const STATUS_CONFIG = {
-  loading:   { color: 'gray',  label: 'Connecting…' },
-  connected: { color: 'green', label: 'API Connected' },
-  error:     { color: 'red',   label: 'Connection Error' },
-};
-
-export default function TopBar({ opened, onMenuToggle, connectionStatus }) {
+export default function TopBar({ opened, onMenuToggle }) {
   const [language, setLanguage] = useState('en');
-  const status = STATUS_CONFIG[connectionStatus] ?? STATUS_CONFIG.loading;
 
   return (
     <Group className="workspace-topbar" h="100%" px="md" justify="space-between" wrap="nowrap">
@@ -47,7 +40,6 @@ export default function TopBar({ opened, onMenuToggle, connectionStatus }) {
           w={120}
           aria-label="Language"
         />
-        <Badge color={status.color} variant="light" size="lg" radius="xl">{status.label}</Badge>
       </Group>
     </Group>
   );
