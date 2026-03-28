@@ -76,6 +76,9 @@ import {
   listAppointmentsByDateRange,
   listReminders, createReminder, updateReminder,
   listWaitlist, createWaitlistEntry, updateWaitlistEntry,
+  listAvailabilityOverrides, createAvailabilityOverride, updateAvailabilityOverride, deleteAvailabilityOverride,
+  listSeries, createSeries, updateSeries,
+  getUtilizationSummary,
 } from './db/queries/appointments.js';
 import {
   listServiceCodes, getServiceCodeById, createServiceCode, updateServiceCode,
@@ -1059,6 +1062,21 @@ const server = http.createServer(async (request, response) => {
 
     if (requestUrl.pathname === '/v1/waitlist') {
       await handleWaitlist(request, response, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/scheduling/availability-overrides') {
+      await handleAvailabilityOverrides(request, response, requestUrl, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/scheduling/series') {
+      await handleAppointmentSeries(request, response, requestUrl, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/scheduling/utilization') {
+      await handleUtilization(request, response, requestUrl, session);
       return;
     }
 
@@ -3896,6 +3914,204 @@ async function handleWaitlist(request, response, session) {
       clientId,
       ...waitlistMetadataByClientId[clientId],
     },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4 — ScheduleOps handlers
+// ---------------------------------------------------------------------------
+
+async function handleAvailabilityOverrides(request, response, requestUrl, session) {
+  const tenantId = callerTenant(request, session);
+
+  if (request.method === 'GET') {
+    if (process.env.DB_NAME) {
+      const staffId = sanitizeStr(requestUrl.searchParams.get('staffId') ?? '', 50) || undefined;
+      const from   = sanitizeStr(requestUrl.searchParams.get('from')    ?? '', 12) || undefined;
+      const to     = sanitizeStr(requestUrl.searchParams.get('to')      ?? '', 12) || undefined;
+      const items  = await listAvailabilityOverrides(tenantId, staffId, from, to);
+      emitAudit(request, 'availability_override.read', 'availability_override', 'collection', session);
+      writeJson(response, 200, { items });
+      return;
+    }
+    writeJson(response, 200, { items: [] });
+    return;
+  }
+
+  if (request.method === 'POST') {
+    const payload = await readJsonBody(request);
+    if (!payload.staffId || !payload.overrideDate) {
+      writeJson(response, 400, { error: 'staffId and overrideDate are required' });
+      return;
+    }
+    if (process.env.DB_NAME) {
+      const item = await createAvailabilityOverride({
+        id: crypto.randomUUID(),
+        tenantId,
+        staffId:      sanitizeStr(payload.staffId, 50),
+        overrideDate: sanitizeStr(payload.overrideDate, 12),
+        overrideType: payload.overrideType === 'open' ? 'open' : 'block',
+        reason:       sanitizeStr(payload.reason ?? '', 255) || null,
+        startTime:    sanitizeStr(payload.startTime ?? '', 8) || null,
+        endTime:      sanitizeStr(payload.endTime ?? '', 8)   || null,
+        allDay:       payload.allDay !== false,
+      });
+      telemetry.recordMutation('availability_override.create');
+      emitAudit(request, 'availability_override.create', 'availability_override', item.id, session);
+      writeJson(response, 201, { item });
+      return;
+    }
+    writeJson(response, 201, { item: { id: crypto.randomUUID(), tenantId, ...payload } });
+    return;
+  }
+
+  if (request.method === 'PATCH') {
+    const payload = await readJsonBody(request);
+    const id = sanitizeStr(payload.id ?? '', 36);
+    if (!id) { writeJson(response, 400, { error: 'id is required' }); return; }
+    if (process.env.DB_NAME) {
+      const fields = {};
+      if (payload.overrideDate !== undefined) fields.overrideDate = sanitizeStr(payload.overrideDate, 12);
+      if (payload.overrideType !== undefined) fields.overrideType = payload.overrideType === 'open' ? 'open' : 'block';
+      if (payload.reason      !== undefined) fields.reason        = sanitizeStr(payload.reason, 255) || null;
+      if (payload.startTime   !== undefined) fields.startTime     = sanitizeStr(payload.startTime, 8) || null;
+      if (payload.endTime     !== undefined) fields.endTime       = sanitizeStr(payload.endTime, 8)   || null;
+      if (payload.allDay      !== undefined) fields.allDay        = !!payload.allDay;
+      const item = await updateAvailabilityOverride(id, tenantId, fields);
+      if (!item) { writeJson(response, 404, { error: 'Override not found' }); return; }
+      telemetry.recordMutation('availability_override.update');
+      emitAudit(request, 'availability_override.update', 'availability_override', id, session);
+      writeJson(response, 200, { item });
+      return;
+    }
+    writeJson(response, 200, { item: { id, tenantId, ...payload } });
+    return;
+  }
+
+  if (request.method === 'DELETE') {
+    const id = sanitizeStr(requestUrl.searchParams.get('id') ?? '', 36);
+    if (!id) { writeJson(response, 400, { error: 'id query param is required' }); return; }
+    if (process.env.DB_NAME) {
+      const result = await deleteAvailabilityOverride(id, tenantId);
+      telemetry.recordMutation('availability_override.delete');
+      emitAudit(request, 'availability_override.delete', 'availability_override', id, session);
+      writeJson(response, 200, result);
+      return;
+    }
+    writeJson(response, 200, { deleted: true });
+    return;
+  }
+
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+async function handleAppointmentSeries(request, response, requestUrl, session) {
+  const tenantId = callerTenant(request, session);
+
+  if (request.method === 'GET') {
+    if (process.env.DB_NAME) {
+      const filters = {};
+      const counselorId = requestUrl.searchParams.get('counselorId');
+      const clientId    = requestUrl.searchParams.get('clientId');
+      const status      = requestUrl.searchParams.get('status');
+      if (counselorId) filters.counselorId = sanitizeStr(counselorId, 50);
+      if (clientId)    filters.clientId    = sanitizeStr(clientId, 50);
+      if (status)      filters.status      = sanitizeStr(status, 20);
+      const items = await listSeries(tenantId, filters);
+      emitAudit(request, 'series.read', 'appointment_series', 'collection', session);
+      writeJson(response, 200, { items });
+      return;
+    }
+    writeJson(response, 200, { items: [] });
+    return;
+  }
+
+  if (request.method === 'POST') {
+    const payload = await readJsonBody(request);
+    if (!payload.counselorId || !payload.clientId || !payload.recurrenceRule || !payload.startDate) {
+      writeJson(response, 400, { error: 'counselorId, clientId, recurrenceRule, and startDate are required' });
+      return;
+    }
+    if (process.env.DB_NAME) {
+      const item = await createSeries({
+        id: crypto.randomUUID(),
+        tenantId,
+        counselorId:     sanitizeStr(payload.counselorId, 50),
+        clientId:        sanitizeStr(payload.clientId, 50),
+        clientName:      sanitizeStr(payload.clientName ?? '', 160)    || null,
+        counselorName:   sanitizeStr(payload.counselorName ?? '', 160) || null,
+        appointmentType: sanitizeStr(payload.appointmentType ?? '', 60) || null,
+        recurrenceRule:  sanitizeStr(payload.recurrenceRule, 200),
+        startDate:       sanitizeStr(payload.startDate, 12),
+        endDate:         sanitizeStr(payload.endDate ?? '', 12) || null,
+        durationMinutes: Number.isFinite(Number(payload.durationMinutes)) ? Number(payload.durationMinutes) : 50,
+        locationId:      sanitizeStr(payload.locationId ?? '', 50) || null,
+        remoteSession:   !!payload.remoteSession,
+      });
+      telemetry.recordMutation('series.create');
+      emitAudit(request, 'series.create', 'appointment_series', item.id, session);
+      writeJson(response, 201, { item });
+      return;
+    }
+    writeJson(response, 201, { item: { id: crypto.randomUUID(), tenantId, status: 'active', ...payload } });
+    return;
+  }
+
+  if (request.method === 'PATCH') {
+    const payload = await readJsonBody(request);
+    const id = sanitizeStr(payload.id ?? '', 36);
+    if (!id) { writeJson(response, 400, { error: 'id is required' }); return; }
+    if (process.env.DB_NAME) {
+      const fields = {};
+      if (payload.status        !== undefined) fields.status        = sanitizeStr(payload.status, 20);
+      if (payload.endDate       !== undefined) fields.endDate       = sanitizeStr(payload.endDate, 12) || null;
+      if (payload.recurrenceRule !== undefined) fields.recurrenceRule = sanitizeStr(payload.recurrenceRule, 200);
+      const item = await updateSeries(id, tenantId, fields);
+      if (!item) { writeJson(response, 404, { error: 'Series not found' }); return; }
+      telemetry.recordMutation('series.update');
+      emitAudit(request, 'series.update', 'appointment_series', id, session);
+      writeJson(response, 200, { item });
+      return;
+    }
+    writeJson(response, 200, { item: { id, tenantId, ...payload } });
+    return;
+  }
+
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+const UTILIZATION_ROLES = new Set(['practice_owner', 'practice_admin', 'scheduler_biller']);
+
+async function handleUtilization(request, response, requestUrl, session) {
+  if (request.method !== 'GET') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const role = callerRole(request, session);
+  if (!UTILIZATION_ROLES.has(role)) {
+    writeJson(response, 403, { error: 'Forbidden' });
+    return;
+  }
+
+  const tenantId    = callerTenant(request, session);
+  const from        = sanitizeStr(requestUrl.searchParams.get('from')        ?? '', 12) || undefined;
+  const to          = sanitizeStr(requestUrl.searchParams.get('to')          ?? '', 12) || undefined;
+  const counselorId = sanitizeStr(requestUrl.searchParams.get('counselorId') ?? '', 50) || undefined;
+
+  if (process.env.DB_NAME) {
+    const summary = await getUtilizationSummary(tenantId, from, to, counselorId);
+    emitAudit(request, 'utilization.read', 'appointment', 'summary', session);
+    writeJson(response, 200, summary);
+    return;
+  }
+
+  writeJson(response, 200, {
+    period: { from: from ?? null, to: to ?? null },
+    totalAppointments: 0,
+    byStatus: {},
+    byCounselor: [],
+    byLocation: [],
   });
 }
 

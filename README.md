@@ -4,8 +4,35 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## Version
 
-- Current release: `2.0.0`
-- Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI + revamped ops/monitoring + explicit health probes + OTEL health export + full Scheduling module with Waitlist, Reminders & Calendar DB support)
+- Current release: `2.1.0`
+- Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI + revamped ops/monitoring + explicit health probes + OTEL health export + full Scheduling module with Waitlist, Reminders & Calendar DB support + waitlist-to-appointment promotion + audit UUID hardening)
+
+## v2.1.0 — ScheduleOps: Audit Hardening & Waitlist Promotion (March 2026)
+
+### v2.1.0 Overview
+
+Patches two latent defects discovered during tenant-model validation smoke runs, and delivers the first ScheduleOps Phase 4 quick-win: manual waitlist-to-appointment promotion from the Scheduling page.
+
+### v2.1.0 Changes
+
+#### Domain — Audit UUID Auto-Generation (`packages/domain/src/index.js`)
+
+`createAuditEvent` now auto-generates a `crypto.randomUUID()` `id` before spreading caller-provided fields. Previously, callers never supplied an `id`, causing `AUDIT_FAIL: Column 'id' cannot be null` on every audit write in DB mode. All downstream callers (`createAppointment`, `updateAppointment`, `deleteAppointment`, and any module that emits audit events) benefit automatically — no call-site changes required.
+
+#### Scheduling — Waitlist Promote-to-Appointment (`apps/web/src/components/SchedulingPage.jsx`)
+
+The **Waitlist** tab now exposes a **Schedule** button on each row. Clicking any waitlist entry pre-seeds the appointment composer with that client's id and immediately opens the composer on the Appointments tab, ready for a counselor and time slot. This closes the manual waitlist promotion gap — formerly, staff had to open the composer separately and re-enter the client.
+
+- `WaitlistPanel` accepts a new `onPromote(clientId)` prop
+- `SchedulingPage` manages a `composerClientId` state that overrides the default `initialClientId` for the duration of a promoted session
+- Selecting **New Appointment** from the toolbar resets `composerClientId` back to the default, preserving existing entry-point behavior
+
+### v2.1.0 Validation
+
+- Audit events written in DB mode no longer produce `Column 'id' cannot be null` errors
+- Clicking **Schedule** on any waitlist row opens the composer pre-seeded with the correct client
+- **New Appointment** toolbar button continues to function as before
+- All previously-passing smoke tests (`step11`, `step12`, `security-regression`) remain green
 
 ## Tenant-Model Update (March 2026)
 

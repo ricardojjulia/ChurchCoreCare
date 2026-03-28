@@ -35,6 +35,16 @@ import {
   patchWaitlistEntry,
   updateAppointmentRecord,
 } from '../lib/clientApi.js';
+import {
+  createAvailabilityOverride,
+  createSeries,
+  deleteAvailabilityOverride,
+  fetchAvailabilityOverrides,
+  fetchSeries,
+  fetchUtilization,
+  updateAvailabilityOverride,
+  updateSeries,
+} from '../lib/clientApi.js';
 
 const GLOBAL_SCHEDULING_ROLES = new Set([
   'platform_admin',
@@ -636,6 +646,378 @@ function WaitlistPanel({ onPromote }) {
   );
 }
 
+function AvailabilityOverridesPanel({ staff }) {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [creatorOpen, setCreatorOpen] = useState(false);
+  const form = useForm({
+    initialValues: {
+      staffId: '',
+      overrideDate: '',
+      overrideType: 'block',
+      reason: '',
+      startTime: '',
+      endTime: '',
+      allDay: true,
+    },
+  });
+
+  const load = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const data = await fetchAvailabilityOverrides();
+      setItems(Array.isArray(data?.items) ? data.items : []);
+    } catch (err) {
+      setError(err.message || 'Unable to load overrides');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const handleCreate = async (values) => {
+    try {
+      await createAvailabilityOverride(values);
+      notifications.show({ title: 'Override created', message: 'Availability override saved.', color: 'green' });
+      setCreatorOpen(false);
+      form.reset();
+      await load();
+    } catch (err) {
+      notifications.show({ title: 'Create failed', message: err.message, color: 'red' });
+    }
+  };
+
+  const handleDelete = async (id) => {
+    try {
+      await deleteAvailabilityOverride(id);
+      notifications.show({ title: 'Override removed', message: 'Availability override deleted.', color: 'teal' });
+      await load();
+    } catch (err) {
+      notifications.show({ title: 'Delete failed', message: err.message, color: 'red' });
+    }
+  };
+
+  const staffOptions = staff.map((s) => ({
+    value: s.id,
+    label: [s.firstName, s.lastName].filter(Boolean).join(' ') || s.id,
+  }));
+
+  if (loading) return <Group justify="center" py="xl"><Loader size="sm" /></Group>;
+  if (error) return <Alert color="red" title="Unable to load overrides">{error}</Alert>;
+
+  return (
+    <Stack gap="md">
+      <Group justify="space-between">
+        <Text c="dimmed" fz="sm">Block or open specific dates for staff members (PTO, holidays, one-off availability).</Text>
+        <Group gap="xs">
+          <Button variant="default" size="xs" onClick={load}>Refresh</Button>
+          <Button size="xs" onClick={() => setCreatorOpen(true)}>Add Override</Button>
+        </Group>
+      </Group>
+
+      <Modal opened={creatorOpen} onClose={() => setCreatorOpen(false)} title="Add Availability Override" size="md">
+        <form onSubmit={form.onSubmit(handleCreate)}>
+          <Stack gap="sm">
+            <Select
+              label="Staff Member"
+              placeholder="Select staff"
+              data={staffOptions}
+              searchable
+              required
+              {...form.getInputProps('staffId')}
+            />
+            <TextInput label="Date" type="date" required {...form.getInputProps('overrideDate')} />
+            <Select
+              label="Type"
+              data={[{ value: 'block', label: 'Block (unavailable)' }, { value: 'open', label: 'Open (available)' }]}
+              {...form.getInputProps('overrideType')}
+            />
+            <TextInput label="Reason" placeholder="e.g. PTO, Holiday" {...form.getInputProps('reason')} />
+            <Checkbox label="All Day" {...form.getInputProps('allDay', { type: 'checkbox' })} />
+            {!form.values.allDay && (
+              <Group grow>
+                <TextInput label="Start Time" placeholder="09:00" {...form.getInputProps('startTime')} />
+                <TextInput label="End Time" placeholder="17:00" {...form.getInputProps('endTime')} />
+              </Group>
+            )}
+            <Group justify="flex-end" mt="sm">
+              <Button variant="default" onClick={() => setCreatorOpen(false)}>Cancel</Button>
+              <Button type="submit">Save</Button>
+            </Group>
+          </Stack>
+        </form>
+      </Modal>
+
+      {items.length === 0 ? (
+        <Paper withBorder radius="md" p="md">
+          <Text c="dimmed" fz="sm" ta="center">No overrides configured.</Text>
+        </Paper>
+      ) : (
+        <Paper withBorder radius="md">
+          <Table striped highlightOnHover>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Date</Table.Th>
+                <Table.Th>Type</Table.Th>
+                <Table.Th>Staff ID</Table.Th>
+                <Table.Th>Reason</Table.Th>
+                <Table.Th>All Day</Table.Th>
+                <Table.Th>Time Range</Table.Th>
+                <Table.Th />
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {items.map((item) => (
+                <Table.Tr key={item.id}>
+                  <Table.Td>{item.overrideDate}</Table.Td>
+                  <Table.Td><Badge color={item.overrideType === 'open' ? 'green' : 'red'}>{item.overrideType}</Badge></Table.Td>
+                  <Table.Td>{item.staffId}</Table.Td>
+                  <Table.Td>{item.reason || '—'}</Table.Td>
+                  <Table.Td>{item.allDay ? 'Yes' : 'No'}</Table.Td>
+                  <Table.Td>{item.allDay ? '—' : `${item.startTime || '?'} – ${item.endTime || '?'}`}</Table.Td>
+                  <Table.Td>
+                    <Button size="xs" color="red" variant="light" onClick={() => handleDelete(item.id)}>Remove</Button>
+                  </Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Paper>
+      )}
+    </Stack>
+  );
+}
+
+function SeriesPanel({ staff, clients }) {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [creatorOpen, setCreatorOpen] = useState(false);
+  const form = useForm({
+    initialValues: {
+      counselorId: '',
+      clientId: '',
+      recurrenceRule: 'FREQ=WEEKLY;BYDAY=MO',
+      startDate: '',
+      endDate: '',
+      durationMinutes: '50',
+      appointmentType: '',
+      remoteSession: false,
+    },
+  });
+
+  const load = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const data = await fetchSeries();
+      setItems(Array.isArray(data?.items) ? data.items : []);
+    } catch (err) {
+      setError(err.message || 'Unable to load series');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const handleCreate = async (values) => {
+    const counselor = staff.find((s) => s.id === values.counselorId);
+    const client = clients.find((c) => c.id === values.clientId);
+    try {
+      await createSeries({
+        ...values,
+        durationMinutes: Number(values.durationMinutes) || 50,
+        counselorName: counselor ? [counselor.firstName, counselor.lastName].filter(Boolean).join(' ') : '',
+        clientName: client ? [client.firstName, client.lastName].filter(Boolean).join(' ') : '',
+      });
+      notifications.show({ title: 'Series created', message: 'Recurring series saved.', color: 'green' });
+      setCreatorOpen(false);
+      form.reset();
+      await load();
+    } catch (err) {
+      notifications.show({ title: 'Create failed', message: err.message, color: 'red' });
+    }
+  };
+
+  const handleCancel = async (id) => {
+    try {
+      await updateSeries({ id, status: 'cancelled' });
+      notifications.show({ title: 'Series cancelled', message: 'Recurring series cancelled.', color: 'orange' });
+      await load();
+    } catch (err) {
+      notifications.show({ title: 'Cancel failed', message: err.message, color: 'red' });
+    }
+  };
+
+  const staffOptions = staff.map((s) => ({
+    value: s.id,
+    label: [s.firstName, s.lastName].filter(Boolean).join(' ') || s.id,
+  }));
+
+  const clientOptions = clients.map((c) => ({
+    value: c.id,
+    label: [c.firstName, c.lastName].filter(Boolean).join(' ') || c.id,
+  }));
+
+  const seriesStatusColor = (s) => ({ active: 'green', cancelled: 'gray', completed: 'blue' }[s] || 'gray');
+
+  if (loading) return <Group justify="center" py="xl"><Loader size="sm" /></Group>;
+  if (error) return <Alert color="red" title="Unable to load series">{error}</Alert>;
+
+  return (
+    <Stack gap="md">
+      <Group justify="space-between">
+        <Text c="dimmed" fz="sm">Manage recurring appointment series for ongoing client relationships.</Text>
+        <Group gap="xs">
+          <Button variant="default" size="xs" onClick={load}>Refresh</Button>
+          <Button size="xs" onClick={() => setCreatorOpen(true)}>New Series</Button>
+        </Group>
+      </Group>
+
+      <Modal opened={creatorOpen} onClose={() => setCreatorOpen(false)} title="New Recurring Series" size="md">
+        <form onSubmit={form.onSubmit(handleCreate)}>
+          <Stack gap="sm">
+            <Select label="Counselor" placeholder="Select counselor" data={staffOptions} searchable required {...form.getInputProps('counselorId')} />
+            <Select label="Client" placeholder="Select client" data={clientOptions} searchable required {...form.getInputProps('clientId')} />
+            <TextInput label="Recurrence Rule" placeholder="FREQ=WEEKLY;BYDAY=MO" required {...form.getInputProps('recurrenceRule')} />
+            <Group grow>
+              <TextInput label="Start Date" type="date" required {...form.getInputProps('startDate')} />
+              <TextInput label="End Date" type="date" {...form.getInputProps('endDate')} />
+            </Group>
+            <Group grow>
+              <TextInput label="Duration (min)" type="number" placeholder="50" {...form.getInputProps('durationMinutes')} />
+              <TextInput label="Appointment Type" placeholder="Individual therapy" {...form.getInputProps('appointmentType')} />
+            </Group>
+            <Checkbox label="Remote session" {...form.getInputProps('remoteSession', { type: 'checkbox' })} />
+            <Group justify="flex-end" mt="sm">
+              <Button variant="default" onClick={() => setCreatorOpen(false)}>Cancel</Button>
+              <Button type="submit">Create</Button>
+            </Group>
+          </Stack>
+        </form>
+      </Modal>
+
+      {items.length === 0 ? (
+        <Paper withBorder radius="md" p="md">
+          <Text c="dimmed" fz="sm" ta="center">No recurring series configured.</Text>
+        </Paper>
+      ) : (
+        <Paper withBorder radius="md">
+          <Table striped highlightOnHover>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Client</Table.Th>
+                <Table.Th>Counselor</Table.Th>
+                <Table.Th>Rule</Table.Th>
+                <Table.Th>Start</Table.Th>
+                <Table.Th>End</Table.Th>
+                <Table.Th>Status</Table.Th>
+                <Table.Th />
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {items.map((item) => (
+                <Table.Tr key={item.id}>
+                  <Table.Td>{item.clientName || item.clientId}</Table.Td>
+                  <Table.Td>{item.counselorName || item.counselorId}</Table.Td>
+                  <Table.Td><Text fz="xs" ff="monospace">{item.recurrenceRule}</Text></Table.Td>
+                  <Table.Td>{item.startDate}</Table.Td>
+                  <Table.Td>{item.endDate || '—'}</Table.Td>
+                  <Table.Td><Badge color={seriesStatusColor(item.status)}>{item.status}</Badge></Table.Td>
+                  <Table.Td>
+                    {item.status === 'active' && (
+                      <Button size="xs" color="orange" variant="light" onClick={() => handleCancel(item.id)}>Cancel</Button>
+                    )}
+                  </Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Paper>
+      )}
+    </Stack>
+  );
+}
+
+function UtilizationPanel() {
+  const [summary, setSummary] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+
+  const load = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const data = await fetchUtilization({ from: from || undefined, to: to || undefined });
+      setSummary(data);
+    } catch (err) {
+      setError(err.message || 'Unable to load utilization');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  if (loading) return <Group justify="center" py="xl"><Loader size="sm" /></Group>;
+  if (error) return <Alert color="red" title="Unable to load utilization">{error}</Alert>;
+
+  return (
+    <Stack gap="md">
+      <Group align="flex-end" gap="sm">
+        <TextInput label="From" type="date" value={from} onChange={(e) => setFrom(e.currentTarget.value)} />
+        <TextInput label="To" type="date" value={to} onChange={(e) => setTo(e.currentTarget.value)} />
+        <Button onClick={load}>Apply</Button>
+      </Group>
+
+      {summary && (
+        <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }}>
+          <Card withBorder radius="md" p="md">
+            <Text c="dimmed" fz="xs" tt="uppercase" fw={500}>Total</Text>
+            <Text fz="xl" fw={700}>{summary.totalAppointments}</Text>
+          </Card>
+          {Object.entries(summary.byStatus ?? {}).map(([status, count]) => (
+            <Card key={status} withBorder radius="md" p="md">
+              <Text c="dimmed" fz="xs" tt="uppercase" fw={500}>{status}</Text>
+              <Text fz="xl" fw={700}>{count}</Text>
+            </Card>
+          ))}
+        </SimpleGrid>
+      )}
+
+      {summary?.byCounselor?.length > 0 && (
+        <Paper withBorder radius="md">
+          <Title order={4} fz="sm" p="sm">By Counselor</Title>
+          <Table striped>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Counselor ID</Table.Th>
+                <Table.Th>Total</Table.Th>
+                <Table.Th>Completed</Table.Th>
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {summary.byCounselor.map((row) => (
+                <Table.Tr key={row.counselorId}>
+                  <Table.Td>{row.counselorId}</Table.Td>
+                  <Table.Td>{row.count}</Table.Td>
+                  <Table.Td>{row.completedCount}</Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Paper>
+      )}
+    </Stack>
+  );
+}
+
 function RemindersPanel({ appointments }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -987,6 +1369,11 @@ export default function SchedulingPage({
           <Tabs.Tab value="appointments">Appointments</Tabs.Tab>
           <Tabs.Tab value="waitlist">Waitlist</Tabs.Tab>
           <Tabs.Tab value="reminders">Reminders</Tabs.Tab>
+                  <Tabs.Tab value="availability">Availability</Tabs.Tab>
+                  <Tabs.Tab value="recurring">Recurring</Tabs.Tab>
+                  {['practice_owner', 'practice_admin', 'scheduler_biller'].includes(currentUser?.role) && (
+                    <Tabs.Tab value="utilization">Utilization</Tabs.Tab>
+                  )}
         </Tabs.List>
 
         <Tabs.Panel value="appointments" pt="md">
@@ -1130,6 +1517,21 @@ export default function SchedulingPage({
           <RemindersPanel appointments={appointments} />
         </Tabs.Panel>
       </Tabs>
+
+            <Tabs.Panel value="availability" pt="md">
+              <AvailabilityOverridesPanel staff={staff} />
+            </Tabs.Panel>
+
+            <Tabs.Panel value="recurring" pt="md">
+              <SeriesPanel staff={staff} clients={clients} />
+            </Tabs.Panel>
+
+            {['practice_owner', 'practice_admin', 'scheduler_biller'].includes(currentUser?.role) && (
+              <Tabs.Panel value="utilization" pt="md">
+                <UtilizationPanel />
+              </Tabs.Panel>
+            )}
+          </Tabs>
     </Stack>
   );
 }

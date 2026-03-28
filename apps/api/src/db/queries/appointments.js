@@ -93,6 +93,45 @@ function rowToAvailabilityTemplate(row) {
   };
 }
 
+function rowToOverride(row) {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    staffId: row.staff_id,
+    overrideDate: row.override_date instanceof Date
+      ? row.override_date.toISOString().slice(0, 10)
+      : row.override_date,
+    overrideType: row.override_type,
+    reason: row.reason ?? null,
+    startTime: row.start_time ?? null,
+    endTime: row.end_time ?? null,
+    allDay: Boolean(row.all_day),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function rowToSeries(row) {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    counselorId: row.counselor_id,
+    clientId: row.client_id,
+    clientName: row.client_name_enc ? decrypt(row.client_name_enc) : null,
+    counselorName: row.counselor_name_enc ? decrypt(row.counselor_name_enc) : null,
+    appointmentType: row.appointment_type,
+    recurrenceRule: row.recurrence_rule,
+    startDate: row.start_date instanceof Date ? row.start_date.toISOString().slice(0, 10) : row.start_date,
+    endDate: row.end_date instanceof Date ? row.end_date.toISOString().slice(0, 10) : (row.end_date ?? null),
+    durationMinutes: Number(row.duration_minutes) || 50,
+    locationId: row.location_id ?? null,
+    remoteSession: Boolean(row.remote_session),
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Appointments
 // ---------------------------------------------------------------------------
@@ -388,6 +427,219 @@ export async function deleteAvailabilityTemplate(staffId, tenantId) {
     [staffId, tenantId]
   );
 }
+
+// ---------------------------------------------------------------------------
+// Availability Overrides
+// ---------------------------------------------------------------------------
+
+export async function listAvailabilityOverrides(tenantId, staffId, from, to) {
+  const conditions = ['tenant_id = ?'];
+  const values = [tenantId];
+  if (staffId) { conditions.push('staff_id = ?'); values.push(staffId); }
+  if (from) { conditions.push('override_date >= ?'); values.push(from); }
+  if (to) { conditions.push('override_date <= ?'); values.push(to); }
+  const [rows] = await pool.query(
+    `SELECT * FROM availability_overrides WHERE ${conditions.join(' AND ')} ORDER BY override_date ASC`,
+    values
+  );
+  return rows.map(rowToOverride);
+}
+
+export async function createAvailabilityOverride({
+  id,
+  tenantId,
+  staffId,
+  overrideDate,
+  overrideType,
+  reason,
+  startTime,
+  endTime,
+  allDay,
+}) {
+  await pool.query(
+    `INSERT INTO availability_overrides
+       (id, tenant_id, staff_id, override_date, override_type, reason, start_time, end_time, all_day)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, tenantId, staffId, overrideDate, overrideType ?? 'block', reason ?? null, startTime ?? null, endTime ?? null, allDay !== false ? 1 : 0]
+  );
+  const [rows] = await pool.query(
+    'SELECT * FROM availability_overrides WHERE id = ? AND tenant_id = ?',
+    [id, tenantId]
+  );
+  if (rows.length === 0) return null;
+  return rowToOverride(rows[0]);
+}
+
+export async function updateAvailabilityOverride(id, tenantId, fields) {
+  const setClauses = [];
+  const values = [];
+  if (fields.overrideDate !== undefined) { setClauses.push('override_date = ?'); values.push(fields.overrideDate); }
+  if (fields.overrideType !== undefined) { setClauses.push('override_type = ?'); values.push(fields.overrideType); }
+  if (fields.reason !== undefined) { setClauses.push('reason = ?'); values.push(fields.reason); }
+  if (fields.startTime !== undefined) { setClauses.push('start_time = ?'); values.push(fields.startTime); }
+  if (fields.endTime !== undefined) { setClauses.push('end_time = ?'); values.push(fields.endTime); }
+  if (fields.allDay !== undefined) { setClauses.push('all_day = ?'); values.push(fields.allDay ? 1 : 0); }
+  if (setClauses.length > 0) {
+    values.push(id, tenantId);
+    await pool.query(
+      `UPDATE availability_overrides SET ${setClauses.join(', ')} WHERE id = ? AND tenant_id = ?`,
+      values
+    );
+  }
+  const [rows] = await pool.query(
+    'SELECT * FROM availability_overrides WHERE id = ? AND tenant_id = ?',
+    [id, tenantId]
+  );
+  if (rows.length === 0) return null;
+  return rowToOverride(rows[0]);
+}
+
+export async function deleteAvailabilityOverride(id, tenantId) {
+  await pool.query(
+    'DELETE FROM availability_overrides WHERE id = ? AND tenant_id = ?',
+    [id, tenantId]
+  );
+  return { deleted: true };
+}
+
+// ---------------------------------------------------------------------------
+// Appointment Series
+// ---------------------------------------------------------------------------
+
+export async function listSeries(tenantId, filters = {}) {
+  const conditions = ['tenant_id = ?'];
+  const values = [tenantId];
+  if (filters.counselorId) { conditions.push('counselor_id = ?'); values.push(filters.counselorId); }
+  if (filters.clientId) { conditions.push('client_id = ?'); values.push(filters.clientId); }
+  if (filters.status) { conditions.push('status = ?'); values.push(filters.status); }
+  const [rows] = await pool.query(
+    `SELECT * FROM appointment_series WHERE ${conditions.join(' AND ')} ORDER BY start_date ASC`,
+    values
+  );
+  return rows.map(rowToSeries);
+}
+
+export async function createSeries({
+  id,
+  tenantId,
+  counselorId,
+  clientId,
+  clientName,
+  counselorName,
+  appointmentType,
+  recurrenceRule,
+  startDate,
+  endDate,
+  durationMinutes,
+  locationId,
+  remoteSession,
+}) {
+  await pool.query(
+    `INSERT INTO appointment_series
+       (id, tenant_id, counselor_id, client_id, client_name_enc, counselor_name_enc,
+        appointment_type, recurrence_rule, start_date, end_date, duration_minutes,
+        location_id, remote_session, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
+    [
+      id, tenantId, counselorId, clientId,
+      clientName ? encrypt(clientName) : null,
+      counselorName ? encrypt(counselorName) : null,
+      appointmentType ?? null, recurrenceRule,
+      startDate, endDate ?? null,
+      durationMinutes ?? 50, locationId ?? null,
+      remoteSession ? 1 : 0,
+    ]
+  );
+  const [rows] = await pool.query(
+    'SELECT * FROM appointment_series WHERE id = ? AND tenant_id = ?',
+    [id, tenantId]
+  );
+  if (rows.length === 0) return null;
+  return rowToSeries(rows[0]);
+}
+
+export async function updateSeries(id, tenantId, fields) {
+  const setClauses = [];
+  const values = [];
+  if (fields.status !== undefined) { setClauses.push('status = ?'); values.push(fields.status); }
+  if (fields.endDate !== undefined) { setClauses.push('end_date = ?'); values.push(fields.endDate); }
+  if (fields.recurrenceRule !== undefined) { setClauses.push('recurrence_rule = ?'); values.push(fields.recurrenceRule); }
+  if (setClauses.length > 0) {
+    values.push(id, tenantId);
+    await pool.query(
+      `UPDATE appointment_series SET ${setClauses.join(', ')} WHERE id = ? AND tenant_id = ?`,
+      values
+    );
+  }
+  const [rows] = await pool.query(
+    'SELECT * FROM appointment_series WHERE id = ? AND tenant_id = ?',
+    [id, tenantId]
+  );
+  if (rows.length === 0) return null;
+  return rowToSeries(rows[0]);
+}
+
+// ---------------------------------------------------------------------------
+// Utilization Reporting
+// ---------------------------------------------------------------------------
+
+export async function getUtilizationSummary(tenantId, from, to, counselorId) {
+  const conditions = ['a.tenant_id = ?'];
+  const values = [tenantId];
+  if (from) { conditions.push('a.scheduled_at >= ?'); values.push(toSqlTimestamp(from + 'T00:00:00Z')); }
+  if (to) { conditions.push('a.scheduled_at <= ?'); values.push(toSqlTimestamp(to + 'T23:59:59Z')); }
+  if (counselorId) { conditions.push('a.counselor_id = ?'); values.push(counselorId); }
+
+  const where = conditions.join(' AND ');
+
+  const [[totalRow]] = await pool.query(
+    `SELECT COUNT(*) AS total FROM appointments a WHERE ${where}`,
+    values
+  );
+
+  const [statusRows] = await pool.query(
+    `SELECT status, COUNT(*) AS cnt FROM appointments a WHERE ${where} GROUP BY status`,
+    values
+  );
+
+  const [counselorRows] = await pool.query(
+    `SELECT counselor_id, COUNT(*) AS total_count,
+            SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed_count
+     FROM appointments a WHERE ${where} GROUP BY counselor_id`,
+    values
+  );
+
+  const [locationRows] = await pool.query(
+    `SELECT COALESCE(l.name, 'Remote') AS location_name, COUNT(*) AS cnt
+     FROM appointments a
+     LEFT JOIN locations l ON l.id = a.location_id AND l.tenant_id = a.tenant_id
+     WHERE ${where}
+     GROUP BY location_name`,
+    values
+  );
+
+  const byStatus = {};
+  for (const r of statusRows) byStatus[r.status] = Number(r.cnt);
+
+  return {
+    period: { from: from ?? null, to: to ?? null },
+    totalAppointments: Number(totalRow.total),
+    byStatus,
+    byCounselor: counselorRows.map(r => ({
+      counselorId: r.counselor_id,
+      count: Number(r.total_count),
+      completedCount: Number(r.completed_count),
+    })),
+    byLocation: locationRows.map(r => ({
+      locationName: r.location_name,
+      count: Number(r.cnt),
+    })),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Utility helpers
+// ---------------------------------------------------------------------------
 
 function toIsoString(value) {
   if (value instanceof Date) return value.toISOString();

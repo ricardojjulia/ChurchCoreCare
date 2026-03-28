@@ -54,6 +54,16 @@ if (process.env.DB_NAME) {
 
     for (const row of rows) {
       try {
+        // Re-check status inside the loop to guard against concurrent cancellations.
+        const [[fresh]] = await pool.query(
+          `SELECT status FROM reminders WHERE id = ? AND tenant_id = ?`,
+          [row.id, row.tenant_id]
+        );
+        if (!fresh || fresh.status !== 'pending') {
+          console.log(`[${workerName}] Skipping reminder ${row.id} (status=${fresh?.status ?? 'gone'})`);
+          continue;
+        }
+
         // In a production system this would dispatch an email/SMS via a
         // notification provider.  For now we log the intent and mark sent.
         console.log(
@@ -83,10 +93,29 @@ if (process.env.DB_NAME) {
     }
   }
 
-  // Run once immediately, then on an interval
-  await processDueReminders().catch((err) => console.error(`[${workerName}] Poll error:`, err.message));
+  async function expireStaleReminders() {
+    // Reminders still pending > 24 h past their scheduled time are unlikely to
+    // be actionable; mark them expired so they do not re-enter the poll window.
+    const [result] = await pool.query(
+      `UPDATE reminders
+       SET status = 'expired', updated_at = NOW()
+       WHERE status = 'pending'
+         AND reminder_at < DATE_SUB(NOW(), INTERVAL 24 HOUR)`
+    );
+    if (result.affectedRows > 0) {
+      console.log(`[${workerName}] Expired ${result.affectedRows} stale reminder(s)`);
+      telemetry.recordMutation('reminder.expired');
+    }
+  }
+
+  async function poll() {
+    await Promise.all([processDueReminders(), expireStaleReminders()]);
+  }
+
+  // Run once immediately, then on a fixed interval.
+  await poll().catch((err) => console.error(`[${workerName}] Poll error:`, err.message));
   setInterval(() => {
-    processDueReminders().catch((err) => console.error(`[${workerName}] Poll error:`, err.message));
+    poll().catch((err) => console.error(`[${workerName}] Poll error:`, err.message));
   }, POLL_INTERVAL_MS);
 
   console.log(`[${workerName}] Reminder poll started (interval=${POLL_INTERVAL_MS}ms)`);
