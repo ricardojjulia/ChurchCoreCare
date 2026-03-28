@@ -41,6 +41,7 @@ Excluded from initial implementation slices:
 - Audit ledger writes are append-only. No updates or deletes of audit rows.
 - Audit and telemetry are separate systems. Do not treat telemetry as a compliance ledger.
 - Never emit PHI, free text, names, emails, or high-cardinality IDs into telemetry labels.
+- Operational logs must be structured, request-correlated, and PHI/PII-safe.
 - Audit metadata must be strict, bounded, and allowlisted.
 - Audit access is privileged and role-gated.
 
@@ -143,6 +144,28 @@ Disallowed telemetry:
 - Raw audit event rows.
 - Actor IDs, target IDs, request IDs.
 - Free-form payload values.
+
+## Operational Logging Standard
+
+Required API logging behavior:
+
+- Emit structured JSON lines for startup, request failures, request warnings, and audit-write failures.
+- Include stable operational context: `timestamp`, `level`, `event`, `requestId`, normalized `route`, HTTP `method`, `statusCode`, `durationMs`, tenant context, and actor role when available.
+- Return or generate a request correlation ID on every API response and reuse it across request and audit logs.
+- Use normalized route templates rather than raw request paths when logging API traffic.
+
+Disallowed log content:
+
+- Request or response bodies.
+- Raw SQL statements or unbounded DB payload dumps.
+- Names, emails, phone numbers, addresses, notes, messages, document text, or other free-text content.
+- Authorization headers, cookies, session secrets, bearer tokens, or password material.
+
+Usability requirements:
+
+- Server failures must produce a dedicated structured error line in addition to the HTTP response.
+- Client errors and slow requests must emit structured warning lines rather than disappearing silently.
+- Audit console output must use the same structured logger rather than ad hoc string prefixes.
 
 ## Audit Intelligence UI Requirements
 

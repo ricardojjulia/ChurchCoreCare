@@ -4,8 +4,129 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## Version
 
-- Current release: `2.1.3`
-- Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI + revamped ops/monitoring + explicit health probes + OTEL health export + full Scheduling module with Waitlist, Reminders & Calendar DB support + waitlist-to-appointment promotion + audit UUID hardening + deep DB engine monitoring dashboard)
+- Current release: `2.1.5`
+- Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI + revamped ops/monitoring + explicit health probes + OTEL health export + full Scheduling module with Waitlist, Reminders & Calendar DB support + waitlist-to-appointment promotion + audit UUID hardening + deep DB engine monitoring dashboard + full Audit Intelligence UI redesign + structured PHI-safe API logging)
+
+## v2.1.5 — Structured PHI-Safe API Logging (March 2026)
+
+### v2.1.5 Overview
+
+Hardens the API logging layer so server failures, request warnings, audit failures, and startup events always emit usable structured JSON lines without leaking request bodies, raw SQL, names, emails, tokens, cookies, or other PHI/PII-sensitive content.
+
+### v2.1.5 Changes
+
+#### API logging contract (`apps/api/src/index.js`, `apps/api/src/lib/log.js`)
+
+- Added a shared structured logger for API runtime events
+- Every request now gets a correlation-friendly `x-request-id` response header; inbound IDs are preserved when present, otherwise the API generates one
+- Request logs now use normalized route templates like `/v1/appointments/:id` instead of raw paths
+- Caught request failures emit structured `request.failed` lines with method, route, request ID, status code, duration, tenant context, actor role, and sanitized error details
+- Request warnings now cover non-5xx client errors and slow requests; successful low-latency traffic stays quiet unless `API_LOG_ALL_REQUESTS=1`
+- Startup logs and listen failures now use the same JSON logger instead of plain `console.log` / `console.error`
+
+#### Audit console output (`apps/api/src/index.js`)
+
+- Audit events now flow through the same structured logger as `audit.event`
+- Audit write failures now emit structured `audit.write_failed` lines with request correlation and sanitized error detail
+- Audit logging keeps IDs required for audit usability, but the logger still strips or redacts free text and credential material
+
+#### Privacy and usability guardrails
+
+- Logged request context is bounded to operational metadata: request ID, method, normalized route, tenant ID, actor role, auth state, status code, and duration
+- Request/response bodies are never logged
+- Raw SQL statements and payload dumps are never logged
+- Error messages are sanitized before emission so obvious secrets, cookies, bearer tokens, JWTs, and email addresses are redacted
+
+### v2.1.5 Validation
+
+- `node --check apps/api/src/lib/log.js`
+- `node --check apps/api/src/index.js`
+- Live malformed JSON request to `POST /v1/auth/login` returned `400` and emitted structured `request.failed` + `request.complete` log lines with request correlation
+- Live auth-gated requests emitted structured `request.complete` warning lines instead of disappearing silently
+- The API now returns `x-request-id` headers for correlation
+
+## v2.1.4 — Audit Intelligence UI Redesign (March 2026)
+
+### v2.1.4 Overview
+
+Replaces the two raw JSON textarea boxes in the Audit Intelligence tab with a purpose-built investigation interface. Operators now see a descriptive introduction, a compact filter bar, live stat cards, proportional breakdown charts, and a properly formatted event log table — all without touching the API.
+
+### v2.1.4 Changes
+
+#### Operations Studio — Audit Intelligence Tab (`apps/web/public/operations.html`, `apps/web/public/operations.js`)
+
+##### What changed and why
+
+The previous UI rendered the API's JSON payloads directly into `<textarea>` elements. That made it impossible to scan for patterns, compare counts at a glance, or read an action name without parsing dot-notation mentally. The redesign treats operators as the primary audience and presents every field in a form suited to its meaning.
+
+##### Intro banner
+
+A contextual description at the top of the tab explains what the audit log tracks and explicitly notes that no PHI, client names, or free-text is stored — only action codes, roles, target types, and IDs. This gives operators immediate context before they run a query.
+
+##### Filter bar
+
+- **Time window** — three preset buttons (7 days / 30 days / 90 days) replace the raw number input; the selected window is shown as an active pill
+- **Result** — dropdown: All results / Success / Denied / Error
+- **Actor role** — dropdown pre-populated with all known roles (Practice Owner, Practice Admin, Counselor, Scheduler / Biller, System)
+- **Action contains** — free-text search field; supports Enter key to trigger query without reaching for the button
+- **Run Query** button — aligned flush to the bottom of the filter row
+
+##### Summary stat cards (appear after first query)
+
+Four cards in a row, each with a large numeric value and a colored top accent:
+
+| Card | Accent | What it shows |
+| --- | --- | --- |
+| Total Events | Neutral | All events in the selected window |
+| Successful | Green | Events with `result: success` |
+| Denied | Amber | Access or permission blocks |
+| Errors | Red | Unexpected failures |
+
+##### Breakdown charts (two cards side by side)
+
+- **Top Actions** — horizontal bar chart of the 8 most frequent action codes; bars are indigo; each bar row shows the full action string and a count
+- **Activity Breakdown** — two stacked bar charts: By Actor Role (purple bars) and By Target Type (cyan bars); up to 8 rows each
+
+All bars animate to their correct width on render via a CSS transition.
+
+##### Event Log table
+
+Replaces the raw events textarea with a proper table:
+
+| Column | Content |
+| --- | --- |
+| (dot) | Color-coded result indicator — green glow for success, amber for denied, red for error |
+| Action | Action string in monospace; the module prefix (e.g. `billing`) is highlighted indigo; the result label appears below in matching color |
+| Actor Role | Color-coded badge — purple for practice_owner, blue for practice_admin, green for system, amber for counselor |
+| Target | Target type in bold with the target ID in grey monospace below |
+| Tenant | Tenant ID in monospace grey |
+| When | Relative time ("3m ago") with full locale timestamp below |
+
+A description line beneath the card title narrates the active filters. A count badge shows the number of events returned.
+
+##### Zero state
+
+When a query returns no events, a centered search icon, heading, and suggestion message replace the empty table — no blank textarea, no confusion.
+
+##### JS helpers added (`apps/web/public/operations.js`)
+
+- `escapeHtml(str)` — XSS-safe string rendering for all dynamic content
+- `fmtRelTime(iso)` — converts ISO timestamp to relative label (s / m / h / d ago)
+- `fmtActionHtml(action)` — renders dot-notation action strings with the module prefix highlighted
+- `roleBadgeClass(role)` — maps role strings to CSS badge modifier classes
+- `runAuditQuery()` — extracted from the click handler; also called on Enter in the action filter field
+- `renderAuditSummary(summary, days)` — drives stat cards and all three bar charts
+- `renderAuditEvents(events, days)` — drives the event log table and zero state
+
+### v2.1.4 Validation
+
+- Querying with no filters renders stat cards, both breakdown charts, and the full event log
+- Applying a result filter recalculates all panels correctly
+- Pressing Enter in the action filter field triggers the query
+- Zero-state renders when no events match; event log card is hidden
+- Role badges render the correct color for each known role
+- All dynamic content is XSS-safe via `escapeHtml`
+- `node --check` passes on `operations.js`
 
 ## v2.1.3 — Deep Database Engine Monitoring (March 2026)
 

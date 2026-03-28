@@ -40,6 +40,7 @@ import { createServiceTelemetry, startNodeTelemetry } from '../../../packages/te
 import { createI18nStore } from './lib/i18n-store.js';
 import { featureFlags } from './lib/feature-flags.js';
 import { HttpError, readJsonBody, writeJson } from './lib/http.js';
+import { logError, logInfo, logWarn, serializeError } from './lib/log.js';
 import { translateMessages } from './lib/translate.js';
 import { handleCors, checkRateLimit, enforceRbac, enforceTenantScope, callerIdentity } from './lib/security.js';
 import pool, { verifyConnection } from './db/pool.js';
@@ -150,9 +151,32 @@ const i18nStore = await createI18nStore();
 // Verify DB connectivity at startup when DB_NAME is configured.
 // Skipped if DB_NAME is unset (allows running without a DB in dev/CI).
 if (process.env.DB_NAME) {
-  await verifyConnection();
-  console.log('Database connection verified.');
+  try {
+    await verifyConnection();
+    logInfo('startup.db_connection_verified', {
+      dbConfigured: true,
+      mode: 'mysql',
+    });
+  } catch (error) {
+    logError('startup.db_connection_failed', {
+      dbConfigured: true,
+      mode: 'mysql',
+      error,
+    });
+    throw error;
+  }
 }
+
+process.on('unhandledRejection', (reason) => {
+  logError('process.unhandled_rejection', {
+    error: reason instanceof Error ? reason : new Error(String(reason)),
+  });
+});
+
+process.on('uncaughtException', (error) => {
+  logError('process.uncaught_exception', { error });
+  process.exit(1);
+});
 
 telemetry.updateHealth({
   serviceStatus: 2,
@@ -871,7 +895,14 @@ const MAX_RUNTIME_AUDIT_EVENTS = 4000;
 const server = http.createServer(async (request, response) => {
   const requestUrl = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
   const route = resolveRoute(requestUrl.pathname);
+  const requestStartedAt = Date.now();
+  const requestId = normalizeRequestId(request.headers['x-request-id']) ?? crypto.randomUUID();
   const requestTelemetryAttributes = {};
+  let session = null;
+  let requestFailureLogged = false;
+
+  request.requestId = requestId;
+  response.setHeader('x-request-id', requestId);
 
   if (featureFlags.tenantTelemetry) {
     const headerTenantId = normalizeTenantId(request.headers['x-tenant-id']);
@@ -894,7 +925,7 @@ const server = http.createServer(async (request, response) => {
     if (checkRateLimit(request, response)) return;
 
     // Resolve session from cookie (null if unauthenticated or DB not configured)
-    const session = process.env.DB_NAME ? await resolveSession(request) : null;
+    session = process.env.DB_NAME ? await resolveSession(request) : null;
 
     if (featureFlags.tenantTelemetry) {
       const identity = callerIdentity(request, session);
@@ -1381,25 +1412,59 @@ const server = http.createServer(async (request, response) => {
     writeJson(response, 404, { error: 'Not found' });
   } catch (error) {
     const statusCode = error instanceof HttpError ? error.statusCode : 500;
+    requestFailureLogged = true;
+    logRequestFailure({
+      error,
+      request,
+      route,
+      requestId,
+      requestStartedAt,
+      statusCode,
+      session,
+    });
     writeJson(response, statusCode, { error: error.message || 'Unexpected server error' });
   } finally {
+    logRequestCompletion({
+      request,
+      response,
+      route,
+      requestId,
+      requestStartedAt,
+      session,
+      skipServerErrorCompletionLog: requestFailureLogged,
+    });
     requestScope.end(response.statusCode || 200, requestTelemetryAttributes);
   }
 });
 
 server.on('error', (error) => {
   if (error?.code === 'EADDRINUSE') {
-    console.error(`Port ${port} is already in use.`);
-    console.error(standaloneHint);
+    logError('server.listen_failed', {
+      port,
+      code: error.code,
+      message: `Port ${port} is already in use.`,
+      hint: standaloneHint,
+    });
     process.exit(1);
   }
 
-  console.error('API server failed to start:', error.message || error);
+  logError('server.start_failed', {
+    port,
+    error,
+  });
   process.exit(1);
 });
 
 server.listen(port, () => {
-  console.log(`Faith Counseling API listening on port ${port}`);
+  logInfo('server.listening', {
+    port,
+    dbConfigured: Boolean(process.env.DB_NAME),
+    otelExportConfigured: Boolean(
+      process.env.OTEL_EXPORTER_OTLP_ENDPOINT
+      || process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+      || process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT
+    ),
+  });
 });
 
 // ─── Auth handlers ────────────────────────────────────────────────────────────
@@ -7738,6 +7803,84 @@ function normalizeTenantId(value) {
   return candidate ? candidate : null;
 }
 
+function normalizeRequestId(value) {
+  if (typeof value !== 'string') return null;
+  const candidate = value.trim();
+  if (!candidate) return null;
+  return candidate.slice(0, 120);
+}
+
+function classifyRequestStatus(statusCode) {
+  if (statusCode >= 500) return 'server_error';
+  if (statusCode >= 400) return 'client_error';
+  return 'success';
+}
+
+function buildRequestLogContext(request, route, requestId, session = null) {
+  const identity = callerIdentity(request, session);
+  return {
+    requestId,
+    method: request.method ?? 'GET',
+    route,
+    tenantId: normalizeTenantId(identity.tenantId) ?? 'system',
+    actorRole: identity.role || 'anonymous',
+    authenticated: Boolean(session),
+  };
+}
+
+function logRequestFailure({ error, request, route, requestId, requestStartedAt, statusCode, session }) {
+  const log = statusCode >= 500 ? logError : logWarn;
+  log('request.failed', {
+    ...buildRequestLogContext(request, route, requestId, session),
+    statusCode,
+    outcome: classifyRequestStatus(statusCode),
+    durationMs: Date.now() - requestStartedAt,
+    error: serializeError(error),
+  });
+}
+
+function logRequestCompletion({
+  request,
+  response,
+  route,
+  requestId,
+  requestStartedAt,
+  session,
+  skipServerErrorCompletionLog = false,
+}) {
+  const statusCode = response.statusCode || 200;
+  const durationMs = Date.now() - requestStartedAt;
+  const outcome = classifyRequestStatus(statusCode);
+  const isSlowRequest = durationMs >= 1500;
+  const context = {
+    ...buildRequestLogContext(request, route, requestId, session),
+    statusCode,
+    outcome,
+    durationMs,
+  };
+
+  if (statusCode >= 500) {
+    if (!skipServerErrorCompletionLog) {
+      logError('request.complete', context);
+    }
+    return;
+  }
+
+  if (statusCode >= 400) {
+    logWarn('request.complete', context);
+    return;
+  }
+
+  if (isSlowRequest) {
+    logWarn('request.slow', context);
+    return;
+  }
+
+  if (process.env.API_LOG_ALL_REQUESTS === '1') {
+    logInfo('request.complete', context);
+  }
+}
+
 function normalizeIsoDate(value) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
@@ -8865,7 +9008,7 @@ async function emitAudit(request, action, targetType, targetId, session = null) 
     const tenantId  = session?.tenant_id  ?? (request.headers['x-tenant-id']  || 'system').trim();
     const actorRole = session?.role       ?? (request.headers['x-staff-role']  || 'unknown').trim();
     const actorId   = session?.staff_account_id ?? (request.headers['x-actor-id'] || 'anonymous').trim();
-    const requestId = (request.headers['x-request-id'] || '').trim();
+    const requestId = request.requestId || (request.headers['x-request-id'] || '').trim();
 
     const event = createAuditEvent({
       tenantId,
@@ -8883,8 +9026,7 @@ async function emitAudit(request, action, targetType, targetId, session = null) 
       runtimeAuditEvents.splice(0, runtimeAuditEvents.length - MAX_RUNTIME_AUDIT_EVENTS);
     }
 
-    // Always emit to console for structured log aggregation.
-    console.log('[AUDIT]', JSON.stringify(event));
+    logInfo('audit.event', { audit: event });
 
     const mutationAttributes = featureFlags.tenantTelemetry
       ? { tenantId: normalizeTenantId(tenantId) ?? 'unknown' }
@@ -8906,7 +9048,13 @@ async function emitAudit(request, action, targetType, targetId, session = null) 
     }
   } catch (auditError) {
     // Audit failure must never suppress the primary operation.
-    console.error('[AUDIT_FAIL]', auditError.message);
+    logError('audit.write_failed', {
+      requestId: request.requestId || normalizeRequestId(request.headers['x-request-id']) || 'unknown',
+      action,
+      targetType,
+      targetId: String(targetId),
+      error: auditError,
+    });
   }
 }
 

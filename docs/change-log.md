@@ -1,5 +1,111 @@
 # Change Log
 
+## v2.1.5 — Structured PHI-Safe API Logging
+
+**Date:** March 28, 2026
+**Type:** Minor Release
+
+### Overview
+
+Hardens the API logging layer so useful error and warning lines always reach operators as structured JSON without exposing request bodies, raw SQL, auth material, names, emails, or other PHI/PII-sensitive content.
+
+### API (v2.1.5)
+
+- Added shared structured API logger: `apps/api/src/lib/log.js`
+- Added `x-request-id` correlation header generation/preservation on API responses
+- Added structured startup, listen-failure, uncaught exception, and unhandled rejection logging
+- Added structured `request.failed`, `request.complete`, and `request.slow` events with normalized route templates, status code, duration, tenant context, and actor role
+- Added structured audit console output (`audit.event`) and audit failure logging (`audit.write_failed`)
+- Sanitized error text before logging so obvious secrets, cookies, JWTs, bearer tokens, and email addresses are redacted
+- Explicitly kept request/response bodies and raw SQL out of operational logs
+
+### Standards and documentation
+
+- Updated `PLANS/FULL-SECURITY-AND-AUDITING.md` with the canonical operational logging standard
+- Updated `README.md` with the new API logging contract and validation notes
+
+### Breaking changes
+
+None.
+
+## v2.1.4 — Audit Intelligence UI Redesign
+
+**Date:** March 28, 2026
+**Type:** Minor Release
+
+### Overview
+
+Replaces the two raw JSON textarea boxes in the Audit Intelligence tab of Operations Studio with a purpose-built investigation interface. No API changes — entirely a frontend improvement. Operators now have a filter bar, live stat cards, breakdown bar charts, and a formatted event log table instead of unreadable JSON blobs.
+
+### Web (v2.1.4)
+
+#### Filter bar (`operations.html`)
+
+- Time window preset buttons replace the number input: **7 days**, **30 days**, **90 days** — active selection shown with filled indigo pill
+- Result dropdown: All results / Success / Denied / Error
+- Actor role dropdown pre-populated with all known system roles
+- Free-text "action contains" search field; pressing Enter triggers the query
+- All controls in a single card-style row above results
+
+#### Summary stat cards (`operations.html`)
+
+Four cards rendered after each query, each with a large count and a color-coded top border:
+
+| Card | Color | Metric |
+| --- | --- | --- |
+| Total Events | Neutral | All events in window |
+| Successful | Green | `result: success` count |
+| Denied | Amber | Access / permission blocks |
+| Errors | Red | Unexpected failures |
+
+#### Breakdown charts (`operations.html`)
+
+Two side-by-side cards with proportional horizontal bar charts:
+
+- **Top Actions** (indigo) — up to 8 most frequent action codes with counts
+- **By Actor Role** (purple) + **By Target Type** (cyan) — stacked in a single card; up to 8 rows each
+
+All bars animate to width via CSS transition on render.
+
+#### Event Log table (`operations.html`)
+
+Full-width table replacing the events textarea:
+
+| Column | Content |
+| --- | --- |
+| Dot | Color-coded glow dot — green (success), amber (denied), red (error) |
+| Action | Monospace; module prefix highlighted indigo; result label in matching color below |
+| Actor Role | Color-coded badge by role |
+| Target | Target type + target ID in grey monospace |
+| Tenant | Tenant ID in monospace |
+| When | Relative ("3m ago") + full locale timestamp |
+
+Description line under the card title narrates active filters. Count badge shows number of events returned.
+
+#### Zero state (`operations.html`)
+
+Centered search icon, "No events matched" heading, and a suggestion message replace the empty table when no results are returned.
+
+#### Intro banner (`operations.html`)
+
+Contextual paragraph at the tab top explains what is tracked and explicitly states no PHI or client names are stored — operators get context without reading documentation.
+
+### JS (`operations.js`)
+
+- `escapeHtml(str)` — XSS-safe rendering for all dynamic content
+- `fmtRelTime(iso)` — relative time label (s / m / h / d ago)
+- `fmtActionHtml(action)` — highlights module prefix of dot-notation action strings
+- `roleBadgeClass(role)` — maps role strings to CSS badge modifier classes
+- `runAuditQuery()` — decoupled from click handler; also wired to Enter key on action filter
+- `renderAuditSummary(summary, days)` — drives stat cards and all bar charts
+- `renderAuditEvents(events, days)` — drives event log table and zero state
+
+### Breaking changes
+
+None. No API changes. Existing `GET /v1/audit/intelligence` response shape is consumed directly.
+
+---
+
 ## v2.1.3 — Deep Database Engine Monitoring
 
 **Date:** March 28, 2026

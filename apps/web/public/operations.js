@@ -537,12 +537,11 @@ function roleBadgeClass(role) {
 }
 
 function initAuditIntelligence() {
-  // Window preset buttons
+  // Window preset buttons — active state is the source of truth; no hidden input
   document.querySelectorAll('.audit-window-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.audit-window-btn').forEach((b) => b.classList.remove('active'));
       btn.classList.add('active');
-      el('auditWindowDays').value = btn.dataset.days;
     });
   });
 
@@ -559,7 +558,7 @@ async function runAuditQuery() {
   clearStatus('auditStatus');
 
   const params = new URLSearchParams();
-  const days      = String(el('auditWindowDays')?.value  || '7').trim();
+  const days      = document.querySelector('.audit-window-btn.active')?.dataset?.days ?? '7';
   const result    = String(el('auditResultFilter')?.value || '').trim();
   const actorRole = String(el('auditRoleFilter')?.value  || '').trim();
   const action    = String(el('auditActionFilter')?.value || '').trim();
