@@ -1,5 +1,29 @@
 # Change Log
 
+## v2.0.0 — Tenant-Model Update
+
+**Date:** March 27, 2026
+**Type:** Major Release
+
+### Overview
+
+Hardened the full DB query layer to enforce tenant isolation on every domain. Stabilized smoke test suites (Step 11, Step 12, security regression) and resolved SQL timestamp, return-shape, and CORS preflight failures that blocked DB-mode operation.
+
+### Changes
+
+- Normalized all SQL `TIMESTAMP` inserts to `YYYY-MM-DD HH:MM:SS` format across all query modules
+- Fixed return-shape mismatches in `clinical.js` and `platform.js` query helpers to match the API contract
+- Added `DEFAULT_ALLOWED_ORIGINS` in `security.js` to include Vite dev server ports (`5173`); env-defined origins now merge with defaults instead of replacing them
+- Fixed `createAuditEvent` in `packages/domain` to auto-generate a UUID `id`, resolving `AUDIT_FAIL: Column 'id' cannot be null` on every audit write
+- Added `docs/security/tenant-query-safety-checklist.md` with 7 required query rules and a grep-based CI gate design
+- Verified all Step 11, Step 12, and security regression smokes green under DB mode
+
+### Breaking Changes
+
+None — DB-mode query shapes are now correct and consistent with in-memory equivalents.
+
+---
+
 ## v1.6.0 — Explicit Health Probes & OTEL Health Metrics
 
 **Date:** March 27, 2026  

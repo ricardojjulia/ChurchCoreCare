@@ -508,7 +508,7 @@ const DELIVERY_CHANNEL_OPTIONS = [
   { value: 'both', label: 'Both' },
 ];
 
-function WaitlistPanel() {
+function WaitlistPanel({ onPromote }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -620,7 +620,10 @@ function WaitlistPanel() {
                     <Table.Td>{item.preferredSessionType || '—'}</Table.Td>
                     <Table.Td><Text fz="sm" c="dimmed" lineClamp={1}>{item.notes || '—'}</Text></Table.Td>
                     <Table.Td>
-                      <Button size="xs" variant="default" onClick={() => handleEdit(item)}>Edit</Button>
+                      <Group gap="xs">
+                        <Button size="xs" variant="default" onClick={() => handleEdit(item)}>Edit</Button>
+                        <Button size="xs" color="blue" variant="light" onClick={() => onPromote?.(item.clientId)}>Schedule</Button>
+                      </Group>
                     </Table.Td>
                   </Table.Tr>
                 )
@@ -806,6 +809,7 @@ export default function SchedulingPage({
   const [composerOpen, setComposerOpen] = useState(initialComposerOpen);
   const [composerMode, setComposerMode] = useState('create');
   const [editingAppointment, setEditingAppointment] = useState(null);
+  const [composerClientId, setComposerClientId] = useState(initialClientId);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [appointments, setAppointments] = useState([]);
@@ -953,13 +957,14 @@ export default function SchedulingPage({
           setComposerOpen(false);
           setComposerMode('create');
           setEditingAppointment(null);
+          setComposerClientId(initialClientId);
           onComposerHandled?.();
         }}
         onCreated={loadScheduling}
         clients={clients}
         counselors={counselors}
         appointmentTypes={appointmentTypes}
-        initialClientId={initialClientId}
+        initialClientId={composerClientId}
         initialPortalRequest={initialPortalRequest}
         mode={composerMode}
         editingAppointment={editingAppointment}
@@ -989,6 +994,7 @@ export default function SchedulingPage({
             <Group justify="flex-end">
               <Button variant="default" onClick={loadScheduling}>Refresh</Button>
               <Button onClick={() => {
+                setComposerClientId(initialClientId);
                 setComposerMode('create');
                 setEditingAppointment(null);
                 setComposerOpen(true);
@@ -1111,7 +1117,13 @@ export default function SchedulingPage({
         </Tabs.Panel>
 
         <Tabs.Panel value="waitlist" pt="md">
-          <WaitlistPanel />
+          <WaitlistPanel onPromote={(clientId) => {
+            setComposerClientId(clientId);
+            setComposerMode('create');
+            setEditingAppointment(null);
+            setComposerOpen(true);
+            setActiveTab('appointments');
+          }} />
         </Tabs.Panel>
 
         <Tabs.Panel value="reminders" pt="md">

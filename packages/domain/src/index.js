@@ -192,6 +192,7 @@ export function createAuditEvent(event) {
   }
 
   return Object.freeze({
+    id: crypto.randomUUID(),
     ...event,
   });
 }
