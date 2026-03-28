@@ -320,6 +320,7 @@ export default function App() {
         <TopBar
           opened={navOpened}
           onMenuToggle={toggleNav}
+          onSignOut={handleSignOut}
         />
       </AppShell.Header>
 

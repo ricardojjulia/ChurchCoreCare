@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Burger, Group, Select, Text, Box } from '@mantine/core';
+import { Burger, Group, Select, Text, Box, Button } from '@mantine/core';
 
 const LANGUAGES = [
   { value: 'en', label: 'English' },
@@ -8,7 +8,7 @@ const LANGUAGES = [
   { value: 'pt', label: 'Português' },
 ];
 
-export default function TopBar({ opened, onMenuToggle }) {
+export default function TopBar({ opened, onMenuToggle, onSignOut }) {
   const [language, setLanguage] = useState('en');
 
   return (
@@ -45,6 +45,9 @@ export default function TopBar({ opened, onMenuToggle }) {
           w={120}
           aria-label="Language"
         />
+        <Button size="xs" variant="default" onClick={onSignOut}>
+          Logout
+        </Button>
       </Group>
     </Group>
   );

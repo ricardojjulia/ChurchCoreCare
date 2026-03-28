@@ -1,5 +1,7 @@
 # Change Log
 
+<!-- markdownlint-disable MD024 -->
+
 ## v3.0.5 — Workspace Studio Forms + Portal Workflow Completion
 
 **Date:** March 2026  
@@ -122,6 +124,7 @@ Expands the clinical forms library from 4 to **19 instruments** and redesigns th
 All new files located in `apps/web/src/components/Documents/forms/`.
 
 #### `PHQ9.js` — Patient Health Questionnaire-9 (Depression Screener)
+
 - **Reference:** Kroenke K, Spitzer RL, Williams JBW. *J Gen Intern Med* 2001;16:606–13
 - **Scoring:** `scoreFields` (9 items, 0–3 each) → `phq9ScoreInterpretation(total)` — max 27
 - **Exports:** `PHQ9_SCORE_IDS`, `phq9ScoreInterpretation`, `PHQ9`
@@ -130,6 +133,7 @@ All new files located in `apps/web/src/components/Documents/forms/`.
 - **Clinical note:** Item 9 (self-harm ideation) triggers inline counselor alert at any non-zero response
 
 #### `BeckAnxietyInventory.js` — Beck Anxiety Inventory
+
 - **Reference:** Beck AT, et al. *J Consult Clin Psychol* 1988;56:893–897
 - **Scoring:** `scoreFields` (21 items, 0–3 each) → `baiScoreInterpretation(total)` — max 63
 - **Exports:** `BAI_SCORE_IDS`, `baiScoreInterpretation`, `BeckAnxietyInventory`
@@ -137,6 +141,7 @@ All new files located in `apps/web/src/components/Documents/forms/`.
 - **Bands:** Minimal (0–7), Mild (8–15), Moderate (16–25), Severe (26–63)
 
 #### `PCL5.js` — PTSD Checklist for DSM-5
+
 - **Reference:** Weathers FW, et al. (2013). National Center for PTSD
 - **Scoring:** `scoreFields` (20 items, 0–4 each) → `pcl5ScoreInterpretation(total)` — max 80; cutpoint ≥ 33
 - **Exports:** `PCL5_SCORE_IDS`, `pcl5ScoreInterpretation`, `PCL5`
@@ -144,6 +149,7 @@ All new files located in `apps/web/src/components/Documents/forms/`.
 - **Bands:** Minimal (0–9), Significant Symptoms (10–32), Probable PTSD (≥ 33)
 
 #### `RosenbergSelfEsteem.js` — Rosenberg Self-Esteem Scale
+
 - **Reference:** Rosenberg M. Princeton University Press, 1965
 - **Scoring:** `scoreFields` (10 items) → `rsesScoreInterpretation(total)` — max 30
 - **Implementation note:** Reverse-scored items use `RSES_OPTIONS_REVERSED` (SA=0, A=1, D=2, SD=3) so the standard sum is correct without a custom reversal function
@@ -152,12 +158,14 @@ All new files located in `apps/web/src/components/Documents/forms/`.
 - **Bands:** Low (< 15), Normal (15–24), High (25–30)
 
 #### `ASRSv1.js` — Adult ADHD Self-Report Scale v1.1
+
 - **Reference:** WHO / Kessler RC, et al. (2003)
 - **Scoring:** `scoreInterpretation(answers)` — Part A threshold counting (items 1–4: ≥ 2, items 5–6: ≥ 3). ≥ 4 positives = likely ADHD
 - **Exports:** `asrsScoreInterpretation`, `ASRSv1`
 - **Sections:** Part A (6 screening items), Part B (12 additional items), History & Impact, Faith Dimension
 
 #### `OCIRevised.js` — OCD Inventory Revised
+
 - **Reference:** Foa EB, et al. *Psychol Assess* 2002;14(4):485–96
 - **Scoring:** `scoreFields` (18 items, 0–4 each) → `ociScoreInterpretation(total)` — max 72; cutpoint ≥ 21
 - **Exports:** `OCI_SCORE_IDS`, `ociScoreInterpretation`, `OCIRevised`
@@ -165,6 +173,7 @@ All new files located in `apps/web/src/components/Documents/forms/`.
 - **Bands:** Minimal (0–9), Subclinical (10–20), OCD Likely (≥ 21), Severe (≥ 40)
 
 #### `AUDIT.js` — Alcohol Use Disorders Identification Test
+
 - **Reference:** Babor TF, et al. WHO Publication No. 01.6a, 2001
 - **Scoring:** `scoreInterpretation(answers)` — sums all 10 items manually (Q9/Q10 use values 0, 2, 4); max 40
 - **Exports:** `auditScoreInterpretation`, `AUDIT`
@@ -173,12 +182,14 @@ All new files located in `apps/web/src/components/Documents/forms/`.
 - **Bands:** Low Risk (0–7), Hazardous (8–15), Harmful (16–19), Likely Dependence (≥ 20)
 
 #### `DASS21.js` — Depression Anxiety Stress Scales (Short Form)
+
 - **Reference:** Lovibond PF, Lovibond SH. *Behav Res Ther* 1995;33(3):335–43
 - **Scoring:** `scoreInterpretation(answers)` — computes three independent subscales (Depression: items 3,5,10,13,16,17,21 · Anxiety: items 2,4,7,9,15,19,20 · Stress: items 1,6,8,11,12,14,18); returns worst color
 - **Exports:** `dass21ScoreInterpretation`, `DASS21`
 - **Sections:** 21 symptom items (0–3 scale), Context & Duration, Faith Dimension
 
 #### `ACEQuestionnaire.js` — Adverse Childhood Experiences
+
 - **Reference:** Felitti VJ, Anda RF, et al. *Am J Prev Med* 1998;14(4):245–258
 - **Scoring:** `scoreInterpretation(answers)` — counts `'Yes'` responses across 10 specific field IDs; max 10
 - **Exports:** `aceScoreInterpretation`, `ACEQuestionnaire`
@@ -186,6 +197,7 @@ All new files located in `apps/web/src/components/Documents/forms/`.
 - **Bands:** None (0), Low-Moderate (1), Moderate (2–3), High (4–5), Very High Risk (≥ 6)
 
 #### `InsomniaSeverityIndex.js` — Insomnia Severity Index
+
 - **Reference:** Morin CM. Guilford Press, 1993. Morin CM, et al. *Sleep* 2011;34(5):601–608
 - **Scoring:** `scoreFields` (7 items, 0–4 each) → `isiScoreInterpretation(total)` — max 28. Item 2 uses reverse-sorted options (satisfaction)
 - **Exports:** `ISI_SCORE_IDS`, `isiScoreInterpretation`, `InsomniaSeverityIndex`
@@ -193,26 +205,31 @@ All new files located in `apps/web/src/components/Documents/forms/`.
 - **Bands:** No Significant Insomnia (0–7), Subthreshold (8–14), Moderate Clinical (15–21), Severe Clinical (22–28)
 
 #### `CouplesAssessment.js` — Couples & Relationship Assessment
+
 - **Type:** Custom, unscored
 - **Export:** `CouplesAssessment`
 - **Sections:** Relationship Background, Communication Patterns (Gottman-informed), Conflict & Repair, Intimacy & Connection, Faith & Marriage (Eph. 5:21–33)
 
 #### `GriefAssessment.js` — Grief & Loss Assessment
+
 - **Type:** Custom, unscored
 - **Export:** `GriefAssessment`
 - **Sections:** Loss History, Grief Experience, Complicated Grief Indicators (DSM-5 Prolonged Grief Disorder), Faith & Lament (Ps. 22, 88; Lamentations; Job; John 11:35)
 
 #### `BurnoutAssessment.js` — Ministry & Caregiver Burnout Assessment
+
 - **Type:** Custom, unscored; based on Maslach Burnout Inventory dimensions
 - **Export:** `BurnoutAssessment`
 - **Sections:** Role & Ministry Context, Emotional Exhaustion, Cynicism & Compassion Fatigue, Reduced Accomplishment & Identity, Faith & Sustainability (Matt. 11:28)
 
 #### `SpiritualWellnessInventory.js` — Spiritual Wellness Inventory
+
 - **Type:** Custom, unscored; faith-specific assessment
 - **Export:** `SpiritualWellnessInventory`
 - **Sections:** Spiritual Practices, Core Beliefs & Theology, Community & Accountability, Spiritual Growth & Discipleship
 
 #### `FamilySystemsAssessment.js` — Family Systems Assessment
+
 - **Type:** Custom, unscored; Bowen Family Systems Theory + biblical family theology
 - **Export:** `FamilySystemsAssessment`
 - **Sections:** Family Composition, Family Relationships & Emotional Climate, Roles & Patterns & Triangles, Faith in Family Context
@@ -222,6 +239,7 @@ All new files located in `apps/web/src/components/Documents/forms/`.
 ### Modified Files
 
 #### `apps/web/src/components/Documents/DocumentsPage.jsx`
+
 - Added 15 import statements for new form definitions
 - Added `CATEGORIES` array (14 domains, display-ordered)
 - Replaced flat `FORM_CATALOG` (4 entries) with 19-entry categorized catalog — each entry has `category` field referencing a `CATEGORIES.id`
@@ -229,6 +247,7 @@ All new files located in `apps/web/src/components/Documents/forms/`.
 - Replaced single `SimpleGrid` render with `CATEGORIES.map()` loop producing separate labeled `<Stack>` + `<SimpleGrid>` groups per category
 
 #### `package.json` — all 7 monorepo files
+
 - `apps/api/package.json`, `apps/web/package.json`, `apps/worker/package.json`
 - `package.json` (root), `packages/domain/package.json`, `packages/i18n/package.json`, `packages/telemetry/package.json`
 - Changed: `"version": "2.2.0"` → `"version": "3.0.0"`

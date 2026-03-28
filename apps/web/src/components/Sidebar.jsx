@@ -46,8 +46,8 @@ export default function Sidebar({ currentUser, currentView, onNavigate, onOpenCl
   const connectionTone = CONNECTION_TONE[connectionStatus] ?? CONNECTION_TONE.loading;
 
   return (
-    <Stack h="100%" justify="space-between" gap={0} p="sm">
-      <Box>
+    <Stack h="100%" gap={0} p="sm">
+      <Box style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingBottom: 8 }}>
         <Group gap="sm" mb="md" px="xs" className="sidebar-options-head">
           <Box className="sidebar-options-mark" aria-hidden="true">
             <span className="sidebar-options-glow"></span>
@@ -109,7 +109,7 @@ export default function Sidebar({ currentUser, currentView, onNavigate, onOpenCl
         </Stack>
       </Box>
 
-      <Box>
+      <Box mt="sm">
         <Divider mb="sm" />
         <Button variant="default" fullWidth onClick={onSignOut}>
           Sign out

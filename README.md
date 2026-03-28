@@ -118,51 +118,61 @@ All new forms follow the form definition schema established in v2.2.0. The gener
 ### v3.0.0 — Validated Clinical Instruments (10 new forms)
 
 #### PHQ-9 — Patient Health Questionnaire-9
+
 **File:** `apps/web/src/components/Documents/forms/PHQ9.js` · **Scoring:** 0–27 · **Time:** ~5 min
 **Reference:** Kroenke K, Spitzer RL, Williams JBW. *J Gen Intern Med* 2001;16:606–13.
 Gold-standard 9-item depression screener. Nine frequency items (0–3 each). Bands: 0–4 Minimal, 5–9 Mild, 10–14 Moderate, 15–19 Moderately Severe, 20–27 Severe. Item 9 (thoughts of self-harm) triggers a counselor follow-up alert at any non-zero response. Faith Dimension explores connection with God, impact of depression on prayer and worship, hope anchored in faith, and comforting Scriptures.
 
 #### Beck Anxiety Inventory (BAI)
+
 **File:** `apps/web/src/components/Documents/forms/BeckAnxietyInventory.js` · **Scoring:** 0–63 · **Time:** ~7 min
 **Reference:** Beck AT, Epstein N, Brown G, Steer RA. *J Consult Clin Psychol* 1988;56:893–897.
 21 somatic and cognitive anxiety symptoms rated 0–3 over the past week. Bands: 0–7 Minimal, 8–15 Mild, 16–25 Moderate, 26–63 Severe. Faith Dimension grounded in Philippians 4:6–7 and 1 Peter 5:7.
 
 #### PCL-5 — PTSD Checklist for DSM-5
+
 **File:** `apps/web/src/components/Documents/forms/PCL5.js` · **Scoring:** 0–80 · **Time:** ~10 min
 **Reference:** Weathers FW, et al. (2013). National Center for PTSD.
 20-item PTSD symptom checklist anchored to a client-identified stressful event. Items rated 0–4. Cutpoint ≥ 33 suggests probable PTSD. Faith Dimension covers lament theology (Psalms 22, 88; Lamentations; Job), anger at God, and integration of Christian hope in trauma recovery.
 
 #### Rosenberg Self-Esteem Scale (RSES)
+
 **File:** `apps/web/src/components/Documents/forms/RosenbergSelfEsteem.js` · **Scoring:** 0–30 · **Time:** ~5 min
 **Reference:** Rosenberg M. Princeton University Press, 1965.
 10-item global self-esteem measure. Five items are reverse-scored — reversal is encoded in option values (RSES\_NEG uses SA=0, A=1, D=2, SD=3) so the standard `scoreFields` sum works without post-processing. Bands: < 15 Low, 15–24 Normal, 25–30 High. Faith Dimension anchored in *imago Dei* (Gen. 1:27) and identity as a beloved child of God (1 John 3:1).
 
 #### ASRS v1.1 — Adult ADHD Self-Report Scale
+
 **File:** `apps/web/src/components/Documents/forms/ASRSv1.js` · **Scoring:** threshold-based · **Time:** ~8 min
 **Reference:** World Health Organization / Kessler RC, et al. (2003).
 18-item ADHD screener. Part A (6 items) is the primary screen; positive if ≥ 2 for items 1–4, ≥ 3 for items 5–6. Four or more Part A positives suggests likely ADHD. Uses `scoreInterpretation(answers)` pattern. Faith Dimension explores ADHD-related shame in faith contexts and God-given cognitive design.
 
 #### OCI-R — Obsessive-Compulsive Inventory Revised
+
 **File:** `apps/web/src/components/Documents/forms/OCIRevised.js` · **Scoring:** 0–72 · **Time:** ~7 min
 **Reference:** Foa EB, et al. *Psychol Assess* 2002;14(4):485–96.
 18-item OCD measure across six subscales (washing, checking, ordering, obsessing, hoarding, neutralizing). Items rated 0–4. Clinical cutpoint ≥ 21. Faith Dimension includes dedicated coverage of **scrupulosity** — religious OCD involving obsessive guilt, compulsive confession, and inability to receive God's grace.
 
 #### AUDIT — Alcohol Use Disorders Identification Test
+
 **File:** `apps/web/src/components/Documents/forms/AUDIT.js` · **Scoring:** 0–40 · **Time:** ~5 min
 **Reference:** Babor TF, et al. WHO Publication No. 01.6a, 2001.
 10-item WHO alcohol screening. Items 1–8 use 0–4 scale; items 9–10 use 0/2/4 scale and use `gad_scale` type with values `'0'`, `'2'`, `'4'` so standard `parseInt()` summation works correctly. Bands: 0–7 Low Risk, 8–15 Hazardous, 16–19 Harmful, ≥ 20 Likely Dependence. Faith Dimension references Ephesians 5:18 and 1 Corinthians 6:19–20.
 
 #### DASS-21 — Depression Anxiety Stress Scales
+
 **File:** `apps/web/src/components/Documents/forms/DASS21.js` · **Scoring:** 3 subscales · **Time:** ~8 min
 **Reference:** Lovibond PF, Lovibond SH. *Behav Res Ther* 1995;33(3):335–43.
 21-item tripartite measure yielding Depression, Anxiety, and Stress subscores. Uses `scoreInterpretation(answers)` pattern with dedicated subscale item arrays. ScoreBanner displays all three severity levels; banner color reflects the most elevated subscale.
 
 #### ACE Questionnaire — Adverse Childhood Experiences
+
 **File:** `apps/web/src/components/Documents/forms/ACEQuestionnaire.js` · **Scoring:** 0–10 count · **Time:** ~10 min
 **Reference:** Felitti VJ, Anda RF, et al. *Am J Prev Med* 1998;14(4):245–258.
 10-category childhood adversity screener (yes/no). Uses `scoreInterpretation(answers)` counting `'Yes'` values. Bands: 0 None, 1 Low-Moderate, 2–3 Moderate, 4–5 High, ≥ 6 Very High Risk. Covers physical, emotional, and sexual abuse; physical and emotional neglect; and five household dysfunction categories. Faith Dimension covers healing from childhood wounds and the role of the "Father to the fatherless" (Psalm 68:5).
 
 #### Insomnia Severity Index (ISI)
+
 **File:** `apps/web/src/components/Documents/forms/InsomniaSeverityIndex.js` · **Scoring:** 0–28 · **Time:** ~5 min
 **Reference:** Morin CM. Guilford Press, 1993. Morin CM, et al. *Sleep* 2011;34(5):601–608.
 7-item validated insomnia screener. Item 2 is reverse-scored (satisfaction → dissatisfaction). Bands: 0–7 None, 8–14 Subthreshold, 15–21 Moderate Clinical, 22–28 Severe Clinical. Faith Dimension grounded in Psalm 127:2 and explores Sabbath rhythms, surrender to God, and nighttime prayer practices.
@@ -172,22 +182,27 @@ Gold-standard 9-item depression screener. Nine frequency items (0–3 each). Ban
 ### v3.0.0 — Custom Faith-Based Assessments (5 new forms)
 
 #### Couples & Relationship Assessment
+
 **File:** `apps/web/src/components/Documents/forms/CouplesAssessment.js` · **Unscored** · **Time:** ~20 min
 Five-section couples counseling assessment. Covers relationship duration and history, Gottman-informed communication patterns (the Four Horsemen), conflict intensity and repair capacity, trust and safety, physical and emotional intimacy, love languages, and a Faith & Marriage section covering shared practice, marital theology (Eph. 5:21–33), and vision for a Kingdom-centered marriage.
 
 #### Grief & Loss Assessment
+
 **File:** `apps/web/src/components/Documents/forms/GriefAssessment.js` · **Unscored** · **Time:** ~20 min
 Four-section grief assessment grounded in Worden's Tasks of Mourning and biblical lament theology. Covers all loss types (death, divorce, health loss, miscarriage, estrangement, career). Includes DSM-5-informed complicated grief indicators. Faith & Lament section covers anger at God, the practice of lament (Ps. 22, 88; Lamentations; Job), resurrection hope, and faith community support.
 
 #### Ministry & Caregiver Burnout Assessment
+
 **File:** `apps/web/src/components/Documents/forms/BurnoutAssessment.js` · **Unscored** · **Time:** ~15 min
 Five-section burnout assessment for pastors, missionaries, counselors, healthcare workers, and family caregivers. Based on Maslach Burnout Inventory dimensions: Emotional Exhaustion, Depersonalization/Cynicism, Reduced Personal Accomplishment. Faith & Sustainability section explores calling, spiritual intimacy vs. duty-driven ministry, rest theology, Sabbath rhythms, and experiencing God's acceptance apart from performance. Rooted in Matthew 11:28.
 
 #### Spiritual Wellness Inventory
+
 **File:** `apps/web/src/components/Documents/forms/SpiritualWellnessInventory.js` · **Unscored** · **Time:** ~20 min
 Four-section comprehensive spiritual health inventory spanning spiritual practices (prayer quality, Bible engagement, disciplines, personal barriers), core beliefs and theology (God's character and nearness, grace reception, theological doubts), community and accountability (church belonging, small group, spiritual direction, church wounds/spiritual abuse), and spiritual growth (current season, areas of struggle, habitual sin patterns, identity in Christ, and what God may be inviting the client into).
 
 #### Family Systems Assessment
+
 **File:** `apps/web/src/components/Documents/forms/FamilySystemsAssessment.js` · **Unscored** · **Time:** ~25 min
 Four-section family systems assessment grounded in Bowen Family Systems Theory and biblical family theology. Covers family composition and genogram patterns, emotional climate and attachment style (secure, anxious, avoidant, disorganized), family roles (scapegoat, peacemaker, parentified child, hero, mascot, etc.), triangulation and differentiation of self, significant cut-offs, faith transmission, and identifying generational redemption.
 
@@ -198,7 +213,7 @@ Four-section family systems assessment grounded in Bowen Family Systems Theory a
 `DocumentsPage.jsx` redesigned from a flat card grid to a **category-grouped library**:
 
 | Icon | Category | Forms |
-|------|----------|-------|
+| ------ | ---------- | ------- |
 | 📋 | Intake Forms | Short Intake, Long Intake |
 | 🌧️ | Depression | PHQ-9, DASS-21 |
 | 💨 | Anxiety & OCD | GAD-7, Beck Anxiety Inventory, OCI-R |
@@ -277,7 +292,7 @@ A clinically validated anxiety screening using the **Generalized Anxiety Disorde
 **Scoring:** The seven GAD-7 items produce a 0–21 total score. The `FormRunner` displays a live score banner with severity band and color:
 
 | Score | Band | Color |
-|-------|------|-------|
+| ------- | ------ | ------- |
 | 0–4 | Minimal anxiety | Green |
 | 5–9 | Mild anxiety | Yellow |
 | 10–14 | Moderate anxiety | Orange |
@@ -292,7 +307,7 @@ A structured risk assessment based on the **Columbia Suicide Severity Rating Sca
 **Risk stratification:** The five C-SSRS ideation items produce a risk band based on answer pattern:
 
 | Band | Trigger |
-|------|---------|
+| ------ | --------- |
 | Imminent | cssrs5 = Yes (plan + intent) |
 | High | cssrs4 = Yes (plan without intent) |
 | Moderate | cssrs3 = Yes (intent without plan) |
@@ -315,7 +330,7 @@ The **Faith Dimension** section opens with Jeremiah 29:11 and Psalm 34:18 as pas
 
 Forms are pure JavaScript objects exported from files in `apps/web/src/components/Documents/forms/`. The schema:
 
-```
+```text
 FormDefinition {
   id: string                        // unique identifier
   title: string
@@ -363,6 +378,7 @@ Field {
 Stateless renderer: accepts `formDef` and `onClose` props. Manages `answers` and `activeStep` locally. Computes visible field counts and percent-complete in real time using `useMemo`. All `showIf` evaluation is purely derived from the current `answers` object — no side effects.
 
 Key implementation details:
+
 - `ScoreField`, `GadScaleField`, and `CheckboxesField` are isolated sub-components that receive `field`, `value`, and `onChange` props — no answer state leaks between fields
 - `ScoreBanner` reads from the exported `scoreInterpretation` function on the form definition; it handles both the numeric-sum pattern (GAD-7) and the answer-object pattern (C-SSRS risk)
 - Print CSS is injected as an inline `<style>` tag; `.no-print` elements (header, nav, buttons) are hidden; `.print-section` Paper blocks avoid page breaks with `break-inside: avoid`
@@ -377,7 +393,7 @@ Thin page shell that maintains a single piece of state: `activeEntry | null`. Wh
 ### v2.2.0 — App Routing and Telemetry Changes
 
 | File | Change |
-|------|--------|
+| ------ | -------- |
 | `apps/web/src/App.jsx` | Added `DocumentsPage` import |
 | `apps/web/src/App.jsx` | Added `const showDocuments = currentView === 'documents'` |
 | `apps/web/src/App.jsx` | Added `!showDocuments` to the `showClientsWorkspace` fallback |
