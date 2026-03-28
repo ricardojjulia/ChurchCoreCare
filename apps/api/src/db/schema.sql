@@ -395,6 +395,32 @@ CREATE TABLE IF NOT EXISTS availability_templates (
   INDEX idx_avail_tenant (tenant_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- ─── Appointment series ───────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS appointment_series (
+  id                  VARCHAR(64)  NOT NULL,
+  tenant_id           VARCHAR(64)  NOT NULL,
+  counselor_id        VARCHAR(64)  NOT NULL,
+  client_id           VARCHAR(64)  NOT NULL,
+  client_name_enc     VARBINARY(512),
+  counselor_name_enc  VARBINARY(512),
+  appointment_type    VARCHAR(128),
+  recurrence_rule     VARCHAR(512) NOT NULL,         -- e.g. FREQ=WEEKLY;BYDAY=MO,WE
+  start_date          DATE         NOT NULL,
+  end_date            DATE,
+  duration_minutes    INT          NOT NULL DEFAULT 50,
+  location_id         VARCHAR(64),
+  remote_session      TINYINT(1)   NOT NULL DEFAULT 0,
+  status              VARCHAR(32)  NOT NULL DEFAULT 'active',
+  created_at          TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at          TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_series_tenant     (tenant_id),
+  INDEX idx_series_counselor  (tenant_id, counselor_id),
+  INDEX idx_series_client     (tenant_id, client_id),
+  INDEX idx_series_dates      (tenant_id, start_date, end_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ─── Availability overrides ───────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS availability_overrides (
