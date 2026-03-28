@@ -4,8 +4,100 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## Version
 
-- Current release: `2.1.7`
-- Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI + revamped ops/monitoring + explicit health probes + OTEL health export + full Scheduling module with Waitlist, Reminders & Calendar DB support + waitlist-to-appointment promotion + audit UUID hardening + deep DB engine monitoring dashboard + full Audit Intelligence UI redesign + structured PHI-safe API logging + live dashboard appointment and audit metrics + full Reporting tab UI redesign)
+- Current release: `2.1.10`
+- Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI + revamped ops/monitoring + explicit health probes + OTEL health export + full Scheduling module with Waitlist, Reminders & Calendar DB support + waitlist-to-appointment promotion + audit UUID hardening + deep DB engine monitoring dashboard + full Audit Intelligence UI redesign + structured PHI-safe API logging + live dashboard appointment and audit metrics + full Reporting tab UI redesign + repaired Swagger UI proxy/docs delivery + redesigned About experience + static file server query-string fix)
+
+## v2.1.10 — Static File Server Query-String Fix (March 2026)
+
+### v2.1.10 Overview
+
+Patches a bug in the raw Node.js static file server where any URL containing a query string (e.g. `/operations.js?v=2.1.7`) was passed verbatim to `path.join()`. The server would then look for a file literally named `operations.js?v=2.1.7` on disk, find nothing, and return a 404. In practice this meant adding a cache-busting query string to any script tag caused that script to silently fail to load — leaving the page with no JavaScript event listeners and completely unresponsive to user interaction.
+
+### v2.1.10 Changes
+
+#### Web static file server (`apps/web/server.js`)
+
+- Fixed `resolvePublicUrl(requestUrl)` to strip the query string before resolving to a file path: `const pathname = requestUrl.split('?')[0]`
+- The `pathname` (not the full URL) is now used for all path comparisons (`/about`, `/monitor`) and returned as the file path to look up on disk
+- Query strings are still forwarded correctly for API proxy requests (`/api/...`) — only static asset lookups are affected by this change
+- Cache-busting suffixes on any static asset (`?v=X`, `?t=X`, `?build=X`) now resolve correctly in production
+
+### v2.1.10 Validation
+
+- `node --check apps/web/server.js`
+- Request to `/operations.js?v=2.1.7` now returns the contents of `operations.js` with a `200` rather than a `404`
+- Removing the query string from the script src and doing a hard refresh (`Cmd+Shift+R`) also unblocks the page while the server is still running the old binary
+
+## v2.1.9 — About Page Experience Refresh (March 2026)
+
+### v2.1.9 Overview
+
+Transforms the static About page from a plain stack of utility panels into a proper product overview surface. The old page was functional but visually flat: one header, two white boxes, and bare checklist text. The new version keeps the same content and links, but presents them as a designed landing page with a stronger visual identity, clearer hierarchy, richer grouping, and better scannability on both desktop and mobile.
+
+### v2.1.9 Changes
+
+#### About page layout and styling (`apps/web/public/about.html`)
+
+- Rebuilt the page as a two-stage editorial layout with a branded top bar, a hero panel, and a split content grid
+- Added a stronger hero section with a large serif headline, supporting narrative copy, and compact characteristic badges for role-aware workflows, faith workflows, API backing, and telemetry visibility
+- Introduced a summary aside in the hero with a plain-language “what this app does” explanation and three compact numeric summary tiles
+- Replaced the old checklist presentation with module cards for:
+  - Client Lifecycle & Charting
+  - Scheduling & Operations
+  - Billing & Claims
+  - Portal & Faith Workflows
+- Reworked the platform/documentation area into dedicated utility cards for API Health, OpenAPI, Swagger UI, and Monitoring, with the existing links preserved
+- Added local page-only styling so the About experience feels intentional without changing the broader shared stylesheet or the rest of the app shell
+
+#### Visual direction
+
+- Introduced a warmer, more atmospheric background using layered radial gradients instead of a flat content-page look
+- Switched the page to a more expressive type pairing: editorial serif headline treatment with a cleaner operational sans-serif body
+- Added softer glass-like panels, stronger card rhythm, and more deliberate spacing to make the page feel like a product overview rather than a settings stub
+- Improved mobile behavior with explicit responsive stacking for the hero, module cards, utility cards, and navigation
+
+### v2.1.9 Validation
+
+- Verified the page remains fully static and continues to load through the existing web server route at `/about`
+- Verified all existing links remain intact:
+  - `/index.html`
+  - `/api/openapi.yaml`
+  - `/api/docs`
+  - `/monitor.html`
+- Kept the existing telemetry hook for the `about` surface in place so monitoring coverage is unchanged
+
+## v2.1.8 — Swagger UI Proxy Repair (March 2026)
+
+### v2.1.8 Overview
+
+Repairs the interactive API documentation at `/api/docs`. The proxied Swagger UI had two independent breakages: the docs HTML was still referencing the spec as `/openapi.yaml`, which is correct only when the API serves the page directly, and the web proxy was applying the app’s strict CSP/COEP profile to the docs page, which blocked Swagger’s CDN-hosted scripts and styles. The result was a broken interactive docs page even though the API spec itself still existed.
+
+### v2.1.8 Changes
+
+#### API docs HTML generation (`apps/api/src/index.js`)
+
+- Changed the Swagger spec URL from absolute `/openapi.yaml` to relative `./openapi.yaml`
+- This preserves direct API docs behavior at `/docs` while also making proxied docs at `/api/docs` correctly resolve the spec at `/api/openapi.yaml`
+- Disabled Swagger’s external validator call with `validatorUrl: null` so the docs stay self-contained and do not depend on outbound network behavior
+- Added `HEAD` support for `/docs` and `/openapi.yaml` so the docs endpoints behave like normal static documentation assets for link checkers, proxies, and inspectors
+
+#### Web proxy security headers (`apps/web/server.js`)
+
+- Added a docs-specific CSP profile for `/api/docs` and `/api/docs/`
+- Allowed Swagger UI CDN assets from `https://unpkg.com` only on the docs route instead of weakening the CSP for the full application
+- Allowed inline Swagger bootstrap script execution only on the docs route, because the HTML returned by the API contains a small inline initializer
+- Relaxed `Cross-Origin-Embedder-Policy` only for the docs route so the proxied Swagger page can load its cross-origin assets successfully
+- Left the stricter application CSP/COEP policy unchanged for the rest of the site
+
+### v2.1.8 Validation
+
+- `node --check apps/api/src/index.js`
+- `node --check apps/web/server.js`
+- Restarted API and web servers with the patched code
+- Verified `GET /docs` returns Swagger HTML with `url: './openapi.yaml'`
+- Verified `GET /api/docs` returns Swagger HTML through the web proxy with a docs-compatible CSP
+- Verified `GET /api/openapi.yaml` is the intended proxied spec path for the interactive docs
+- Verified `HEAD /docs`, `HEAD /api/docs`, and `HEAD /api/openapi.yaml` no longer fall through to `404`
 
 ## v2.1.7 — Reporting Tab UI Redesign (March 2026)
 

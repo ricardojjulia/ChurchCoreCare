@@ -1,5 +1,75 @@
 # Change Log
 
+## v2.1.10 — Static File Server Query-String Fix
+
+**Date:** March 28, 2026
+**Type:** Patch
+
+### Overview
+
+Fixes the web server's static file handler so URLs with query strings (e.g. `operations.js?v=2.1.7`) resolve correctly to their on-disk files. Before this patch, any `?...` suffix was passed verbatim into `path.join()`, causing the server to look for a file with the query string literally in its name — resulting in a 404, the script never loading, and the entire page becoming unresponsive to clicks.
+
+### Web (v2.1.10)
+
+- Fixed `resolvePublicUrl()` in `apps/web/server.js` to strip the query string with `requestUrl.split('?')[0]` before resolving the file path
+- All cache-busting query strings on static assets (`?v=X`, `?t=X`, etc.) now work correctly
+- No behavior change for URLs without a query string
+
+### Breaking changes
+
+None.
+
+## v2.1.9 — About Page Experience Refresh
+
+**Date:** March 28, 2026
+**Type:** Minor Release
+
+### Overview
+
+Redesigns the static About page into a more polished product-overview experience. The page previously rendered as a minimal header plus two generic content panels. It now uses a branded hero, stronger layout hierarchy, warmer visual treatment, and dedicated module/documentation cards while preserving the same operational links and product scope.
+
+### Web (v2.1.9)
+
+- Rebuilt `apps/web/public/about.html` as a richer landing page with:
+  - branded top navigation and a stronger Back to App control
+  - hero section with large headline, supporting copy, and capability badges
+  - summary sidebar with explanatory copy and compact workspace metrics
+  - dedicated module cards for charting, scheduling, billing, and portal/faith workflows
+  - dedicated utility cards for API health, OpenAPI, Swagger UI, and Monitoring
+- Added page-local styling for a warmer gradient background, more expressive typography, softer card treatment, and clearer mobile stacking
+- Preserved all existing about-page links and telemetry startup behavior
+
+### Breaking changes
+
+None.
+
+## v2.1.8 — Swagger UI Proxy Repair
+
+**Date:** March 28, 2026
+**Type:** Minor Release
+
+### Overview
+
+Repairs the interactive API docs at `/api/docs`. The proxied Swagger page was broken because it still referenced the spec as `/openapi.yaml` instead of the proxied `/api/openapi.yaml`, and the web server applied the normal app CSP/COEP profile to the docs route, which blocked Swagger’s CDN-hosted JS and CSS assets.
+
+### API (v2.1.8)
+
+- Changed Swagger UI spec resolution from `/openapi.yaml` to relative `./openapi.yaml`
+- Disabled the external Swagger validator with `validatorUrl: null`
+- Added `HEAD` support for `/docs` and `/openapi.yaml`
+
+### Web (v2.1.8)
+
+- Added a Swagger-specific CSP profile for `/api/docs` and `/api/docs/`
+- Allowed `https://unpkg.com` scripts and styles only on the docs route
+- Allowed the inline Swagger bootstrap script only on the docs route
+- Relaxed `Cross-Origin-Embedder-Policy` only on the docs route so CDN assets can load successfully
+- Left the stricter CSP/COEP profile unchanged for the rest of the application
+
+### Breaking changes
+
+None.
+
 ## v2.1.7 — Reporting Tab UI Redesign
 
 **Date:** March 28, 2026

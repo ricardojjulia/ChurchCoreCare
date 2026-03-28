@@ -1,6 +1,6 @@
 {
   "name": "@faith/web",
-  "version": "2.1.5",
+  "version": "2.1.10",
   "private": true,
   "type": "module",
   "dependencies": {

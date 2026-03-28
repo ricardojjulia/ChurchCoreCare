@@ -28,31 +28,45 @@ const contentTypes = {
   '.ico': 'image/x-icon',
 };
 
-const WEB_SECURITY_HEADERS = {
-  'x-content-type-options': 'nosniff',
-  'x-frame-options': 'DENY',
-  'x-xss-protection': '0',
-  'referrer-policy': 'strict-origin-when-cross-origin',
-  'permissions-policy': 'geolocation=(), microphone=(), camera=()',
-  // Web app CSP: allow self-hosted scripts, styles, and same-origin API calls
-  'content-security-policy': [
-    "default-src 'self'",
-    "script-src 'self'",
-    "style-src 'self' 'unsafe-inline'",
-    "connect-src 'self'",
-    "img-src 'self' data:",
-    "font-src 'self'",
-    "frame-ancestors 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-  ].join('; '),
-  'strict-transport-security': 'max-age=63072000; includeSubDomains; preload',
-  'cross-origin-opener-policy': 'same-origin',
-  'cross-origin-embedder-policy': 'require-corp',
-};
+function buildWebSecurityHeaders(requestUrl = '/') {
+  const swaggerDocsRoute = requestUrl === '/api/docs' || requestUrl === '/api/docs/';
+  return {
+    'x-content-type-options': 'nosniff',
+    'x-frame-options': 'DENY',
+    'x-xss-protection': '0',
+    'referrer-policy': 'strict-origin-when-cross-origin',
+    'permissions-policy': 'geolocation=(), microphone=(), camera=()',
+    'content-security-policy': swaggerDocsRoute
+      ? [
+          "default-src 'self'",
+          "script-src 'self' 'unsafe-inline' https://unpkg.com",
+          "style-src 'self' 'unsafe-inline' https://unpkg.com",
+          "connect-src 'self'",
+          "img-src 'self' data:",
+          "font-src 'self' data:",
+          "frame-ancestors 'none'",
+          "base-uri 'self'",
+          "form-action 'self'",
+        ].join('; ')
+      : [
+          "default-src 'self'",
+          "script-src 'self'",
+          "style-src 'self' 'unsafe-inline'",
+          "connect-src 'self'",
+          "img-src 'self' data:",
+          "font-src 'self'",
+          "frame-ancestors 'none'",
+          "base-uri 'self'",
+          "form-action 'self'",
+        ].join('; '),
+    'strict-transport-security': 'max-age=63072000; includeSubDomains; preload',
+    'cross-origin-opener-policy': 'same-origin',
+    'cross-origin-embedder-policy': swaggerDocsRoute ? 'unsafe-none' : 'require-corp',
+  };
+}
 
-function applyWebSecurityHeaders(response) {
-  for (const [header, value] of Object.entries(WEB_SECURITY_HEADERS)) {
+function applyWebSecurityHeaders(response, requestUrl) {
+  for (const [header, value] of Object.entries(buildWebSecurityHeaders(requestUrl))) {
     response.setHeader(header, value);
   }
 }
@@ -109,7 +123,7 @@ function csrfCheckFailed(request, response) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const server = http.createServer(async (request, response) => {
-  applyWebSecurityHeaders(response);
+  applyWebSecurityHeaders(response, request.url);
 
   // Ensure CSRF cookie on every request so the browser has a token to use
   ensureCsrfCookie(request, response);
@@ -195,9 +209,11 @@ function writeText(response, statusCode, text) {
 
 function resolvePublicUrl(requestUrl) {
   if (!requestUrl || requestUrl === '/') return '/index.html';
-  if (requestUrl === '/about' || requestUrl === '/about/') return '/about.html';
-  if (requestUrl === '/monitor' || requestUrl === '/monitor/') return '/monitor.html';
-  return requestUrl;
+  // Strip query string before resolving the file path
+  const pathname = requestUrl.split('?')[0];
+  if (pathname === '/about' || pathname === '/about/') return '/about.html';
+  if (pathname === '/monitor' || pathname === '/monitor/') return '/monitor.html';
+  return pathname;
 }
 
 async function proxyApiRequest(request, response) {
