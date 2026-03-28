@@ -1,6 +1,19 @@
 import pool from '../pool.js';
 import { encrypt, decrypt } from '../../lib/encrypt.js';
 
+function toSqlTimestamp(value) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  const hours = String(date.getUTCHours()).padStart(2, '0');
+  const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+  const seconds = String(date.getUTCSeconds()).padStart(2, '0');
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
 // ---------------------------------------------------------------------------
 // Row mappers
 // ---------------------------------------------------------------------------
@@ -23,9 +36,7 @@ function rowToPortalResource(row) {
     title: row.title,
     content: row.content,
     resourceType: row.resource_type,
-    assignedClientIds: typeof row.assigned_client_ids === 'string'
-      ? JSON.parse(row.assigned_client_ids)
-      : row.assigned_client_ids,
+    audience: row.audience,
     publishedAt: row.published_at,
   };
 }
@@ -37,7 +48,9 @@ function rowToPortalMessageThread(row) {
     clientId: row.client_id,
     subject: row.subject,
     status: row.status,
-    lastMessageAt: row.last_message_at,
+    lastMessageAt: row.updated_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -47,23 +60,32 @@ function rowToPortalMessage(row) {
     tenantId: row.tenant_id,
     threadId: row.thread_id,
     senderId: row.sender_id,
-    senderType: row.sender_type,
+    senderType: row.sender_role,
+    senderRole: row.sender_role,
     content: decrypt(row.content_enc),
     sentAt: row.sent_at,
   };
 }
 
 function rowToPortalAppointmentRequest(row) {
+  const preferredTimes = typeof row.preferred_times === 'string'
+    ? JSON.parse(row.preferred_times)
+    : row.preferred_times;
+  const first = Array.isArray(preferredTimes) ? preferredTimes[0] : null;
   return {
     id: row.id,
     tenantId: row.tenant_id,
     clientId: row.client_id,
-    preferredDates: typeof row.preferred_dates === 'string'
-      ? JSON.parse(row.preferred_dates)
-      : row.preferred_dates,
-    requestedCounselorId: row.requested_counselor_id,
+    requestedType: row.requested_type,
+    preferredTimes,
+    preferredStartAt: first?.startAt ?? null,
+    preferredEndAt: first?.endAt ?? null,
+    mode: first?.mode ?? 'remote',
     notes: row.notes,
     status: row.status,
+    resolvedAt: row.resolved_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -126,14 +148,14 @@ export async function createPortalResource({
   title,
   content,
   resourceType,
-  assignedClientIds,
+  audience,
   publishedAt,
 }) {
   await pool.query(
     `INSERT INTO portal_resources
-       (id, tenant_id, title, content, resource_type, assigned_client_ids, published_at)
+       (id, tenant_id, title, content, resource_type, audience, published_at)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [id, tenantId, title, content, resourceType, JSON.stringify(assignedClientIds), publishedAt]
+    [id, tenantId, title, content, resourceType, audience ?? 'all', toSqlTimestamp(publishedAt)]
   );
   const [rows] = await pool.query(
     'SELECT * FROM portal_resources WHERE id = ? AND tenant_id = ?',
@@ -149,8 +171,8 @@ export async function updatePortalResource(id, tenantId, fields) {
   if (fields.title !== undefined) { setClauses.push('title = ?'); values.push(fields.title); }
   if (fields.content !== undefined) { setClauses.push('content = ?'); values.push(fields.content); }
   if (fields.resourceType !== undefined) { setClauses.push('resource_type = ?'); values.push(fields.resourceType); }
-  if (fields.assignedClientIds !== undefined) { setClauses.push('assigned_client_ids = ?'); values.push(JSON.stringify(fields.assignedClientIds)); }
-  if (fields.publishedAt !== undefined) { setClauses.push('published_at = ?'); values.push(fields.publishedAt); }
+  if (fields.audience !== undefined) { setClauses.push('audience = ?'); values.push(fields.audience); }
+  if (fields.publishedAt !== undefined) { setClauses.push('published_at = ?'); values.push(toSqlTimestamp(fields.publishedAt)); }
 
   if (setClauses.length > 0) {
     values.push(id, tenantId);
@@ -202,13 +224,12 @@ export async function createPortalMessageThread({
   clientId,
   subject,
   status,
-  lastMessageAt,
 }) {
   await pool.query(
     `INSERT INTO portal_message_threads
-       (id, tenant_id, client_id, subject, status, last_message_at)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [id, tenantId, clientId, subject, status, lastMessageAt]
+       (id, tenant_id, client_id, subject, status)
+     VALUES (?, ?, ?, ?, ?)`,
+    [id, tenantId, clientId, subject, status]
   );
   return getPortalMessageThread(id, tenantId);
 }
@@ -220,7 +241,6 @@ export async function updatePortalMessageThread(id, tenantId, fields) {
   if (fields.clientId !== undefined) { setClauses.push('client_id = ?'); values.push(fields.clientId); }
   if (fields.subject !== undefined) { setClauses.push('subject = ?'); values.push(fields.subject); }
   if (fields.status !== undefined) { setClauses.push('status = ?'); values.push(fields.status); }
-  if (fields.lastMessageAt !== undefined) { setClauses.push('last_message_at = ?'); values.push(fields.lastMessageAt); }
 
   if (setClauses.length > 0) {
     values.push(id, tenantId);
@@ -256,9 +276,9 @@ export async function createPortalMessage({
 }) {
   await pool.query(
     `INSERT INTO portal_messages
-       (id, tenant_id, thread_id, sender_id, sender_type, content_enc, sent_at)
+       (id, tenant_id, thread_id, sender_id, sender_role, content_enc, sent_at)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [id, tenantId, threadId, senderId, senderType, encrypt(content), sentAt]
+    [id, tenantId, threadId, senderId, senderType, encrypt(content), toSqlTimestamp(sentAt)]
   );
   const [rows] = await pool.query(
     'SELECT * FROM portal_messages WHERE id = ? AND tenant_id = ?',
@@ -290,16 +310,17 @@ export async function createPortalAppointmentRequest({
   id,
   tenantId,
   clientId,
-  preferredDates,
-  requestedCounselorId,
+  preferredTimes,
+  requestedType,
   notes,
   status,
+  resolvedAt,
 }) {
   await pool.query(
     `INSERT INTO portal_appointment_requests
-       (id, tenant_id, client_id, preferred_dates, requested_counselor_id, notes, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [id, tenantId, clientId, JSON.stringify(preferredDates), requestedCounselorId, notes, status]
+       (id, tenant_id, client_id, requested_type, preferred_times, notes, status, resolved_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, tenantId, clientId, requestedType ?? 'session', JSON.stringify(preferredTimes ?? []), notes, status, toSqlTimestamp(resolvedAt)]
   );
   const [rows] = await pool.query(
     'SELECT * FROM portal_appointment_requests WHERE id = ? AND tenant_id = ?',
@@ -313,10 +334,11 @@ export async function updatePortalAppointmentRequest(id, tenantId, fields) {
   const values = [];
 
   if (fields.clientId !== undefined) { setClauses.push('client_id = ?'); values.push(fields.clientId); }
-  if (fields.preferredDates !== undefined) { setClauses.push('preferred_dates = ?'); values.push(JSON.stringify(fields.preferredDates)); }
-  if (fields.requestedCounselorId !== undefined) { setClauses.push('requested_counselor_id = ?'); values.push(fields.requestedCounselorId); }
+  if (fields.preferredTimes !== undefined) { setClauses.push('preferred_times = ?'); values.push(JSON.stringify(fields.preferredTimes)); }
+  if (fields.requestedType !== undefined) { setClauses.push('requested_type = ?'); values.push(fields.requestedType); }
   if (fields.notes !== undefined) { setClauses.push('notes = ?'); values.push(fields.notes); }
   if (fields.status !== undefined) { setClauses.push('status = ?'); values.push(fields.status); }
+  if (fields.resolvedAt !== undefined) { setClauses.push('resolved_at = ?'); values.push(toSqlTimestamp(fields.resolvedAt)); }
 
   if (setClauses.length > 0) {
     values.push(id, tenantId);

@@ -1,6 +1,19 @@
 import pool from '../pool.js';
 import { encrypt, decrypt, encryptJson, decryptJson } from '../../lib/encrypt.js';
 
+function toSqlTimestamp(value) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  const hours = String(date.getUTCHours()).padStart(2, '0');
+  const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+  const seconds = String(date.getUTCSeconds()).padStart(2, '0');
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
 // ---------------------------------------------------------------------------
 // Row mappers
 // ---------------------------------------------------------------------------
@@ -81,34 +94,49 @@ function rowToProgressNote(row) {
 }
 
 function rowToInventoryDefinition(row) {
+  const questionSchema = row.question_schema
+    ? typeof row.question_schema === 'string'
+      ? JSON.parse(row.question_schema)
+      : row.question_schema
+    : null;
+  const scoringRules = row.scoring_rules
+    ? typeof row.scoring_rules === 'string'
+      ? JSON.parse(row.scoring_rules)
+      : row.scoring_rules
+    : null;
+  const scoringMethod = row.scoring_method ?? scoringRules?.method ?? 'sum';
+  const versionNumber = row.version_number ?? scoringRules?.versionNumber ?? 1;
   return {
     id: row.id,
     tenantId: row.tenant_id,
     name: row.name,
     category: row.category,
-    questions: row.questions
-      ? typeof row.questions === 'string'
-        ? JSON.parse(row.questions)
-        : row.questions
-      : null,
-    scoringRules: row.scoring_rules
-      ? typeof row.scoring_rules === 'string'
-        ? JSON.parse(row.scoring_rules)
-        : row.scoring_rules
-      : null,
+    questionSchema,
+    questions: questionSchema,
+    scoringMethod,
+    versionNumber,
+    scoringRules: { method: scoringMethod, versionNumber },
   };
 }
 
 function rowToInventoryAssignment(row) {
+  const responses = row.responses
+    ? typeof row.responses === 'string'
+      ? JSON.parse(row.responses)
+      : row.responses
+    : (row.responses_enc ? decryptJson(row.responses_enc) : null);
   return {
     id: row.id,
     clientId: row.client_id,
     tenantId: row.tenant_id,
-    definitionId: row.definition_id,
-    assignedAt: row.assigned_at,
+    definitionId: row.inventory_id ?? row.definition_id,
+    inventoryId: row.inventory_id ?? row.definition_id,
+    assignedAt: row.created_at ?? row.assigned_at,
     status: row.status,
-    responses: row.responses_enc ? decryptJson(row.responses_enc) : null,
+    responses,
     score: row.score,
+    scoredAt: row.scored_at,
+    completedAt: row.completed_at,
   };
 }
 
@@ -186,12 +214,19 @@ export async function createConsent({
   effectiveFrom,
   effectiveTo,
 }) {
+  const effectiveFromSql = toSqlTimestamp(effectiveFrom);
+  const effectiveToSql = toSqlTimestamp(effectiveTo);
   await pool.query(
     `INSERT INTO consent_records
        (id, client_id, tenant_id, consent_type, signature_state, version, effective_from, effective_to)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, clientId, tenantId, consentType, signatureState, version, effectiveFrom, effectiveTo],
+    [id, clientId, tenantId, consentType, signatureState, version, effectiveFromSql, effectiveToSql],
   );
+  const [rows] = await pool.query(
+    'SELECT * FROM consent_records WHERE id = ? AND client_id = ? AND tenant_id = ?',
+    [id, clientId, tenantId],
+  );
+  return rows.length ? rowToConsent(rows[0]) : null;
 }
 
 export async function updateConsent(id, clientId, tenantId, fields) {
@@ -200,9 +235,9 @@ export async function updateConsent(id, clientId, tenantId, fields) {
   if (fields.consentType !== undefined) pairs.push(['consent_type = ?', fields.consentType]);
   if (fields.signatureState !== undefined) pairs.push(['signature_state = ?', fields.signatureState]);
   if (fields.version !== undefined) pairs.push(['version = ?', fields.version]);
-  if (fields.effectiveFrom !== undefined) pairs.push(['effective_from = ?', fields.effectiveFrom]);
-  if (fields.effectiveTo !== undefined) pairs.push(['effective_to = ?', fields.effectiveTo]);
-  if (fields.signedAt !== undefined) pairs.push(['signed_at = ?', fields.signedAt]);
+  if (fields.effectiveFrom !== undefined) pairs.push(['effective_from = ?', toSqlTimestamp(fields.effectiveFrom)]);
+  if (fields.effectiveTo !== undefined) pairs.push(['effective_to = ?', toSqlTimestamp(fields.effectiveTo)]);
+  if (fields.signedAt !== undefined) pairs.push(['signed_at = ?', toSqlTimestamp(fields.signedAt)]);
 
   if (!pairs.length) return;
 
@@ -227,13 +262,19 @@ export async function getIntakePacket(clientId, tenantId) {
   return rows.length ? rowToIntakePacket(rows[0]) : null;
 }
 
-export async function createIntakePacket({ id, clientId, tenantId, status, assignedForms }) {
+export async function createIntakePacket({ id, clientId, tenantId, status, assignedForms, submittedAt }) {
   const assignedFormsJson = assignedForms ? JSON.stringify(assignedForms) : null;
+  const submittedAtSql = toSqlTimestamp(submittedAt);
   await pool.query(
-    `INSERT INTO intake_packets (id, client_id, tenant_id, status, assigned_forms)
-     VALUES (?, ?, ?, ?, ?)`,
-    [id, clientId, tenantId, status, assignedFormsJson],
+    `INSERT INTO intake_packets (id, client_id, tenant_id, status, assigned_forms, submitted_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [id, clientId, tenantId, status, assignedFormsJson, submittedAtSql],
   );
+  const [rows] = await pool.query(
+    'SELECT * FROM intake_packets WHERE id = ? AND client_id = ? AND tenant_id = ?',
+    [id, clientId, tenantId],
+  );
+  return rows.length ? rowToIntakePacket(rows[0]) : null;
 }
 
 export async function updateIntakePacket(clientId, tenantId, fields) {
@@ -242,7 +283,7 @@ export async function updateIntakePacket(clientId, tenantId, fields) {
   if (fields.status !== undefined) pairs.push(['status = ?', fields.status]);
   if (fields.assignedForms !== undefined)
     pairs.push(['assigned_forms = ?', fields.assignedForms ? JSON.stringify(fields.assignedForms) : null]);
-  if (fields.submittedAt !== undefined) pairs.push(['submitted_at = ?', fields.submittedAt]);
+  if (fields.submittedAt !== undefined) pairs.push(['submitted_at = ?', toSqlTimestamp(fields.submittedAt)]);
 
   if (!pairs.length) return;
 
@@ -340,12 +381,18 @@ export async function createProgressNote({
 }) {
   const summaryEnc = summary ? encrypt(summary) : null;
   const interventionsEnc = interventions ? encrypt(interventions) : null;
+  const signedAtSql = toSqlTimestamp(signedAt);
   await pool.query(
     `INSERT INTO progress_notes
        (id, client_id, tenant_id, note_type, summary_enc, interventions_enc, locked, signed_by, signed_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, clientId, tenantId, noteType, summaryEnc, interventionsEnc, lockedNote ? 1 : 0, signedBy, signedAt],
+    [id, clientId, tenantId, noteType, summaryEnc, interventionsEnc, lockedNote ? 1 : 0, signedBy, signedAtSql],
   );
+  const [rows] = await pool.query(
+    'SELECT * FROM progress_notes WHERE id = ? AND client_id = ? AND tenant_id = ?',
+    [id, clientId, tenantId],
+  );
+  return rows.length ? rowToProgressNote(rows[0]) : null;
 }
 
 export async function updateProgressNote(id, clientId, tenantId, fields) {
@@ -358,7 +405,7 @@ export async function updateProgressNote(id, clientId, tenantId, fields) {
     pairs.push(['interventions_enc = ?', fields.interventions ? encrypt(fields.interventions) : null]);
   if (fields.lockedNote !== undefined) pairs.push(['locked = ?', fields.lockedNote ? 1 : 0]);
   if (fields.signedBy !== undefined) pairs.push(['signed_by = ?', fields.signedBy]);
-  if (fields.signedAt !== undefined) pairs.push(['signed_at = ?', fields.signedAt]);
+  if (fields.signedAt !== undefined) pairs.push(['signed_at = ?', toSqlTimestamp(fields.signedAt)]);
 
   if (!pairs.length) return;
 
@@ -390,13 +437,18 @@ export async function createInventoryDefinition({
   category,
   questions,
   scoringRules,
+  questionSchema,
+  scoringMethod,
+  versionNumber,
 }) {
-  const questionsJson = questions ? JSON.stringify(questions) : null;
-  const scoringRulesJson = scoringRules ? JSON.stringify(scoringRules) : null;
+  const normalizedQuestionSchema = questionSchema ?? questions ?? null;
+  const normalizedScoringMethod = scoringMethod ?? scoringRules?.method ?? 'sum';
+  const normalizedVersionNumber = versionNumber ?? scoringRules?.versionNumber ?? 1;
+  const questionSchemaJson = normalizedQuestionSchema ? JSON.stringify(normalizedQuestionSchema) : null;
   await pool.query(
-    `INSERT INTO inventory_definitions (id, tenant_id, name, category, questions, scoring_rules)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [id, tenantId, name, category, questionsJson, scoringRulesJson],
+    `INSERT INTO inventory_definitions (id, tenant_id, name, category, scoring_method, version_number, question_schema)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [id, tenantId, name, category, normalizedScoringMethod, normalizedVersionNumber, questionSchemaJson],
   );
 }
 
@@ -417,14 +469,24 @@ export async function createInventoryAssignment({
   clientId,
   tenantId,
   definitionId,
+  inventoryId,
   assignedAt,
   status,
+  responses,
+  score,
+  scoredAt,
+  completedAt,
 }) {
+  const inventoryIdValue = inventoryId ?? definitionId;
+  const assignedAtSql = toSqlTimestamp(assignedAt);
+  const scoredAtSql = toSqlTimestamp(scoredAt);
+  const completedAtSql = toSqlTimestamp(completedAt);
+  const responsesJson = responses ? JSON.stringify(responses) : null;
   await pool.query(
     `INSERT INTO inventory_assignments
-       (id, client_id, tenant_id, definition_id, assigned_at, status)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [id, clientId, tenantId, definitionId, assignedAt, status],
+       (id, client_id, tenant_id, inventory_id, created_at, status, responses, score, scored_at, completed_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, clientId, tenantId, inventoryIdValue, assignedAtSql, status, responsesJson, score ?? null, scoredAtSql, completedAtSql],
   );
 }
 
@@ -433,8 +495,10 @@ export async function updateInventoryAssignment(id, clientId, tenantId, fields) 
 
   if (fields.status !== undefined) pairs.push(['status = ?', fields.status]);
   if (fields.responses !== undefined)
-    pairs.push(['responses_enc = ?', fields.responses ? encryptJson(fields.responses) : null]);
+    pairs.push(['responses = ?', fields.responses ? JSON.stringify(fields.responses) : null]);
   if (fields.score !== undefined) pairs.push(['score = ?', fields.score]);
+  if (fields.scoredAt !== undefined) pairs.push(['scored_at = ?', toSqlTimestamp(fields.scoredAt)]);
+  if (fields.completedAt !== undefined) pairs.push(['completed_at = ?', toSqlTimestamp(fields.completedAt)]);
 
   if (!pairs.length) return;
 

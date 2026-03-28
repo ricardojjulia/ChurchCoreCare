@@ -4,8 +4,26 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## Version
 
-- Current release: `1.9.0`
+- Current release: `2.0.0`
 - Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI + revamped ops/monitoring + explicit health probes + OTEL health export + full Scheduling module with Waitlist, Reminders & Calendar DB support)
+
+## Tenant-Model Update (March 2026)
+
+This update hardens tenant-isolated DB behavior and completes blocker remediation needed for full cross-module smoke validation in DB mode.
+
+### Highlights
+
+- Tenant-safe compatibility fixes across platform, clinical, documents, inventory, billing, portal, and faith DB query paths.
+- SQL timestamp normalization for DB writes to avoid ISO-to-TIMESTAMP failures.
+- DB-mode handler fixes where in-memory lookups previously caused false "not found" errors.
+- CORS preflight hardening for local web origins used by integration smoke validation.
+- Added tenant guardrail checklist and CI gate design in `docs/security/tenant-query-safety-checklist.md`.
+
+### Validation
+
+- `node ops/step11-smoke.mjs` passed.
+- `node ops/step12-validate.mjs` passed.
+- `node ops/security-regression.mjs` passed.
 
 ## v1.9.0 — Scheduling: Waitlist, Reminders & Calendar DB Support (March 2026)
 

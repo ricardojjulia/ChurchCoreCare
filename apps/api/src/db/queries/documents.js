@@ -1,5 +1,18 @@
 import pool from '../pool.js';
 
+function toSqlTimestamp(value) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  const hours = String(date.getUTCHours()).padStart(2, '0');
+  const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+  const seconds = String(date.getUTCSeconds()).padStart(2, '0');
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
 // ---------------------------------------------------------------------------
 // Row mappers
 // ---------------------------------------------------------------------------
@@ -22,21 +35,25 @@ function rowToDocumentTemplate(row) {
 }
 
 function rowToDocumentAssignment(row) {
+  const accessHistory = row.access_history
+    ? typeof row.access_history === 'string'
+      ? JSON.parse(row.access_history)
+      : row.access_history
+    : null;
   return {
     id: row.id,
     tenantId: row.tenant_id,
     templateId: row.template_id,
     assigneeType: row.assignee_type,
     assigneeId: row.assignee_id,
-    assignedAt: row.assigned_at,
+    assignedAt: row.created_at,
     status: row.status,
-    dueDate: row.due_date,
+    requiresSignature: Boolean(row.requires_signature),
+    dueDate: row.due_at,
+    dueAt: row.due_at,
     completedAt: row.completed_at,
-    responses: row.responses
-      ? typeof row.responses === 'string'
-        ? JSON.parse(row.responses)
-        : row.responses
-      : null,
+    accessHistory,
+    responses: accessHistory,
   };
 }
 
@@ -71,11 +88,12 @@ export async function createDocumentTemplate({
   contentBlocks,
 }) {
   const contentBlocksJson = contentBlocks ? JSON.stringify(contentBlocks) : null;
+  const resolvedTemplateKey = templateKey || `${templateType || 'template'}-${id}`;
   await pool.query(
     `INSERT INTO document_templates
        (id, tenant_id, title, template_type, audience, template_key, version_number, content_blocks)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, tenantId, title, templateType, audience, templateKey, versionNumber, contentBlocksJson],
+    [id, tenantId, title, templateType, audience, resolvedTemplateKey, versionNumber, contentBlocksJson],
   );
 }
 
@@ -139,12 +157,17 @@ export async function createDocumentAssignment({
   assignedAt,
   status,
   dueDate,
+  requiresSignature,
+  accessHistory,
 }) {
+  const assignedAtSql = toSqlTimestamp(assignedAt);
+  const dueAtSql = toSqlTimestamp(dueDate);
+  const accessHistoryJson = accessHistory ? JSON.stringify(accessHistory) : null;
   await pool.query(
     `INSERT INTO document_assignments
-       (id, tenant_id, template_id, assignee_type, assignee_id, assigned_at, status, due_date)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, tenantId, templateId, assigneeType, assigneeId, assignedAt, status, dueDate],
+       (id, tenant_id, template_id, assignee_type, assignee_id, created_at, status, requires_signature, due_at, access_history)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, tenantId, templateId, assigneeType, assigneeId, assignedAtSql, status, requiresSignature ? 1 : 0, dueAtSql, accessHistoryJson],
   );
 }
 
@@ -152,10 +175,13 @@ export async function updateDocumentAssignment(id, tenantId, fields) {
   const pairs = [];
 
   if (fields.status !== undefined) pairs.push(['status = ?', fields.status]);
-  if (fields.completedAt !== undefined) pairs.push(['completed_at = ?', fields.completedAt]);
+  if (fields.completedAt !== undefined) pairs.push(['completed_at = ?', toSqlTimestamp(fields.completedAt)]);
+  if (fields.requiresSignature !== undefined) pairs.push(['requires_signature = ?', fields.requiresSignature ? 1 : 0]);
   if (fields.responses !== undefined)
-    pairs.push(['responses = ?', fields.responses ? JSON.stringify(fields.responses) : null]);
-  if (fields.dueDate !== undefined) pairs.push(['due_date = ?', fields.dueDate]);
+    pairs.push(['access_history = ?', fields.responses ? JSON.stringify(fields.responses) : null]);
+  if (fields.accessHistory !== undefined)
+    pairs.push(['access_history = ?', fields.accessHistory ? JSON.stringify(fields.accessHistory) : null]);
+  if (fields.dueDate !== undefined) pairs.push(['due_at = ?', toSqlTimestamp(fields.dueDate)]);
 
   if (!pairs.length) return;
 

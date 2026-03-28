@@ -2,24 +2,55 @@ import { randomUUID } from 'node:crypto';
 import pool from '../pool.js';
 import { encrypt, decrypt } from '../../lib/encrypt.js';
 
+const APPOINTMENT_SELECT = `
+  SELECT
+    a.id,
+    a.tenant_id,
+    a.client_id,
+    a.counselor_id,
+    a.client_name_enc,
+    a.counselor_name_enc,
+    a.appointment_type,
+    a.status,
+    a.scheduled_at,
+    a.duration_minutes,
+    a.location_id,
+    l.name AS location_name,
+    a.remote_session,
+    a.created_at,
+    a.updated_at
+  FROM appointments a
+  LEFT JOIN locations l
+    ON l.id = a.location_id
+   AND l.tenant_id = a.tenant_id
+`;
+
 // ---------------------------------------------------------------------------
 // Row mappers
 // ---------------------------------------------------------------------------
 
 function rowToAppointment(row) {
+  const startsAtIso = toIsoString(row.scheduled_at);
+  const durationMinutes = Number.isFinite(Number(row.duration_minutes)) ? Number(row.duration_minutes) : 50;
+  const endsAtIso = startsAtIso
+    ? new Date(new Date(startsAtIso).getTime() + (durationMinutes * 60_000)).toISOString()
+    : null;
+
   return {
     id: row.id,
     tenantId: row.tenant_id,
     clientId: row.client_id,
     clientName: decrypt(row.client_name_enc),
     counselorName: decrypt(row.counselor_name_enc),
-    startsAt: row.starts_at instanceof Date ? row.starts_at.toISOString() : row.starts_at,
-    endsAt: row.ends_at instanceof Date ? row.ends_at.toISOString() : row.ends_at,
+    startsAt: startsAtIso,
+    endsAt: endsAtIso,
     status: row.status,
     appointmentType: row.appointment_type,
-    locationName: row.location_name,
+    locationId: row.location_id,
+    locationName: row.location_name ?? (row.remote_session ? 'Remote Session' : null),
     remoteSession: Boolean(row.remote_session),
-    timezone: row.timezone,
+    durationMinutes,
+    timezone: 'UTC',
     createdAt: row.created_at,
   };
 }
@@ -68,7 +99,9 @@ function rowToAvailabilityTemplate(row) {
 
 export async function listAppointments(tenantId) {
   const [rows] = await pool.query(
-    'SELECT * FROM appointments WHERE tenant_id = ? ORDER BY starts_at ASC',
+    `${APPOINTMENT_SELECT}
+     WHERE a.tenant_id = ?
+     ORDER BY a.scheduled_at ASC`,
     [tenantId]
   );
   return rows.map(rowToAppointment);
@@ -76,7 +109,9 @@ export async function listAppointments(tenantId) {
 
 export async function getAppointmentById(id, tenantId) {
   const [rows] = await pool.query(
-    'SELECT * FROM appointments WHERE id = ? AND tenant_id = ?',
+    `${APPOINTMENT_SELECT}
+     WHERE a.id = ?
+       AND a.tenant_id = ?`,
     [id, tenantId]
   );
   if (rows.length === 0) return null;
@@ -95,33 +130,38 @@ export async function createAppointment({
   appointmentType,
   locationName,
   remoteSession,
-  timezone,
 }) {
+  const scheduledAt = toSqlTimestamp(startsAt);
+  const durationMinutes = computeDurationMinutes(startsAt, endsAt);
+  const locationId = remoteSession ? null : await resolveLocationId(tenantId, locationName);
+
   await pool.query(
     `INSERT INTO appointments
        (id, tenant_id, client_id, client_name_enc, counselor_name_enc,
-        starts_at, ends_at, status, appointment_type, location_name,
-        remote_session, timezone)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        scheduled_at, duration_minutes, status, appointment_type, location_id,
+        remote_session)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       tenantId,
       clientId,
       encrypt(clientName),
       encrypt(counselorName),
-      startsAt,
-      endsAt,
+      scheduledAt,
+      durationMinutes,
       status,
       appointmentType,
-      locationName,
+      locationId,
       remoteSession ? 1 : 0,
-      timezone,
     ]
   );
   return getAppointmentById(id, tenantId);
 }
 
 export async function updateAppointment(id, tenantId, fields) {
+  const current = await getAppointmentById(id, tenantId);
+  if (!current) return null;
+
   const setClauses = [];
   const values = [];
 
@@ -134,15 +174,30 @@ export async function updateAppointment(id, tenantId, fields) {
     values.push(encrypt(fields.counselorName));
   }
   if (fields.clientId !== undefined) { setClauses.push('client_id = ?'); values.push(fields.clientId); }
-  if (fields.startsAt !== undefined) { setClauses.push('starts_at = ?'); values.push(fields.startsAt); }
-  if (fields.endsAt !== undefined) { setClauses.push('ends_at = ?'); values.push(fields.endsAt); }
+  if (fields.startsAt !== undefined) { setClauses.push('scheduled_at = ?'); values.push(toSqlTimestamp(fields.startsAt)); }
   if (fields.status !== undefined) { setClauses.push('status = ?'); values.push(fields.status); }
   if (fields.appointmentType !== undefined) { setClauses.push('appointment_type = ?'); values.push(fields.appointmentType); }
-  if (fields.locationName !== undefined) { setClauses.push('location_name = ?'); values.push(fields.locationName); }
+  if (fields.locationName !== undefined) {
+    const locationId = fields.remoteSession === true
+      ? null
+      : await resolveLocationId(tenantId, fields.locationName);
+    setClauses.push('location_id = ?');
+    values.push(locationId);
+  }
   if (fields.remoteSession !== undefined) { setClauses.push('remote_session = ?'); values.push(fields.remoteSession ? 1 : 0); }
-  if (fields.timezone !== undefined) { setClauses.push('timezone = ?'); values.push(fields.timezone); }
+  if (fields.remoteSession === true && fields.locationName === undefined) {
+    setClauses.push('location_id = ?');
+    values.push(null);
+  }
 
-  if (setClauses.length === 0) return getAppointmentById(id, tenantId);
+  if (fields.startsAt !== undefined || fields.endsAt !== undefined) {
+    const effectiveStart = fields.startsAt ?? current.startsAt;
+    const effectiveEnd = fields.endsAt ?? current.endsAt;
+    setClauses.push('duration_minutes = ?');
+    values.push(computeDurationMinutes(effectiveStart, effectiveEnd));
+  }
+
+  if (setClauses.length === 0) return current;
 
   values.push(id, tenantId);
   await pool.query(
@@ -161,9 +216,14 @@ export async function deleteAppointment(id, tenantId) {
 }
 
 export async function listAppointmentsByDateRange(tenantId, startDate, endDate) {
+  const sqlStart = toSqlTimestamp(startDate);
+  const sqlEnd = toSqlTimestamp(endDate);
   const [rows] = await pool.query(
-    'SELECT * FROM appointments WHERE tenant_id = ? AND starts_at BETWEEN ? AND ? ORDER BY starts_at ASC',
-    [tenantId, startDate, endDate]
+    `${APPOINTMENT_SELECT}
+     WHERE a.tenant_id = ?
+       AND a.scheduled_at BETWEEN ? AND ?
+     ORDER BY a.scheduled_at ASC`,
+    [tenantId, sqlStart, sqlEnd]
   );
   return rows.map(rowToAppointment);
 }
@@ -206,6 +266,7 @@ export async function createReminder({
     'SELECT * FROM reminders WHERE id = ? AND tenant_id = ?',
     [id, tenantId]
   );
+  if (rows.length === 0) return null;
   return rowToReminder(rows[0]);
 }
 
@@ -268,6 +329,7 @@ export async function createWaitlistEntry({
     'SELECT * FROM waitlist_metadata WHERE id = ? AND tenant_id = ?',
     [id, tenantId]
   );
+  if (rows.length === 0) return null;
   return rowToWaitlist(rows[0]);
 }
 
@@ -325,4 +387,40 @@ export async function deleteAvailabilityTemplate(staffId, tenantId) {
     'DELETE FROM availability_templates WHERE staff_id = ? AND tenant_id = ?',
     [staffId, tenantId]
   );
+}
+
+function toIsoString(value) {
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === 'string') return value;
+  return null;
+}
+
+function computeDurationMinutes(startsAt, endsAt) {
+  const start = new Date(startsAt).getTime();
+  const end = new Date(endsAt).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+    return 50;
+  }
+  return Math.max(1, Math.round((end - start) / 60_000));
+}
+
+function toSqlTimestamp(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  const hours = String(date.getUTCHours()).padStart(2, '0');
+  const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+  const seconds = String(date.getUTCSeconds()).padStart(2, '0');
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
+async function resolveLocationId(tenantId, locationName) {
+  if (typeof locationName !== 'string' || !locationName.trim()) return null;
+  const [rows] = await pool.query(
+    'SELECT id FROM locations WHERE tenant_id = ? AND name = ? ORDER BY updated_at DESC LIMIT 1',
+    [tenantId, locationName.trim()],
+  );
+  return rows[0]?.id ?? null;
 }

@@ -43,15 +43,22 @@ export function applySecurityHeaders(response) {
 // CORS
 // ---------------------------------------------------------------------------
 
-const ALLOWED_ORIGINS = new Set(
-  (
-    process.env.ALLOWED_ORIGINS ||
-    'http://127.0.0.1:3000,http://localhost:3000,http://127.0.0.1:3002,http://localhost:3002'
-  )
+const DEFAULT_ALLOWED_ORIGINS = [
+  'http://127.0.0.1:3000',
+  'http://localhost:3000',
+  'http://127.0.0.1:3002',
+  'http://localhost:3002',
+  'http://127.0.0.1:5173',
+  'http://localhost:5173',
+];
+
+const ALLOWED_ORIGINS = new Set([
+  ...DEFAULT_ALLOWED_ORIGINS,
+  ...(process.env.ALLOWED_ORIGINS ?? '')
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean),
-);
+]);
 
 export function handleCors(request, response) {
   const origin = request.headers['origin'];

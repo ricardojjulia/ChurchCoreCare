@@ -1108,7 +1108,7 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (requestUrl.pathname === '/v1/portal/accounts') {
-      await handlePortalAccounts(request, response, requestUrl);
+      await handlePortalAccounts(request, response, requestUrl, session);
       return;
     }
 
@@ -1118,7 +1118,7 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (requestUrl.pathname === '/v1/portal/documents') {
-      await handlePortalDocuments(request, response, requestUrl);
+      await handlePortalDocuments(request, response, requestUrl, session);
       return;
     }
 
@@ -2171,13 +2171,23 @@ async function handleClientLifecycle(request, response, requestUrl, session) {
 
 async function handleClientConsents(request, response, requestUrl, session) {
   const clientId = extractClientIdForSegment(requestUrl.pathname, 'consents');
-  const client = clients.find((item) => item.id === clientId);
-  if (!client) {
-    writeJson(response, 404, { error: 'Client not found' });
-    return;
+  let client;
+  if (process.env.DB_NAME) {
+    const tenantId = callerTenant(request, session);
+    const [rows] = await pool.query('SELECT id, tenant_id FROM clients WHERE id = ? AND tenant_id = ?', [clientId, tenantId]);
+    if (!rows[0]) {
+      writeJson(response, 404, { error: 'Client not found' });
+      return;
+    }
+    client = { id: rows[0].id, tenantId: rows[0].tenant_id };
+  } else {
+    client = clients.find((item) => item.id === clientId);
+    if (!client) {
+      writeJson(response, 404, { error: 'Client not found' });
+      return;
+    }
+    if (enforceTenantScope(request, response, client.tenantId, session)) return;
   }
-
-  if (enforceTenantScope(request, response, client.tenantId, session)) return;
 
   if (request.method === 'GET') {
     if (process.env.DB_NAME) {
@@ -2293,13 +2303,23 @@ async function handleClientConsents(request, response, requestUrl, session) {
 
 async function handleClientIntakePackets(request, response, requestUrl, session) {
   const clientId = extractClientIdForSegment(requestUrl.pathname, 'intake-packets');
-  const client = clients.find((item) => item.id === clientId);
-  if (!client) {
-    writeJson(response, 404, { error: 'Client not found' });
-    return;
+  let client;
+  if (process.env.DB_NAME) {
+    const tenantId = callerTenant(request, session);
+    const [rows] = await pool.query('SELECT id, tenant_id FROM clients WHERE id = ? AND tenant_id = ?', [clientId, tenantId]);
+    if (!rows[0]) {
+      writeJson(response, 404, { error: 'Client not found' });
+      return;
+    }
+    client = { id: rows[0].id, tenantId: rows[0].tenant_id };
+  } else {
+    client = clients.find((item) => item.id === clientId);
+    if (!client) {
+      writeJson(response, 404, { error: 'Client not found' });
+      return;
+    }
+    if (enforceTenantScope(request, response, client.tenantId, session)) return;
   }
-
-  if (enforceTenantScope(request, response, client.tenantId, session)) return;
 
   if (request.method === 'GET') {
     if (process.env.DB_NAME) {
@@ -2411,13 +2431,23 @@ async function handleClientIntakePackets(request, response, requestUrl, session)
 
 async function handleClientTreatmentPlan(request, response, requestUrl, session) {
   const clientId = extractClientIdForSegment(requestUrl.pathname, 'treatment-plan');
-  const client = clients.find((item) => item.id === clientId);
-  if (!client) {
-    writeJson(response, 404, { error: 'Client not found' });
-    return;
+  let client;
+  if (process.env.DB_NAME) {
+    const tenantId = callerTenant(request, session);
+    const [rows] = await pool.query('SELECT id, tenant_id FROM clients WHERE id = ? AND tenant_id = ?', [clientId, tenantId]);
+    if (!rows[0]) {
+      writeJson(response, 404, { error: 'Client not found' });
+      return;
+    }
+    client = { id: rows[0].id, tenantId: rows[0].tenant_id };
+  } else {
+    client = clients.find((item) => item.id === clientId);
+    if (!client) {
+      writeJson(response, 404, { error: 'Client not found' });
+      return;
+    }
+    if (enforceTenantScope(request, response, client.tenantId, session)) return;
   }
-
-  if (enforceTenantScope(request, response, client.tenantId, session)) return;
 
   if (request.method === 'GET') {
     if (process.env.DB_NAME) {
@@ -2501,13 +2531,23 @@ async function handleClientTreatmentPlan(request, response, requestUrl, session)
 
 async function handleClientProgressNotes(request, response, requestUrl, session) {
   const clientId = extractClientIdForSegment(requestUrl.pathname, 'progress-notes');
-  const client = clients.find((item) => item.id === clientId);
-  if (!client) {
-    writeJson(response, 404, { error: 'Client not found' });
-    return;
+  let client;
+  if (process.env.DB_NAME) {
+    const tenantId = callerTenant(request, session);
+    const [rows] = await pool.query('SELECT id, tenant_id FROM clients WHERE id = ? AND tenant_id = ?', [clientId, tenantId]);
+    if (!rows[0]) {
+      writeJson(response, 404, { error: 'Client not found' });
+      return;
+    }
+    client = { id: rows[0].id, tenantId: rows[0].tenant_id };
+  } else {
+    client = clients.find((item) => item.id === clientId);
+    if (!client) {
+      writeJson(response, 404, { error: 'Client not found' });
+      return;
+    }
+    if (enforceTenantScope(request, response, client.tenantId, session)) return;
   }
-
-  if (enforceTenantScope(request, response, client.tenantId, session)) return;
 
   if (request.method === 'GET') {
     if (process.env.DB_NAME) {
@@ -2776,13 +2816,17 @@ async function handleDocumentAssignments(request, response, requestUrl, session)
   if (request.method === 'POST') {
     const payload = await readJsonBody(request);
     const templateId = sanitizeStr(payload.templateId, 50);
-    const template = documentTemplates.find((record) => record.id === templateId);
+    let template;
+    if (process.env.DB_NAME) {
+      template = await getDocumentTemplateById(templateId, callerTenant(request, session));
+    } else {
+      template = documentTemplates.find((record) => record.id === templateId);
+      if (template && enforceTenantScope(request, response, template.tenantId)) return;
+    }
     if (!template) {
       writeJson(response, 400, { error: 'Valid templateId is required' });
       return;
     }
-
-    if (enforceTenantScope(request, response, template.tenantId)) return;
 
     const assigneeType = normalizeDocumentAudienceType(payload.assigneeType ?? 'client');
     if (!assigneeType) {
@@ -2796,13 +2840,31 @@ async function handleDocumentAssignments(request, response, requestUrl, session)
       return;
     }
 
-    if (assigneeType === 'client' && !clients.some((client) => client.id === assigneeId)) {
-      writeJson(response, 400, { error: 'assigneeId must reference an existing client' });
-      return;
-    }
-    if (assigneeType === 'staff' && !staffMembers.some((staff) => staff.id === assigneeId)) {
-      writeJson(response, 400, { error: 'assigneeId must reference an existing staff member' });
-      return;
+    if (process.env.DB_NAME) {
+      const tenantId = callerTenant(request, session);
+      if (assigneeType === 'client') {
+        const [clientRows] = await pool.query('SELECT id FROM clients WHERE id = ? AND tenant_id = ?', [assigneeId, tenantId]);
+        if (!clientRows[0]) {
+          writeJson(response, 400, { error: 'assigneeId must reference an existing client' });
+          return;
+        }
+      }
+      if (assigneeType === 'staff') {
+        const [staffRows] = await pool.query('SELECT id FROM staff_members WHERE id = ? AND tenant_id = ?', [assigneeId, tenantId]);
+        if (!staffRows[0]) {
+          writeJson(response, 400, { error: 'assigneeId must reference an existing staff member' });
+          return;
+        }
+      }
+    } else {
+      if (assigneeType === 'client' && !clients.some((client) => client.id === assigneeId)) {
+        writeJson(response, 400, { error: 'assigneeId must reference an existing client' });
+        return;
+      }
+      if (assigneeType === 'staff' && !staffMembers.some((staff) => staff.id === assigneeId)) {
+        writeJson(response, 400, { error: 'assigneeId must reference an existing staff member' });
+        return;
+      }
     }
 
     const status = normalizeDocumentAssignmentStatus(payload.status ?? 'assigned');
@@ -2821,6 +2883,10 @@ async function handleDocumentAssignments(request, response, requestUrl, session)
         assignedAt: new Date().toISOString(),
         status,
         dueDate: normalizeIsoDate(payload.dueAt),
+        requiresSignature: payload.requiresSignature ?? template.templateType === 'consent_form',
+        accessHistory: [
+          { action: 'assigned', at: new Date().toISOString(), actorRole: callerRole(request, session) || 'unknown' },
+        ],
       });
       const items = await listDocumentAssignments(template.tenantId, { templateId, assigneeId });
       const item = items[items.length - 1];
@@ -2871,10 +2937,25 @@ async function handleDocumentAssignments(request, response, requestUrl, session)
       if (status === 'completed' || status === 'signed') fields.completedAt = new Date().toISOString();
     }
     if (typeof payload.dueAt === 'string') fields.dueDate = normalizeIsoDate(payload.dueAt);
+    if (typeof payload.requiresSignature === 'boolean') fields.requiresSignature = payload.requiresSignature;
     if (Array.isArray(payload.responses)) fields.responses = payload.responses;
     await updateDocumentAssignment(assignmentId, tenantId, fields);
     const [updated] = await pool.query('SELECT * FROM document_assignments WHERE id = ?', [assignmentId]);
-    const item = { id: updated[0].id, tenantId: updated[0].tenant_id, templateId: updated[0].template_id, assigneeType: updated[0].assignee_type, assigneeId: updated[0].assignee_id, assignedAt: updated[0].assigned_at, status: updated[0].status, dueDate: updated[0].due_date, completedAt: updated[0].completed_at, responses: updated[0].responses ? (typeof updated[0].responses === 'string' ? JSON.parse(updated[0].responses) : updated[0].responses) : null };
+    const item = {
+      id: updated[0].id,
+      tenantId: updated[0].tenant_id,
+      templateId: updated[0].template_id,
+      assigneeType: updated[0].assignee_type,
+      assigneeId: updated[0].assignee_id,
+      assignedAt: updated[0].created_at,
+      status: updated[0].status,
+      requiresSignature: Boolean(updated[0].requires_signature),
+      dueDate: updated[0].due_at,
+      dueAt: updated[0].due_at,
+      completedAt: updated[0].completed_at,
+      responses: updated[0].access_history ? (typeof updated[0].access_history === 'string' ? JSON.parse(updated[0].access_history) : updated[0].access_history) : null,
+      accessHistory: updated[0].access_history ? (typeof updated[0].access_history === 'string' ? JSON.parse(updated[0].access_history) : updated[0].access_history) : null,
+    };
     telemetry.recordMutation('documents.assignment.update');
     emitAudit(request, 'documents.assignment.update', 'document_assignment', item.id, session);
     writeJson(response, 200, { item });
@@ -2977,8 +3058,11 @@ async function handleInventoryDefinitions(request, response, session) {
     const [rows] = await pool.query('SELECT * FROM inventory_definitions WHERE id = ?', [newId]);
     const item = rows[0] ? {
       id: rows[0].id, tenantId: rows[0].tenant_id, name: rows[0].name, category: rows[0].category,
-      questions: rows[0].questions ? (typeof rows[0].questions === 'string' ? JSON.parse(rows[0].questions) : rows[0].questions) : null,
-      scoringRules: rows[0].scoring_rules ? (typeof rows[0].scoring_rules === 'string' ? JSON.parse(rows[0].scoring_rules) : rows[0].scoring_rules) : null,
+      questionSchema: rows[0].question_schema ? (typeof rows[0].question_schema === 'string' ? JSON.parse(rows[0].question_schema) : rows[0].question_schema) : null,
+      questions: rows[0].question_schema ? (typeof rows[0].question_schema === 'string' ? JSON.parse(rows[0].question_schema) : rows[0].question_schema) : null,
+      scoringMethod: rows[0].scoring_method,
+      versionNumber: rows[0].version_number,
+      scoringRules: { method: rows[0].scoring_method, versionNumber: rows[0].version_number },
     } : null;
     telemetry.recordMutation('inventory.definition.create');
     emitAudit(request, 'inventory.definition.create', 'inventory_definition', newId, session);
@@ -3080,19 +3164,35 @@ async function handleInventoryAssignments(request, response, requestUrl, session
   if (request.method === 'POST') {
     const payload = await readJsonBody(request);
     const inventoryId = sanitizeStr(payload.inventoryId, 50);
-    const definition = inventoryDefinitions.find((record) => record.id === inventoryId);
-    if (!definition) {
-      writeJson(response, 400, { error: 'Valid inventoryId is required' });
-      return;
-    }
-
-    if (enforceTenantScope(request, response, definition.tenantId)) return;
-
     const clientId = sanitizeStr(payload.clientId, 50);
-    const client = clients.find((record) => record.id === clientId);
-    if (!client) {
-      writeJson(response, 400, { error: 'Valid clientId is required' });
-      return;
+    let definition;
+    let client;
+    if (process.env.DB_NAME) {
+      const tenantId = callerTenant(request, session);
+      const [definitionRows] = await pool.query('SELECT id, tenant_id, scoring_method FROM inventory_definitions WHERE id = ? AND tenant_id = ?', [inventoryId, tenantId]);
+      if (!definitionRows[0]) {
+        writeJson(response, 400, { error: 'Valid inventoryId is required' });
+        return;
+      }
+      definition = { id: definitionRows[0].id, tenantId: definitionRows[0].tenant_id, scoringMethod: definitionRows[0].scoring_method };
+      const [clientRows] = await pool.query('SELECT id, tenant_id FROM clients WHERE id = ? AND tenant_id = ?', [clientId, tenantId]);
+      if (!clientRows[0]) {
+        writeJson(response, 400, { error: 'Valid clientId is required' });
+        return;
+      }
+      client = { id: clientRows[0].id, tenantId: clientRows[0].tenant_id };
+    } else {
+      definition = inventoryDefinitions.find((record) => record.id === inventoryId);
+      if (!definition) {
+        writeJson(response, 400, { error: 'Valid inventoryId is required' });
+        return;
+      }
+      if (enforceTenantScope(request, response, definition.tenantId)) return;
+      client = clients.find((record) => record.id === clientId);
+      if (!client) {
+        writeJson(response, 400, { error: 'Valid clientId is required' });
+        return;
+      }
     }
 
     const status = normalizeInventoryAssignmentStatus(payload.status ?? 'assigned');
@@ -3112,16 +3212,31 @@ async function handleInventoryAssignments(request, response, requestUrl, session
 
     if (process.env.DB_NAME) {
       const newId = genId('ia');
+      const score = computeInventoryScore(definition.scoringMethod, responses);
       await createInventoryAssignment({
         id: newId,
         clientId: client.id,
         tenantId: definition.tenantId,
-        definitionId: inventoryId,
+        inventoryId,
         assignedAt: new Date().toISOString(),
         status,
+        responses,
+        score,
+        scoredAt: score === null ? null : new Date().toISOString(),
+        completedAt: status === 'completed' || status === 'reviewed' ? new Date().toISOString() : null,
       });
       const [rows] = await pool.query('SELECT * FROM inventory_assignments WHERE id = ?', [newId]);
-      const item = rows[0] ? { id: rows[0].id, clientId: rows[0].client_id, tenantId: rows[0].tenant_id, definitionId: rows[0].definition_id, assignedAt: rows[0].assigned_at, status: rows[0].status, responses: null, score: null } : null;
+      const item = rows[0] ? {
+        id: rows[0].id,
+        clientId: rows[0].client_id,
+        tenantId: rows[0].tenant_id,
+        definitionId: rows[0].inventory_id,
+        inventoryId: rows[0].inventory_id,
+        assignedAt: rows[0].created_at,
+        status: rows[0].status,
+        responses: rows[0].responses ? (typeof rows[0].responses === 'string' ? JSON.parse(rows[0].responses) : rows[0].responses) : null,
+        score: rows[0].score,
+      } : null;
       telemetry.recordMutation('inventory.assignment.create');
       emitAudit(request, 'inventory.assignment.create', 'inventory_assignment', newId, session);
       writeJson(response, 201, { item });
@@ -3168,7 +3283,17 @@ async function handleInventoryAssignments(request, response, requestUrl, session
     if (Array.isArray(payload.responses)) fields.responses = payload.responses.map((entry) => ({ key: sanitizeStr(entry.key, 80), value: Number(entry.value) })).filter((entry) => entry.key && Number.isFinite(entry.value));
     await updateInventoryAssignment(assignmentId, rows[0].client_id, tenantId, fields);
     const [updated] = await pool.query('SELECT * FROM inventory_assignments WHERE id = ?', [assignmentId]);
-    const item = { id: updated[0].id, clientId: updated[0].client_id, tenantId: updated[0].tenant_id, definitionId: updated[0].definition_id, assignedAt: updated[0].assigned_at, status: updated[0].status, responses: null, score: updated[0].score };
+    const item = {
+      id: updated[0].id,
+      clientId: updated[0].client_id,
+      tenantId: updated[0].tenant_id,
+      definitionId: updated[0].inventory_id,
+      inventoryId: updated[0].inventory_id,
+      assignedAt: updated[0].created_at,
+      status: updated[0].status,
+      responses: updated[0].responses ? (typeof updated[0].responses === 'string' ? JSON.parse(updated[0].responses) : updated[0].responses) : null,
+      score: updated[0].score,
+    };
     telemetry.recordMutation('inventory.assignment.update');
     emitAudit(request, 'inventory.assignment.update', 'inventory_assignment', item.id, session);
     writeJson(response, 200, { item });
@@ -4385,9 +4510,15 @@ async function handleSuperbills(request, response, requestUrl, session) {
   writeJson(response, 201, { item });
 }
 
-async function handleClaimPlaceholders(request, response, requestUrl) {
+async function handleClaimPlaceholders(request, response, requestUrl, session) {
   if (request.method === 'GET') {
     const statusFilter = sanitizeStr(requestUrl.searchParams.get('status') ?? '', 40);
+    if (process.env.DB_NAME) {
+      const items = await listClaims(callerTenant(request, session), statusFilter || undefined);
+      emitAudit(request, 'billing.claim.read', 'billing_claim', 'collection', session);
+      writeJson(response, 200, { items });
+      return;
+    }
     let items = filterByTenant(claimPlaceholders, request);
     if (statusFilter) items = items.filter((claim) => claim.status === statusFilter);
     emitAudit(request, 'billing.claim.read', 'billing_claim', 'collection');
@@ -4398,6 +4529,35 @@ async function handleClaimPlaceholders(request, response, requestUrl) {
   if (request.method === 'POST') {
     const payload = await readJsonBody(request);
     const invoiceId = sanitizeStr(payload.invoiceId, 50);
+
+    if (process.env.DB_NAME) {
+      const tenantId = callerTenant(request, session);
+      const invoice = await getInvoiceById(invoiceId, tenantId);
+      if (!invoice) {
+        writeJson(response, 400, { error: 'Valid invoiceId is required' });
+        return;
+      }
+      const status = normalizeClaimStatus(payload.status ?? 'queued');
+      if (!status) {
+        writeJson(response, 400, { error: 'status must be valid' });
+        return;
+      }
+      const item = await createClaim({
+        id: genId('clm'),
+        tenantId,
+        invoiceId,
+        status,
+        externalReference: sanitizeStr(payload.externalReference, 120) ?? '',
+        submittedAt: status === 'queued' || status === 'submitted' ? new Date().toISOString() : null,
+        notes: sanitizeStr(payload.notes, 500) ?? '',
+      });
+      const updatedInvoice = await updateInvoice(invoiceId, tenantId, { claimStatus: status });
+      telemetry.recordMutation('billing.claim.create');
+      emitAudit(request, 'billing.claim.create', 'billing_claim', item.id, session);
+      writeJson(response, 201, { item, invoice: updatedInvoice });
+      return;
+    }
+
     const invoice = invoices.find((item) => item.id === invoiceId);
     if (!invoice) {
       writeJson(response, 400, { error: 'Valid invoiceId is required' });
@@ -4440,6 +4600,37 @@ async function handleClaimPlaceholders(request, response, requestUrl) {
 
   const payload = await readJsonBody(request);
   const claimId = sanitizeStr(payload.claimId, 50);
+
+  if (process.env.DB_NAME) {
+    const tenantId = callerTenant(request, session);
+    const existingClaims = await listClaims(tenantId);
+    const existing = existingClaims.find((claim) => claim.id === claimId);
+    if (!existing) {
+      writeJson(response, 404, { error: 'Claim placeholder not found' });
+      return;
+    }
+    const fields = {};
+    if (typeof payload.status === 'string') {
+      const status = normalizeClaimStatus(payload.status);
+      if (!status) {
+        writeJson(response, 400, { error: 'status must be valid' });
+        return;
+      }
+      fields.status = status;
+    }
+    if (typeof payload.externalReference === 'string') fields.externalReference = sanitizeStr(payload.externalReference, 120) ?? existing.externalReference;
+    if (typeof payload.notes === 'string') fields.notes = sanitizeStr(payload.notes, 500) ?? existing.notes;
+    const item = await updateClaim(claimId, tenantId, fields);
+    let invoice = null;
+    if (item?.invoiceId) {
+      invoice = await updateInvoice(item.invoiceId, tenantId, { claimStatus: item.status });
+    }
+    telemetry.recordMutation('billing.claim.update');
+    emitAudit(request, 'billing.claim.update', 'billing_claim', claimId, session);
+    writeJson(response, 200, { item, invoice });
+    return;
+  }
+
   const item = claimPlaceholders.find((claim) => claim.id === claimId);
   if (!item) {
     writeJson(response, 404, { error: 'Claim placeholder not found' });
@@ -4544,10 +4735,16 @@ async function handlePortalOverview(request, response, requestUrl) {
   });
 }
 
-async function handlePortalAccounts(request, response, requestUrl) {
+async function handlePortalAccounts(request, response, requestUrl, session) {
   if (request.method === 'GET') {
     const client = await resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50));
     if (!client) return;
+    if (process.env.DB_NAME) {
+      const item = await getPortalAccount(client.id, client.tenantId);
+      emitAudit(request, 'portal.account.read', 'portal_account', client.id, session);
+      writeJson(response, 200, { item });
+      return;
+    }
     const item = portalAccounts.find((account) => account.clientId === client.id && account.tenantId === client.tenantId) ?? null;
     emitAudit(request, 'portal.account.read', 'portal_account', client.id);
     writeJson(response, 200, { item });
@@ -4559,10 +4756,64 @@ async function handlePortalAccounts(request, response, requestUrl) {
     return;
   }
 
-  if (requirePracticeAdmin(request, response)) return;
+  if (requirePracticeAdmin(request, response, session)) return;
 
   const payload = await readJsonBody(request);
   const clientId = sanitizeStr(payload.clientId, 50);
+
+  if (process.env.DB_NAME) {
+    const tenantId = callerTenant(request, session);
+    const [clientRows] = await pool.query('SELECT id, tenant_id FROM clients WHERE id = ? AND tenant_id = ?', [clientId, tenantId]);
+    if (!clientRows[0]) {
+      writeJson(response, 400, { error: 'Valid clientId is required' });
+      return;
+    }
+
+    if (request.method === 'POST') {
+      const existing = await getPortalAccount(clientId, tenantId);
+      if (existing) {
+        writeJson(response, 409, { error: 'Portal account already exists for client' });
+        return;
+      }
+      const status = normalizePortalAccountStatus(payload.status ?? 'invited');
+      if (!status) {
+        writeJson(response, 400, { error: 'status must be valid' });
+        return;
+      }
+      const item = await createPortalAccount({
+        id: genId('pa'),
+        clientId,
+        tenantId,
+        email: sanitizeStr(payload.email, 200) ?? '',
+        status,
+        mfaEnabled: Boolean(payload.mfaEnabled),
+      });
+      telemetry.recordMutation('portal.account.create');
+      emitAudit(request, 'portal.account.create', 'portal_account', item.id, session);
+      writeJson(response, 201, { item });
+      return;
+    }
+
+    const status = typeof payload.status === 'string' ? normalizePortalAccountStatus(payload.status) : undefined;
+    if (typeof payload.status === 'string' && !status) {
+      writeJson(response, 400, { error: 'status must be valid' });
+      return;
+    }
+    const item = await updatePortalAccount(clientId, tenantId, {
+      status,
+      email: typeof payload.email === 'string' ? sanitizeStr(payload.email, 200) : undefined,
+      mfaEnabled: payload.mfaEnabled !== undefined ? Boolean(payload.mfaEnabled) : undefined,
+    });
+    if (!item) {
+      writeJson(response, 404, { error: 'Portal account not found' });
+      return;
+    }
+    telemetry.recordMutation('portal.account.update');
+    emitAudit(request, 'portal.account.update', 'portal_account', item.id, session);
+    writeJson(response, 200, { item });
+    return;
+  }
+
   const client = clients.find((item) => item.id === clientId);
   if (!client) {
     writeJson(response, 400, { error: 'Valid clientId is required' });
@@ -4689,11 +4940,17 @@ async function handlePortalIntakePackets(request, response, requestUrl) {
   writeJson(response, 200, { item });
 }
 
-async function handlePortalDocuments(request, response, requestUrl) {
+async function handlePortalDocuments(request, response, requestUrl, session) {
   const client = await resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50));
   if (!client) return;
 
   if (request.method === 'GET') {
+    if (process.env.DB_NAME) {
+      const items = await listDocumentAssignments(client.tenantId, { clientId: client.id });
+      emitAudit(request, 'portal.document.read', 'document_assignment', client.id, session);
+      writeJson(response, 200, { items });
+      return;
+    }
     const items = documentAssignments
       .filter((item) => item.tenantId === client.tenantId)
       .filter((item) => item.assigneeType === 'client' && item.assigneeId === client.id)
@@ -4713,6 +4970,53 @@ async function handlePortalDocuments(request, response, requestUrl) {
 
   const payload = await readJsonBody(request);
   const assignmentId = sanitizeStr(payload.assignmentId, 50);
+
+  if (process.env.DB_NAME) {
+    const [rows] = await pool.query('SELECT * FROM document_assignments WHERE id = ? AND tenant_id = ?', [assignmentId, client.tenantId]);
+    if (!rows[0]) {
+      writeJson(response, 404, { error: 'Document assignment not found' });
+      return;
+    }
+    if (rows[0].assignee_type !== 'client' || rows[0].assignee_id !== client.id) {
+      writeJson(response, 403, { error: 'Access to this resource is not permitted' });
+      return;
+    }
+    const nextStatus = normalizeDocumentAssignmentStatus(payload.status ?? 'signed');
+    if (!nextStatus) {
+      writeJson(response, 400, { error: 'status must be valid' });
+      return;
+    }
+    const existingHistory = rows[0].access_history
+      ? (typeof rows[0].access_history === 'string' ? JSON.parse(rows[0].access_history) : rows[0].access_history)
+      : [];
+    const accessHistory = [
+      ...(Array.isArray(existingHistory) ? existingHistory : []),
+      {
+        action: nextStatus === 'signed' ? 'signed' : 'completed',
+        at: new Date().toISOString(),
+        actorRole: callerRole(request, session) || 'client',
+      },
+    ];
+    const fields = { status: nextStatus, accessHistory };
+    if (nextStatus === 'signed' || nextStatus === 'completed') fields.completedAt = new Date().toISOString();
+    await updateDocumentAssignment(assignmentId, client.tenantId, fields);
+    const [updated] = await pool.query('SELECT * FROM document_assignments WHERE id = ?', [assignmentId]);
+    const item = {
+      id: updated[0].id,
+      tenantId: updated[0].tenant_id,
+      templateId: updated[0].template_id,
+      assigneeType: updated[0].assignee_type,
+      assigneeId: updated[0].assignee_id,
+      status: updated[0].status,
+      completedAt: updated[0].completed_at,
+      accessHistory: updated[0].access_history ? (typeof updated[0].access_history === 'string' ? JSON.parse(updated[0].access_history) : updated[0].access_history) : [],
+    };
+    telemetry.recordMutation('portal.document.update');
+    emitAudit(request, 'portal.document.update', 'document_assignment', item.id, session);
+    writeJson(response, 200, { item });
+    return;
+  }
+
   const item = documentAssignments.find((record) => record.id === assignmentId);
   if (!item) {
     writeJson(response, 404, { error: 'Document assignment not found' });
@@ -5534,11 +5838,11 @@ async function handleTenantProvisioning(request, response, session) {
   if (process.env.DB_NAME) {
     const item = await createTenantProvisioningRequest({
       id: genId('tpr'),
+      tenantId: callerTenant(request, session),
       requestedTenantId,
       requestedPracticeName,
       ownerEmail,
       status,
-      submittedByTenantId: callerTenant(request, session),
     });
     telemetry.recordMutation('platform.tenant_provisioning.create');
     await emitAudit(request, 'platform.tenant_provisioning.create', 'tenant_provisioning_request', item.id, session);

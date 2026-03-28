@@ -281,7 +281,7 @@ export async function updateFaithChurchReferral(id, tenantId, fields) {
 
 export async function getFaithLanguagePreferences(tenantId) {
   const [rows] = await pool.query(
-    'SELECT * FROM faith_language_preferences WHERE tenant_id = ? ORDER BY created_at DESC LIMIT 1',
+    'SELECT * FROM faith_language_preferences WHERE tenant_id = ? ORDER BY updated_at DESC LIMIT 1',
     [tenantId],
   );
   return rows[0] ? rowToFaithLanguagePreferences(rows[0]) : null;
