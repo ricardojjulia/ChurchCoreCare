@@ -1,5 +1,40 @@
 # Change Log
 
+## v2.1.3 — Deep Database Engine Monitoring
+
+**Date:** March 28, 2026
+**Type:** Minor Release
+
+### Overview
+
+Replaces the single DB health ping with a live, rich monitoring surface backed by MySQL internal status tables. The monitoring dashboard now shows connection counts, InnoDB buffer pool hit ratio, per-operation query breakdowns, throughput, slow-query alerting, and per-table row/size estimates alongside an animated SVG database-engine graphic.
+
+### API (v2.1.3)
+
+- Added `GET /v1/monitoring/db` — no-auth monitoring endpoint (same RBAC exemption as `/v1/telemetry/summary`)
+- Queries `SHOW GLOBAL STATUS` for: `Uptime`, `Threads_connected`, `Threads_running`, `Max_used_connections`, `Questions`, `Slow_queries`, `Com_select/insert/update/delete`, `Innodb_buffer_pool_pages_total/free`, `Innodb_buffer_pool_read_requests/reads`, `Bytes_received/sent`
+- Queries `SHOW GLOBAL VARIABLES` for: `max_connections`, `innodb_buffer_pool_size`
+- Queries `information_schema.TABLES` for per-table row estimates and `data_length + index_length` storage sizes, scoped to `DB_NAME`
+- Derives `bufferPool.hitRatio` as `(1 − reads/requests) × 100`
+- Returns `{ mode: "unavailable" }` gracefully when `DB_NAME` is not set
+- Route registered in `resolveRoute()` as `/v1/monitoring/db`
+
+### Web (v2.1.3)
+
+- Added **Database Engine** section in `apps/web/public/monitor.html` between Health Probes and Request Activity
+- Animated SVG graphic: 3D cylinder with glowing cap, three staggered pulsing ground rings, animated data-stream from above, and three orbiting data packets (cyan 3.2 s, indigo 3.2 s half-offset, amber 2.1 s) — pure SVG SMIL, no external libraries
+- Six metric tiles: Uptime, Connections (with running/max sub-line), Buffer Pool Hit %, Total Queries (S/I/U/D sub-line), Slow Queries (amber highlight when > 0), Throughput (human-readable bytes)
+- Table Storage & Row Estimates pill grid: one card per table with name, row count estimate, and KB/MB size
+- Added `fmtBytes()` and `fmtUptimeLong()` helpers to `apps/web/public/monitor.js`
+- Added `updateDbPanel()` to drive all DB panel DOM updates with graceful fallback
+- `/api/v1/monitoring/db` added as a fourth parallel fetch in `doRefresh()` `Promise.allSettled` call
+
+### Breaking changes (v2.1.3)
+
+None.
+
+---
+
 ## v2.1.2 — Monitoring Foundation And OTEL Surface Coverage
 
 **Date:** March 28, 2026

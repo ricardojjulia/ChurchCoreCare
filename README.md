@@ -4,8 +4,83 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## Version
 
-- Current release: `2.1.0`
-- Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI + revamped ops/monitoring + explicit health probes + OTEL health export + full Scheduling module with Waitlist, Reminders & Calendar DB support + waitlist-to-appointment promotion + audit UUID hardening)
+- Current release: `2.1.3`
+- Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI + revamped ops/monitoring + explicit health probes + OTEL health export + full Scheduling module with Waitlist, Reminders & Calendar DB support + waitlist-to-appointment promotion + audit UUID hardening + deep DB engine monitoring dashboard)
+
+## v2.1.3 — Deep Database Engine Monitoring (March 2026)
+
+### v2.1.3 Overview
+
+Replaces the single "is the database reachable?" health ping with a live, rich monitoring surface that queries MySQL internal status and metadata tables. The monitoring dashboard now displays real-time connection counts, InnoDB buffer pool efficiency, query-type breakdowns, throughput, slow-query alerting, and per-table row/size estimates — all alongside an animated database-engine graphic.
+
+### v2.1.3 Changes
+
+#### API — `GET /v1/monitoring/db` (`apps/api/src/index.js`, `apps/api/src/lib/security.js`)
+
+New public (no-auth) monitoring endpoint that queries the running MySQL instance and returns:
+
+| Field | Source | Description |
+| --- | --- | --- |
+| `uptime.seconds` | `SHOW GLOBAL STATUS · Uptime` | Seconds the MySQL process has been running |
+| `connections.current` | `Threads_connected` | Open connections right now |
+| `connections.running` | `Threads_running` | Queries actively executing |
+| `connections.maxUsed` | `Max_used_connections` | High-water mark since last restart |
+| `connections.maxAllowed` | `SHOW GLOBAL VARIABLES · max_connections` | Configured connection ceiling |
+| `queries.total` | `Questions` | Cumulative queries handled |
+| `queries.slow` | `Slow_queries` | Queries that exceeded `long_query_time` |
+| `queries.selects/inserts/updates/deletes` | `Com_*` | Per-operation counts |
+| `bufferPool.hitRatio` | `Innodb_buffer_pool_read_requests` vs `Innodb_buffer_pool_reads` | InnoDB cache efficiency (%) |
+| `bufferPool.pagesUsed/pagesTotal` | `Innodb_buffer_pool_pages_*` | Buffer pool page utilization |
+| `bufferPool.sizeBytes` | `innodb_buffer_pool_size` | Configured buffer pool size |
+| `throughput.bytesReceived/bytesSent` | `Bytes_received/sent` | Cumulative network I/O |
+| `tables[]` | `information_schema.TABLES` | Per-table row estimate and storage size (data + index) |
+
+Returns `{ mode: 'unavailable' }` gracefully when `DB_NAME` is not configured. Route registered in `resolveRoute()`. Exempt from RBAC (same policy as other monitoring/telemetry endpoints).
+
+#### Monitoring Dashboard — Database Engine Section (`apps/web/public/monitor.html`, `apps/web/public/monitor.js`)
+
+A new **Database Engine** section appears between the Health Probes row and the Request Activity charts. It contains:
+
+**Animated SVG graphic** — a 3D database cylinder with:
+
+- Glowing elliptical cap with a pulsing center dot
+- Three staggered pulsing ground rings (blue, indigo, cyan) that expand and fade outward
+- An animated data-stream line falling into the cylinder top with a travelling packet dot
+- Three orbiting data packets (cyan, indigo, amber) traversing an elliptical orbit around the cylinder's equator at different speeds (3.2 s, 3.2 s offset by half cycle, 2.1 s) — all implemented with pure SVG SMIL `<animateMotion>` and `<mpath>` — no external libraries
+
+**Six metric tiles** (pulled from `/api/v1/monitoring/db` on every 15-second refresh):
+
+| Tile | Metric | Notes |
+| --- | --- | --- |
+| Uptime | `d h m` formatted uptime | Shows days when > 24 h |
+| Connections | Current open count | Sub-line: running threads · max used / max allowed |
+| Buffer Pool Hit | InnoDB hit ratio % | Sub-line: pages used / total |
+| Total Queries | Cumulative query count | Sub-line: S / I / U / D breakdown |
+| Slow Queries | Count of slow queries | Value turns amber when non-zero |
+| Throughput | Total bytes received + sent | Human-readable (KB / MB / GB) |
+
+**Table Storage & Row Estimates grid** — one pill per table showing:
+
+- Table name (monospace, truncated with tooltip)
+- Estimated row count
+- Storage size (data + index, shown as KB or MB)
+
+**JS helpers added** (`apps/web/public/monitor.js`):
+
+- `fmtBytes(bytes)` — converts raw byte count to human-readable string
+- `fmtUptimeLong(sec)` — converts seconds to `Xd Xh Xm` format
+- `updateDbPanel(data)` — drives all DB panel DOM updates; falls back gracefully when data is null or unavailable
+
+**Wired into the refresh cycle**: `/api/v1/monitoring/db` is added as a fourth parallel fetch in `Promise.allSettled`, so it updates on every 15-second refresh alongside health, API telemetry, and web telemetry.
+
+### v2.1.3 Validation
+
+- `curl http://localhost:3001/v1/monitoring/db` returns `mode: "live"` with all fields populated when `DB_NAME` is set
+- Returns `mode: "unavailable"` when `DB_NAME` is not configured (no crash, no 500)
+- Monitoring dashboard "Database Engine" section renders with live data on page load and subsequent refreshes
+- Animated SVG renders in Chrome, Firefox, and Safari without external dependencies
+- Slow Queries tile turns amber correctly when `Slow_queries > 0`
+- `monitor.js` passes `node --check` syntax validation
 
 ## v2.1.0 — ScheduleOps: Audit Hardening, Waitlist Promotion & Startup Hardening (March 2026)
 
