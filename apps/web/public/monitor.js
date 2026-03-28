@@ -288,13 +288,13 @@ function updateHealthChecks(health) {
     </div>
   `);
 
-  const dependencyMarkup = dependencies.map(([name, status]) => `
+  const dependencyMarkup = dependencies.map(([name, dep]) => `
     <div class="health-check">
       <div class="health-meta">
         <div class="health-name">${escapeHtml(name)}</div>
         <div class="health-sub">Dependency status</div>
       </div>
-      ${healthBadge(status)}
+      ${healthBadge(dep?.status)}
     </div>
   `);
 
