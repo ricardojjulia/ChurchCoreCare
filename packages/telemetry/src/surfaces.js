@@ -11,6 +11,9 @@ export const SURFACE_DEFINITIONS = Object.freeze([
   { id: 'billing', kind: 'view' },
   { id: 'portal', kind: 'view' },
   { id: 'faith', kind: 'view' },
+  { id: 'portal.dashboard', kind: 'tab' },
+  { id: 'portal.profile', kind: 'tab' },
+  { id: 'portal.appointments', kind: 'tab' },
 
   { id: 'about', kind: 'page' },
   { id: 'operations', kind: 'page' },

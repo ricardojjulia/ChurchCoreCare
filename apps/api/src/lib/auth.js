@@ -41,6 +41,8 @@ const IDLE_TIMEOUT_MS = {
 };
 
 const MAX_FAILED_ATTEMPTS = 10;
+const STAFF_SESSION_COOKIE = 'session';
+const PORTAL_SESSION_COOKIE = 'portal_session';
 
 // Password minimum per session-policy.md
 const MIN_PASSWORD_LENGTH = 14;
@@ -69,10 +71,10 @@ function sessionMaxAge(role) {
     : SESSION_MAX_AGE_MS.default;
 }
 
-function buildSessionCookie(rawToken, role) {
+function buildSessionCookie(cookieName, rawToken, role) {
   const maxAgeSec = Math.floor(sessionMaxAge(role) / 1000);
   const parts = [
-    `session=${rawToken}`,
+    `${cookieName}=${rawToken}`,
     `Path=/`,
     `HttpOnly`,
     `SameSite=Strict`,
@@ -83,6 +85,10 @@ function buildSessionCookie(rawToken, role) {
     parts.push('Secure');
   }
   return parts.join('; ');
+}
+
+function clearSessionCookie(cookieName) {
+  return `${cookieName}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`;
 }
 
 function normalizeEmail(email) {
@@ -136,68 +142,7 @@ export async function isPasswordBreached(password) {
  * On success returns { cookie, profile }.
  * On failure throws an object with { statusCode, error }.
  */
-export async function login(email, password, response) {
-  if (!email || !password) {
-    throw { statusCode: 400, error: 'email and password are required' };
-  }
-
-  const normalizedEmail = normalizeEmail(email);
-  if (!normalizedEmail) {
-    throw { statusCode: 400, error: 'A valid email is required' };
-  }
-  const emailLookupHash = deriveLookupHash(normalizedEmail, { lowercase: true });
-
-  // Look up account by email
-  const [rows] = await pool.query(
-    'SELECT sa.*, sm.role, sm.first_name_enc, sm.last_name_enc FROM staff_accounts sa ' +
-    'JOIN staff_members sm ON sm.id = sa.staff_member_id ' +
-    'WHERE sa.email_lookup_hash = ? OR sa.email = ? ' +
-    'LIMIT 1',
-    [emailLookupHash, normalizedEmail],
-  );
-  const account = rows[0];
-
-  // Constant-time path: always hash even if account not found (timing attack mitigation)
-  const candidateHash = account?.password_hash ?? '$argon2id$v=19$m=65536,t=3,p=1$dummy$dummy';
-
-  if (!account) {
-    await argon2.verify(candidateHash, password).catch(() => {});
-    throw { statusCode: 401, error: 'Invalid credentials' };
-  }
-
-  // Check account lock
-  if (account.failed_attempts >= MAX_FAILED_ATTEMPTS) {
-    const lockedUntil = account.locked_until ? new Date(account.locked_until) : null;
-    if (!lockedUntil || lockedUntil > new Date()) {
-      throw { statusCode: 423, error: 'Account locked due to too many failed attempts. Contact support to unlock.' };
-    }
-  }
-
-  const passwordMatch = await argon2.verify(account.password_hash, password, ARGON2_OPTIONS);
-
-  if (!passwordMatch) {
-    // Increment failed attempts
-    await pool.query(
-      'UPDATE staff_accounts SET failed_attempts = failed_attempts + 1 WHERE id = ?',
-      [account.id],
-    );
-    // Lock after hitting threshold
-    if (account.failed_attempts + 1 >= MAX_FAILED_ATTEMPTS) {
-      await pool.query(
-        'UPDATE staff_accounts SET locked_until = DATE_ADD(NOW(), INTERVAL 24 HOUR) WHERE id = ?',
-        [account.id],
-      );
-    }
-    throw { statusCode: 401, error: 'Invalid credentials' };
-  }
-
-  // Reset failed attempts + update last login
-  await pool.query(
-    'UPDATE staff_accounts SET failed_attempts = 0, locked_until = NULL, last_login_at = NOW() WHERE id = ?',
-    [account.id],
-  );
-
-  // Create session
+async function createStaffSession(account, response) {
   const rawToken = crypto.randomBytes(32).toString('hex');
   const tokenHash = hashToken(rawToken);
   const maxAgeMs  = sessionMaxAge(account.role);
@@ -210,9 +155,10 @@ export async function login(email, password, response) {
     [tokenHash, account.id, account.tenant_id, account.role, expiresAt],
   );
 
-  response.setHeader('Set-Cookie', buildSessionCookie(rawToken, account.role));
+  response.setHeader('Set-Cookie', buildSessionCookie(STAFF_SESSION_COOKIE, rawToken, account.role));
 
   return {
+    actorType: 'staff',
     staffId:  account.staff_member_id,
     tenantId: account.tenant_id,
     role:     account.role,
@@ -221,20 +167,149 @@ export async function login(email, password, response) {
   };
 }
 
+async function createPortalSession(account, response) {
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  const tokenHash = hashToken(rawToken);
+  const maxAgeMs  = sessionMaxAge('client');
+  const expiresAt = new Date(Date.now() + maxAgeMs);
+
+  await pool.query(
+    `INSERT INTO portal_sessions
+       (id, portal_account_id, client_id, tenant_id, role, expires_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [tokenHash, account.id, account.client_id, account.tenant_id, 'client', expiresAt],
+  );
+
+  response.setHeader('Set-Cookie', buildSessionCookie(PORTAL_SESSION_COOKIE, rawToken, 'client'));
+
+  return {
+    actorType: 'client',
+    clientId: account.client_id,
+    portalAccountId: account.id,
+    tenantId: account.tenant_id,
+    role: 'client',
+    email: account.email_enc ? decrypt(account.email_enc) : null,
+    name: `${decrypt(account.first_name_enc)} ${decrypt(account.last_name_enc)}`,
+  };
+}
+
+export async function login(email, password, response) {
+  if (!email || !password) {
+    throw { statusCode: 400, error: 'email and password are required' };
+  }
+
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) {
+    throw { statusCode: 400, error: 'A valid email is required' };
+  }
+  const emailLookupHash = deriveLookupHash(normalizedEmail, { lowercase: true });
+
+  // Look up staff account by email
+  const [rows] = await pool.query(
+    'SELECT sa.*, sm.role, sm.first_name_enc, sm.last_name_enc FROM staff_accounts sa ' +
+    'JOIN staff_members sm ON sm.id = sa.staff_member_id ' +
+    'WHERE sa.email_lookup_hash = ? OR sa.email = ? ' +
+    'LIMIT 1',
+    [emailLookupHash, normalizedEmail],
+  );
+  const account = rows[0];
+
+  if (account) {
+    if (account.failed_attempts >= MAX_FAILED_ATTEMPTS) {
+      const lockedUntil = account.locked_until ? new Date(account.locked_until) : null;
+      if (!lockedUntil || lockedUntil > new Date()) {
+        throw { statusCode: 423, error: 'Account locked due to too many failed attempts. Contact support to unlock.' };
+      }
+    }
+
+    const passwordMatch = await argon2.verify(account.password_hash, password, ARGON2_OPTIONS);
+    if (!passwordMatch) {
+      await pool.query(
+        'UPDATE staff_accounts SET failed_attempts = failed_attempts + 1 WHERE id = ?',
+        [account.id],
+      );
+      if (account.failed_attempts + 1 >= MAX_FAILED_ATTEMPTS) {
+        await pool.query(
+          'UPDATE staff_accounts SET locked_until = DATE_ADD(NOW(), INTERVAL 24 HOUR) WHERE id = ?',
+          [account.id],
+        );
+      }
+      throw { statusCode: 401, error: 'Invalid credentials' };
+    }
+
+    await pool.query(
+      'UPDATE staff_accounts SET failed_attempts = 0, locked_until = NULL, last_login_at = NOW() WHERE id = ?',
+      [account.id],
+    );
+
+    return createStaffSession(account, response);
+  }
+
+  const [portalRows] = await pool.query(
+    'SELECT pa.*, c.first_name_enc, c.last_name_enc FROM portal_accounts pa ' +
+    'JOIN clients c ON c.id = pa.client_id AND c.tenant_id = pa.tenant_id ' +
+    'WHERE pa.email_lookup_hash = ? LIMIT 1',
+    [emailLookupHash],
+  );
+  const portalAccount = portalRows[0];
+  const candidateHash = portalAccount?.password_hash ?? '$argon2id$v=19$m=65536,t=3,p=1$dummy$dummy';
+
+  if (!portalAccount || !portalAccount.password_hash) {
+    await argon2.verify(candidateHash, password).catch(() => {});
+    throw { statusCode: 401, error: 'Invalid credentials' };
+  }
+
+  if (portalAccount.status !== 'active') {
+    throw { statusCode: 403, error: 'Portal access is not active for this account' };
+  }
+
+  if (portalAccount.failed_attempts >= MAX_FAILED_ATTEMPTS) {
+    const lockedUntil = portalAccount.locked_until ? new Date(portalAccount.locked_until) : null;
+    if (!lockedUntil || lockedUntil > new Date()) {
+      throw { statusCode: 423, error: 'Portal account locked due to too many failed attempts. Contact the practice for help.' };
+    }
+  }
+
+  const portalPasswordMatch = await argon2.verify(portalAccount.password_hash, password, ARGON2_OPTIONS);
+  if (!portalPasswordMatch) {
+    await pool.query(
+      'UPDATE portal_accounts SET failed_attempts = failed_attempts + 1 WHERE id = ?',
+      [portalAccount.id],
+    );
+    if (portalAccount.failed_attempts + 1 >= MAX_FAILED_ATTEMPTS) {
+      await pool.query(
+        'UPDATE portal_accounts SET locked_until = DATE_ADD(NOW(), INTERVAL 24 HOUR) WHERE id = ?',
+        [portalAccount.id],
+      );
+    }
+    throw { statusCode: 401, error: 'Invalid credentials' };
+  }
+
+  await pool.query(
+    'UPDATE portal_accounts SET failed_attempts = 0, locked_until = NULL, last_login = NOW() WHERE id = ?',
+    [portalAccount.id],
+  );
+  return createPortalSession(portalAccount, response);
+}
+
 // ─── Logout ──────────────────────────────────────────────────────────────────
 
 export async function logout(request, response) {
   const cookies = parseCookies(request.headers.cookie);
-  const rawToken = cookies.session;
-  if (rawToken) {
-    const tokenHash = hashToken(rawToken);
+  const rawStaffToken = cookies[STAFF_SESSION_COOKIE];
+  if (rawStaffToken) {
+    const tokenHash = hashToken(rawStaffToken);
     await pool.query('UPDATE sessions SET revoked = 1 WHERE id = ?', [tokenHash]);
   }
-  // Clear the cookie
-  response.setHeader(
-    'Set-Cookie',
-    'session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0',
-  );
+  const rawPortalToken = cookies[PORTAL_SESSION_COOKIE];
+  if (rawPortalToken) {
+    const tokenHash = hashToken(rawPortalToken);
+    await pool.query('UPDATE portal_sessions SET revoked = 1 WHERE id = ?', [tokenHash]);
+  }
+  response.setHeader('Set-Cookie', [
+    clearSessionCookie(STAFF_SESSION_COOKIE),
+    clearSessionCookie(PORTAL_SESSION_COOKIE),
+  ]);
 }
 
 // ─── Resolve session (middleware) ─────────────────────────────────────────────
@@ -247,40 +322,61 @@ export async function logout(request, response) {
  */
 export async function resolveSession(request) {
   const cookies = parseCookies(request.headers.cookie);
-  const rawToken = cookies.session;
-  if (!rawToken) return null;
+  const rawStaffToken = cookies[STAFF_SESSION_COOKIE];
+  if (rawStaffToken) {
+    const tokenHash = hashToken(rawStaffToken);
+    const [rows] = await pool.query(
+      `SELECT id, staff_account_id, tenant_id, role, last_active_at, expires_at
+       FROM sessions
+       WHERE id = ? AND revoked = 0 AND expires_at > NOW()`,
+      [tokenHash],
+    );
 
-  const tokenHash = hashToken(rawToken);
+    const session = rows[0];
+    if (session) {
+      const idleLimit = session.role === 'platform_admin'
+        ? IDLE_TIMEOUT_MS.platform_admin
+        : IDLE_TIMEOUT_MS.default;
+      const lastActive = new Date(session.last_active_at).getTime();
+      if (Date.now() - lastActive > idleLimit) {
+        await pool.query('UPDATE sessions SET revoked = 1 WHERE id = ?', [tokenHash]);
+        return null;
+      }
+      await pool.query('UPDATE sessions SET last_active_at = NOW() WHERE id = ?', [tokenHash]);
+      return {
+        actor_type: 'staff',
+        staff_account_id: session.staff_account_id,
+        tenant_id: session.tenant_id,
+        role: session.role,
+      };
+    }
+  }
 
-  const [rows] = await pool.query(
-    `SELECT id, staff_account_id, tenant_id, role, last_active_at, expires_at
-     FROM sessions
+  const rawPortalToken = cookies[PORTAL_SESSION_COOKIE];
+  if (!rawPortalToken) return null;
+  const tokenHash = hashToken(rawPortalToken);
+  const [portalRows] = await pool.query(
+    `SELECT id, portal_account_id, client_id, tenant_id, role, last_active_at, expires_at
+     FROM portal_sessions
      WHERE id = ? AND revoked = 0 AND expires_at > NOW()`,
     [tokenHash],
   );
+  const portalSession = portalRows[0];
+  if (!portalSession) return null;
 
-  const session = rows[0];
-  if (!session) return null;
-
-  // Check idle timeout
-  const idleLimit = session.role === 'platform_admin'
-    ? IDLE_TIMEOUT_MS.platform_admin
-    : IDLE_TIMEOUT_MS.default;
-
-  const lastActive = new Date(session.last_active_at).getTime();
-  if (Date.now() - lastActive > idleLimit) {
-    // Revoke expired idle session
-    await pool.query('UPDATE sessions SET revoked = 1 WHERE id = ?', [tokenHash]);
+  const lastActive = new Date(portalSession.last_active_at).getTime();
+  if (Date.now() - lastActive > IDLE_TIMEOUT_MS.default) {
+    await pool.query('UPDATE portal_sessions SET revoked = 1 WHERE id = ?', [tokenHash]);
     return null;
   }
 
-  // Slide idle window
-  await pool.query('UPDATE sessions SET last_active_at = NOW() WHERE id = ?', [tokenHash]);
-
+  await pool.query('UPDATE portal_sessions SET last_active_at = NOW() WHERE id = ?', [tokenHash]);
   return {
-    staff_account_id: session.staff_account_id,
-    tenant_id:        session.tenant_id,
-    role:             session.role,
+    actor_type: 'client',
+    portal_account_id: portalSession.portal_account_id,
+    client_id: portalSession.client_id,
+    tenant_id: portalSession.tenant_id,
+    role: 'client',
   };
 }
 

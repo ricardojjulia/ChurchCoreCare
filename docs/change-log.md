@@ -4,48 +4,87 @@
 
 ## Unreleased
 
+- uploads and published document workflows for authenticated portal clients
+- counselor directory and counselor detail views inside the client portal
+- dedicated financial portal page, plus GDPR-style export/delete request workflows
+
+## v3.5.0 — Authenticated Client Portal Access + Self-Service Foundation
+
 **Date:** March 29, 2026
-**Type:** Portal expansion foundation
+**Type:** Feature revision
 
 ### Summary
 
-Introduces the first configurable public-portal foundation for the broader client portal plan. Practices can now manage public portal branding and access policy from Workspace Studio, while `/portal` consumes tenant-configurable public settings instead of being fully hard-coded.
+Extends the earlier portal foundation into a real authenticated client experience. Portal users can now sign in with dedicated client credentials, restore client sessions through the shared auth endpoints, land directly on the portal surface, update tenant-scoped profile data, and submit appointment requests without relying on staff preview mode.
 
 ### Added
 
-- `portal_settings` schema for tenant-specific public portal branding and access policy
-- `GET /v1/portal/public-config`
-- `GET/PATCH /v1/portal/settings`
-- richer public portal request capture:
-  - `request_type`
-  - `preferred_contact_method`
-  - `preferred_contact_window`
-- Workspace Studio Portal settings editor for:
-  - practice name
-  - portal messaging
-  - brand colors
-  - support email
-  - registration policy
-  - create-account / care / scheduling toggles
-  - contact preference options
-  - default signup forms
-  - billing vs voluntary offering presentation mode
-- Workspace Studio public-request review queue with review/approve/decline actions
+- `portal_sessions` schema for dedicated client-session persistence
+- `portal_accounts` credential fields for:
+  - `email_lookup_hash`
+  - `password_hash`
+  - `failed_attempts`
+  - `locked_until`
+- development migration/backfill logic for the seeded portal client account
+- real client-session support in:
+  - `POST /v1/auth/login`
+  - `POST /v1/auth/logout`
+  - `GET /v1/auth/me`
+- authenticated client routing in the main shell so `client` users land on `portal`
+- client-role navigation restrictions to:
+  - `portal`
+  - `about`
+  - `monitor`
+- Workspace Studio portal-account creation responses now include a one-time temporary password
+- Playwright regression coverage for a real portal-client login flow
 
 ### Changed
 
-- `apps/web/public/portal.html`
-- `apps/web/public/portal.js`
-- `apps/web/src/components/WorkspaceStudio/tabs/PortalTab.jsx`
-- `apps/api/src/index.js`
-- `apps/api/src/db/queries/portal.js`
-- `apps/api/src/db/schema.sql`
+- `apps/api/src/lib/auth.js`
 - `apps/api/src/lib/security.js`
+- `apps/api/src/index.js`
+- `apps/api/src/db/migrate.js`
+- `apps/api/src/db/schema.sql`
+- `apps/api/src/db/queries/portal.js`
+- `apps/web/src/App.jsx`
+- `apps/web/src/components/Sidebar.jsx`
+- `apps/web/src/components/TopBar.jsx`
+- `apps/web/src/components/WorkspaceStudio/tabs/PortalTab.jsx`
+- `apps/web/src/components/Portal/ClientPortalPage.jsx`
+- `apps/web/src/lib/clientApi.js`
+- `tests/e2e/helpers.mjs`
+- `tests/e2e/high-value-journeys.spec.mjs`
+- `PLANS/CLIENT-PORTAL-EXPANSION.md`
 
 ### Notes
 
-- This slice adds the create-account entry point and practice customization layer, but it does not yet deliver the full authenticated client self-service portal.
-- Public portal telemetry remains on the existing `portal` surface in this slice; deeper split-out portal surfaces are still part of the broader expansion plan.
+- This closes the earlier “staff preview only” gap for the authenticated portal path.
+- Portal telemetry continues to cover `portal.dashboard`, `portal.profile`, and `portal.appointments` without introducing PHI/PII labels.
+- Portal password change is still intentionally blocked from the shared staff password-change surface; dedicated portal credential-management remains a follow-up slice.
+
+### Version bump
+
+Updated package versions from `3.0.7` to `3.5.0`:
+
+- `package.json`
+- `apps/api/package.json`
+- `apps/web/package.json`
+- `apps/worker/package.json`
+- `packages/domain/package.json`
+- `packages/i18n/package.json`
+- `packages/telemetry/package.json`
+
+### Validation
+
+- `node --env-file=.env apps/api/src/db/migrate.js` — passed
+- `pnpm lint` — passed
+- `pnpm --filter @faith/web build` — passed
+- `pnpm test:e2e` — passed (`5/5`)
+- `pnpm test:launch-readiness` — passed (`3/3`)
+
+### Breaking changes
+
+None. The new portal auth path is additive and compatible with the existing admin preview flow.
 
 ## v3.0.7 — Full-Surface Localization Pass 2 + Playwright Regression Coverage
 

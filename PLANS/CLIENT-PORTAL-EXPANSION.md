@@ -46,15 +46,44 @@ Completed in repo as of March 29, 2026:
     - `approved`
     - `declined`
 
+- Phase 3 partial delivery:
+  - authenticated portal shell on the main app `portal` surface
+  - real portal-client sign-in via `/v1/auth/login` with dedicated `portal_session` handling
+  - client portal dashboard with:
+    - next appointment summary
+    - pending forms/documents summary
+    - balance or offering summary
+    - assigned counselor card
+    - published resource preview
+  - encrypted `portal_client_profiles` storage for:
+    - preferred name
+    - contact email
+    - contact phone
+    - contact preferences
+    - demographics
+    - education
+    - affiliations
+  - `GET/PATCH /v1/portal/profile`
+  - DB-backed `GET /v1/portal/overview` enrichment for:
+    - upcoming appointments
+    - assigned forms
+    - resources
+    - balances
+    - assigned counselor
+    - tenant portal financial mode
+  - client portal appointment request composer and list
+  - DB-backed `GET/POST/PATCH /v1/portal/appointment-requests`
+  - Playwright admin-preview regression coverage for the authenticated portal shell
+  - Playwright regression coverage for a real seeded portal-client login and self-service flow
+  - portal account password hashing, lockout tracking, and dedicated portal session persistence
+  - Workspace Studio portal-account creation now returns a one-time temporary password for secure invitation handoff
+
 Still pending:
 
-- full authenticated client portal shell
 - onboarding wizard with account activation flow
-- client profile/preferences editing surfaces
-- client-facing schedule management
-- uploads and published document workflows
-- counselor directory and assigned counselor detail
-- financial portal mode
+- uploads and published document workflows beyond current dashboard/resource visibility
+- richer counselor directory and counselor detail surfaces
+- dedicated financial portal page beyond current summary card
 - data-rights export/delete workflows
 - final agent-driven validation sequence from Phase 6
 
@@ -71,6 +100,7 @@ Non-negotiable constraints:
 - audit and telemetry remain separate systems
 - no PHI, PII, names, emails, IDs, or free text in telemetry labels
 - all portal actions must be tenant-scoped and ownership-validated
+- client authentication must use hashed passwords, session revocation, lockout protection, and tenant-scoped portal sessions
 - export and deletion workflows must be privileged, auditable, and policy-aware
 
 ## Product Experience Model
@@ -535,10 +565,17 @@ Must validate:
 ### Phase 3: Authenticated client portal core
 
 - dashboard
-- appointments
-- forms and uploads
+- appointment self-service request flow
 - profile and preferences
-- assigned counselor card
+- assigned counselor summary card
+- admin preview path using selected client context
+- targeted Playwright coverage
+
+Remaining in this phase:
+
+- client-auth sign-in path for actual seeded portal users
+- uploads and document-completion UI
+- dedicated forms workspace beyond dashboard summaries
 
 ### Phase 4: Financials, counselor directory, and resources
 

@@ -1,5 +1,5 @@
 import pool from '../pool.js';
-import { encrypt, decrypt } from '../../lib/encrypt.js';
+import { encrypt, decrypt, encryptJson, decryptJson, deriveLookupHash } from '../../lib/encrypt.js';
 
 function toSqlTimestamp(value) {
   if (!value) return null;
@@ -26,6 +26,23 @@ function rowToPortalAccount(row) {
     email: decrypt(row.email_enc),
     status: row.status,
     mfaEnabled: Boolean(row.mfa_enabled),
+    lastLoginAt: row.last_login ?? null,
+    invitedAt: row.created_at ?? null,
+  };
+}
+
+function rowToPortalClientProfile(row) {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    clientId: row.client_id,
+    preferredName: row.preferred_name_enc ? decrypt(row.preferred_name_enc) : '',
+    contactEmail: row.contact_email_enc ? decrypt(row.contact_email_enc) : '',
+    contactPhone: row.contact_phone_enc ? decrypt(row.contact_phone_enc) : '',
+    contactPreferences: row.contact_preferences_enc ? (decryptJson(row.contact_preferences_enc) ?? {}) : {},
+    profileDetails: row.profile_details_enc ? (decryptJson(row.profile_details_enc) ?? {}) : {},
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -139,12 +156,21 @@ export async function getPortalAccount(clientId, tenantId) {
   return rowToPortalAccount(rows[0]);
 }
 
-export async function createPortalAccount({ id, clientId, tenantId, email, status, mfaEnabled }) {
+export async function createPortalAccount({ id, clientId, tenantId, email, passwordHash = null, status, mfaEnabled }) {
   await pool.query(
     `INSERT INTO portal_accounts
-       (id, client_id, tenant_id, email_enc, status, mfa_enabled)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [id, clientId, tenantId, encrypt(email), status, mfaEnabled ? 1 : 0]
+       (id, client_id, tenant_id, email_enc, email_lookup_hash, password_hash, status, mfa_enabled)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      id,
+      clientId,
+      tenantId,
+      encrypt(email),
+      deriveLookupHash(email, { lowercase: true }),
+      passwordHash,
+      status,
+      mfaEnabled ? 1 : 0,
+    ]
   );
   return getPortalAccount(clientId, tenantId);
 }
@@ -154,8 +180,13 @@ export async function updatePortalAccount(clientId, tenantId, fields) {
   const values = [];
 
   if (fields.email !== undefined) { setClauses.push('email_enc = ?'); values.push(encrypt(fields.email)); }
+  if (fields.email !== undefined) { setClauses.push('email_lookup_hash = ?'); values.push(deriveLookupHash(fields.email, { lowercase: true })); }
+  if (fields.passwordHash !== undefined) { setClauses.push('password_hash = ?'); values.push(fields.passwordHash); }
   if (fields.status !== undefined) { setClauses.push('status = ?'); values.push(fields.status); }
   if (fields.mfaEnabled !== undefined) { setClauses.push('mfa_enabled = ?'); values.push(fields.mfaEnabled ? 1 : 0); }
+  if (fields.failedAttempts !== undefined) { setClauses.push('failed_attempts = ?'); values.push(fields.failedAttempts); }
+  if (fields.lockedUntil !== undefined) { setClauses.push('locked_until = ?'); values.push(fields.lockedUntil); }
+  if (fields.lastLoginAt !== undefined) { setClauses.push('last_login = ?'); values.push(fields.lastLoginAt); }
 
   if (setClauses.length === 0) return getPortalAccount(clientId, tenantId);
 
@@ -165,6 +196,60 @@ export async function updatePortalAccount(clientId, tenantId, fields) {
     values
   );
   return getPortalAccount(clientId, tenantId);
+}
+
+// ---------------------------------------------------------------------------
+// Portal Client Profiles
+// ---------------------------------------------------------------------------
+
+export async function getPortalClientProfile(clientId, tenantId) {
+  const [rows] = await pool.query(
+    'SELECT * FROM portal_client_profiles WHERE client_id = ? AND tenant_id = ? LIMIT 1',
+    [clientId, tenantId]
+  );
+  if (!rows.length) return null;
+  return rowToPortalClientProfile(rows[0]);
+}
+
+export async function upsertPortalClientProfile({
+  id,
+  clientId,
+  tenantId,
+  preferredName,
+  contactEmail,
+  contactPhone,
+  contactPreferences,
+  profileDetails,
+}) {
+  const existing = await getPortalClientProfile(clientId, tenantId);
+  const targetId = existing?.id ?? id;
+  if (!targetId) {
+    throw new Error('Portal client profile id is required');
+  }
+
+  await pool.query(
+    `INSERT INTO portal_client_profiles
+      (id, tenant_id, client_id, preferred_name_enc, contact_email_enc, contact_phone_enc, contact_preferences_enc, profile_details_enc)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE
+       preferred_name_enc = VALUES(preferred_name_enc),
+       contact_email_enc = VALUES(contact_email_enc),
+       contact_phone_enc = VALUES(contact_phone_enc),
+       contact_preferences_enc = VALUES(contact_preferences_enc),
+       profile_details_enc = VALUES(profile_details_enc)`,
+    [
+      targetId,
+      tenantId,
+      clientId,
+      preferredName ? encrypt(preferredName) : null,
+      contactEmail ? encrypt(contactEmail) : null,
+      contactPhone ? encrypt(contactPhone) : null,
+      encryptJson(contactPreferences ?? {}),
+      encryptJson(profileDetails ?? {}),
+    ]
+  );
+
+  return getPortalClientProfile(clientId, tenantId);
 }
 
 // ---------------------------------------------------------------------------

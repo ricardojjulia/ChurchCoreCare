@@ -85,6 +85,12 @@ Required boundary rules:
 - `operations`
 - `monitor`
 
+### Authenticated portal subviews
+
+- `portal.dashboard`
+- `portal.profile`
+- `portal.appointments`
+
 ### Operations Studio tabs
 
 - `operations.reporting`

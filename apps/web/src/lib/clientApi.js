@@ -22,6 +22,46 @@ async function apiFetch(url, options = {}) {
   });
 }
 
+function withClientId(baseUrl, clientId) {
+  if (!clientId) return baseUrl;
+  const separator = baseUrl.includes('?') ? '&' : '?';
+  return `${baseUrl}${separator}clientId=${encodeURIComponent(clientId)}`;
+}
+
+// ── Portal ───────────────────────────────────────────────────────────────────
+
+export function fetchPortalOverview(clientId = null) {
+  return apiFetch(withClientId('/api/v1/portal/overview', clientId));
+}
+
+export function fetchPortalProfile(clientId = null) {
+  return apiFetch(withClientId('/api/v1/portal/profile', clientId));
+}
+
+export function updatePortalProfile(data, clientId = null) {
+  return apiFetch(withClientId('/api/v1/portal/profile', clientId), {
+    method: 'PATCH',
+    headers: csrfHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export function createPortalAppointmentRequestRecord(data, clientId = null) {
+  return apiFetch(withClientId('/api/v1/portal/appointment-requests', clientId), {
+    method: 'POST',
+    headers: csrfHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
+export function updatePortalAppointmentRequestRecord(data, clientId = null) {
+  return apiFetch(withClientId('/api/v1/portal/appointment-requests', clientId), {
+    method: 'PATCH',
+    headers: csrfHeaders(),
+    body: JSON.stringify(data),
+  });
+}
+
 // ── Client core ──────────────────────────────────────────────────────────────
 
 export function fetchClient(clientId) {

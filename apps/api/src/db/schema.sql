@@ -561,18 +561,61 @@ CREATE TABLE IF NOT EXISTS claims (
 -- ─── Portal accounts ─────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS portal_accounts (
-  id          VARCHAR(64)  NOT NULL,
-  tenant_id   VARCHAR(64)  NOT NULL,
-  client_id   VARCHAR(64)  NOT NULL,
-  email_enc   TEXT         NOT NULL,   -- encrypted PHI
-  status      VARCHAR(64)  NOT NULL DEFAULT 'active',
-  mfa_enabled TINYINT(1)   NOT NULL DEFAULT 0,
-  last_login  TIMESTAMP    NULL,
-  created_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  id                VARCHAR(64)  NOT NULL,
+  tenant_id         VARCHAR(64)  NOT NULL,
+  client_id         VARCHAR(64)  NOT NULL,
+  email_enc         TEXT         NOT NULL,   -- encrypted PHI
+  email_lookup_hash CHAR(64)     NULL,       -- deterministic HMAC-SHA256 lookup hash
+  password_hash     VARCHAR(255) NULL,       -- argon2id, set once portal access is activated
+  failed_attempts   INT          NOT NULL DEFAULT 0,
+  locked_until      TIMESTAMP    NULL,
+  status            VARCHAR(64)  NOT NULL DEFAULT 'active',
+  mfa_enabled       TINYINT(1)   NOT NULL DEFAULT 0,
+  last_login        TIMESTAMP    NULL,
+  created_at        TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at        TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uq_portal_client (client_id),
+  UNIQUE KEY uq_portal_email_lookup_hash (tenant_id, email_lookup_hash),
   INDEX idx_portal_account_tenant (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Portal sessions ─────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS portal_sessions (
+  id                VARCHAR(64)  NOT NULL,   -- SHA-256(token) hex
+  portal_account_id VARCHAR(64)  NOT NULL,
+  client_id         VARCHAR(64)  NOT NULL,
+  tenant_id         VARCHAR(64)  NOT NULL,
+  role              VARCHAR(64)  NOT NULL DEFAULT 'client',
+  created_at        TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_active_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expires_at        TIMESTAMP    NOT NULL,
+  revoked           TINYINT(1)   NOT NULL DEFAULT 0,
+  PRIMARY KEY (id),
+  INDEX idx_portal_sessions_account (portal_account_id),
+  INDEX idx_portal_sessions_client (client_id),
+  INDEX idx_portal_sessions_expires (expires_at),
+  CONSTRAINT fk_portal_sessions_account FOREIGN KEY (portal_account_id) REFERENCES portal_accounts (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ─── Portal client profiles ──────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS portal_client_profiles (
+  id                      VARCHAR(64)  NOT NULL,
+  tenant_id               VARCHAR(64)  NOT NULL,
+  client_id               VARCHAR(64)  NOT NULL,
+  preferred_name_enc      TEXT         NULL,      -- encrypted PII
+  contact_email_enc       TEXT         NULL,      -- encrypted PII
+  contact_phone_enc       TEXT         NULL,      -- encrypted PII
+  contact_preferences_enc MEDIUMTEXT   NULL,      -- encrypted JSON
+  profile_details_enc     MEDIUMTEXT   NULL,      -- encrypted JSON
+  created_at              TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at              TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_portal_profile_client (client_id),
+  INDEX idx_portal_profile_tenant (tenant_id),
+  CONSTRAINT fk_portal_profile_client FOREIGN KEY (client_id) REFERENCES clients (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ─── Portal settings ─────────────────────────────────────────────────────────

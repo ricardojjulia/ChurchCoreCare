@@ -57,13 +57,14 @@ try {
 
   // Seed a default tenant + system practice for local dev
   await seedDevData(connection);
+  await ensureDevPortalClient(connection);
 } finally {
   await connection.end();
 }
 
 async function applyColumnMigrations(conn) {
   const dbName = process.env.DB_NAME;
-  const { encrypt, deriveLookupHash } = await import('../lib/encrypt.js');
+  const { encrypt, decrypt, deriveLookupHash } = await import('../lib/encrypt.js');
 
   // Helper: add a column if it doesn't already exist
   async function addColumnIfMissing(table, column, definition) {
@@ -126,6 +127,11 @@ async function applyColumnMigrations(conn) {
   await addColumnIfMissing('staff_accounts', 'email_lookup_hash', 'CHAR(64) NULL AFTER email_enc');
   await addUniqueIndexIfMissing('staff_accounts', 'uq_staff_accounts_email_lookup_hash', '(email_lookup_hash)');
   await alterColumn('staff_accounts', 'email', 'VARCHAR(320) NULL');
+  await addColumnIfMissing('portal_accounts', 'email_lookup_hash', 'CHAR(64) NULL AFTER email_enc');
+  await addColumnIfMissing('portal_accounts', 'password_hash', 'VARCHAR(255) NULL AFTER email_lookup_hash');
+  await addColumnIfMissing('portal_accounts', 'failed_attempts', 'INT NOT NULL DEFAULT 0 AFTER password_hash');
+  await addColumnIfMissing('portal_accounts', 'locked_until', 'TIMESTAMP NULL AFTER failed_attempts');
+  await addUniqueIndexIfMissing('portal_accounts', 'uq_portal_email_lookup_hash', '(tenant_id, email_lookup_hash)');
 
   await addColumnIfMissing('tenant_provisioning', 'owner_email_enc', 'TEXT NULL AFTER requested_practice_name');
   await alterColumn('tenant_provisioning', 'owner_email', 'VARCHAR(320) NULL');
@@ -206,6 +212,31 @@ async function applyColumnMigrations(conn) {
   await addIndexIfMissing('appointments', 'idx_appointments_counselor', '(tenant_id, counselor_id)');
   await addIndexIfMissing('appointments', 'idx_appointments_starts_at', '(tenant_id, starts_at)');
 
+  const [portalAccountRows] = await conn.query(
+    'SELECT id, tenant_id, client_id, email_enc, email_lookup_hash, password_hash FROM portal_accounts',
+  );
+  const { default: argon2 } = await import('argon2');
+  const defaultPortalPasswordHash = await argon2.hash('ChangeMe!Client2026#', {
+    type: argon2.argon2id,
+    memoryCost: 65536,
+    timeCost: 3,
+    parallelism: 1,
+  });
+  for (const row of portalAccountRows) {
+    const email = row.email_enc ? decrypt(row.email_enc)?.trim().toLowerCase() : '';
+    const nextLookupHash = row.email_lookup_hash || (email ? deriveLookupHash(email, { lowercase: true }) : null);
+    const nextPasswordHash = row.password_hash || (
+      row.tenant_id === 'system' && row.client_id === 'c-001'
+        ? defaultPortalPasswordHash
+        : null
+    );
+    if (!nextLookupHash && !nextPasswordHash) continue;
+    await conn.query(
+      'UPDATE portal_accounts SET email_lookup_hash = COALESCE(email_lookup_hash, ?), password_hash = COALESCE(password_hash, ?) WHERE id = ?',
+      [nextLookupHash, nextPasswordHash, row.id],
+    );
+  }
+
   console.log('Column migrations done.');
 }
 
@@ -283,9 +314,11 @@ async function seedDevData(conn) {
 
   // Import encrypt lazily (needs DB_ENCRYPTION_KEY in env)
   let encrypt;
+  let deriveLookupHash;
   try {
     const mod = await import('../lib/encrypt.js');
     encrypt = mod.encrypt;
+    deriveLookupHash = mod.deriveLookupHash;
   } catch {
     console.warn('Warning: encrypt module not available; staff seed skipped.');
     return;
@@ -328,8 +361,125 @@ async function seedDevData(conn) {
     ],
   );
 
+  await conn.query(
+    `INSERT INTO clients
+       (id, tenant_id, first_name_enc, last_name_enc, status, faith_background)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [
+      'c-001',
+      'system',
+      encrypt('Sarah'),
+      encrypt('Kim'),
+      'active',
+      'Evangelical',
+    ],
+  );
+
+  const portalPasswordHash = await argon2.hash('ChangeMe!Client2026#', {
+    type: argon2.argon2id,
+    memoryCost: 65536,
+    timeCost: 3,
+    parallelism: 1,
+  });
+
+  await conn.query(
+    `INSERT INTO portal_accounts
+       (id, tenant_id, client_id, email_enc, email_lookup_hash, password_hash, status, mfa_enabled)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      'pa-001',
+      'system',
+      'c-001',
+      encrypt('sarah.kim@example.test'),
+      deriveLookupHash('sarah.kim@example.test', { lowercase: true }),
+      portalPasswordHash,
+      'active',
+      0,
+    ],
+  );
+
   console.log('Dev seed complete.');
   console.log('  Tenant:   system');
   console.log('  Email:    admin@faithcounseling.local');
   console.log('  Password: ChangeMe!Dev2024#  (change immediately)');
+  console.log('  Client portal email:    sarah.kim@example.test');
+  console.log('  Client portal password: ChangeMe!Client2026#  (change immediately)');
+}
+
+async function ensureDevPortalClient(conn) {
+  if (process.env.NODE_ENV === 'production') return;
+
+  const [[tenant]] = await conn.query(
+    'SELECT id FROM tenants WHERE id = ? LIMIT 1',
+    ['system'],
+  );
+  if (!tenant) return;
+
+  let encrypt;
+  let deriveLookupHash;
+  try {
+    const mod = await import('../lib/encrypt.js');
+    encrypt = mod.encrypt;
+    deriveLookupHash = mod.deriveLookupHash;
+  } catch {
+    return;
+  }
+
+  const { default: argon2 } = await import('argon2');
+  const portalPasswordHash = await argon2.hash('ChangeMe!Client2026#', {
+    type: argon2.argon2id,
+    memoryCost: 65536,
+    timeCost: 3,
+    parallelism: 1,
+  });
+
+  const [[client]] = await conn.query(
+    'SELECT id FROM clients WHERE id = ? AND tenant_id = ? LIMIT 1',
+    ['c-001', 'system'],
+  );
+  if (!client) {
+    await conn.query(
+      `INSERT INTO clients
+         (id, tenant_id, first_name_enc, last_name_enc, status, faith_background)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      ['c-001', 'system', encrypt('Sarah'), encrypt('Kim'), 'active', 'Evangelical'],
+    );
+  }
+
+  const [[portalAccount]] = await conn.query(
+    'SELECT id FROM portal_accounts WHERE client_id = ? AND tenant_id = ? LIMIT 1',
+    ['c-001', 'system'],
+  );
+  if (!portalAccount) {
+    await conn.query(
+      `INSERT INTO portal_accounts
+         (id, tenant_id, client_id, email_enc, email_lookup_hash, password_hash, status, mfa_enabled)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        'pa-001',
+        'system',
+        'c-001',
+        encrypt('sarah.kim@example.test'),
+        deriveLookupHash('sarah.kim@example.test', { lowercase: true }),
+        portalPasswordHash,
+        'active',
+        0,
+      ],
+    );
+    console.log('  + ensured seeded portal client account for local development');
+    return;
+  }
+
+  await conn.query(
+    `UPDATE portal_accounts
+     SET email_lookup_hash = COALESCE(email_lookup_hash, ?),
+         password_hash = COALESCE(password_hash, ?),
+         status = CASE WHEN status = 'locked' THEN status ELSE 'active' END
+     WHERE id = ?`,
+    [
+      deriveLookupHash('sarah.kim@example.test', { lowercase: true }),
+      portalPasswordHash,
+      portalAccount.id,
+    ],
+  );
 }

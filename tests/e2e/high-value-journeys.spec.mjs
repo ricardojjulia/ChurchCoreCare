@@ -60,6 +60,62 @@ test.describe('high-value UI journeys', () => {
     await expect(page.locator('[data-tab="audit"]')).toBeVisible();
   });
 
+  test('practice admin can preview the authenticated client portal, save profile preferences, and submit an appointment request', async ({ page }) => {
+    const suffix = String(Date.now()).slice(-6);
+    const preferredStartAt = futureDateTimeLocal({ days: 2, hours: 14, minutes: 0 });
+    const preferredEndAt = futureDateTimeLocal({ days: 2, hours: 15, minutes: 0 });
+
+    await signInAs(page, 'practice_admin');
+    await openPrimaryNav(page, 'portal');
+    await expect(page.getByRole('heading', { name: 'Client Portal' })).toBeVisible();
+    await expect(page.getByText('Staff preview mode')).toBeVisible();
+    await expect(page.getByText(/Pending forms/i)).toBeVisible();
+
+    await page.getByRole('tab', { name: 'Profile' }).click();
+    await page.getByLabel('Preferred name').fill(`Portal ${suffix}`);
+    await page.getByLabel('Occupation').fill('Teacher');
+    await page.getByRole('button', { name: 'Save profile' }).click();
+    await expect(page.getByText('Profile saved')).toBeVisible();
+
+    await page.getByRole('tab', { name: 'Appointments' }).click();
+    await page.getByRole('textbox', { name: 'Request type' }).click();
+    await page.getByRole('option', { name: 'Reschedule an appointment' }).click();
+    await page.getByLabel('Preferred start').fill(preferredStartAt);
+    await page.getByLabel('Preferred end').fill(preferredEndAt);
+    await page.getByLabel('Notes').fill('Need to move this appointment to the afternoon.');
+    await page.getByRole('button', { name: 'Submit request' }).click();
+
+    await expect(page.getByText('Request sent')).toBeVisible();
+    await expect(page.getByText(/Need to move this appointment to the afternoon\./i)).toBeVisible();
+  });
+
+  test('client can sign in with a real portal account and use the authenticated portal surface', async ({ page }) => {
+    const suffix = String(Date.now()).slice(-6);
+    const preferredStartAt = futureDateTimeLocal({ days: 3, hours: 11, minutes: 0 });
+    const preferredEndAt = futureDateTimeLocal({ days: 3, hours: 12, minutes: 0 });
+
+    await signInAs(page, 'client');
+    await expect(page.getByRole('heading', { name: 'Client Portal', level: 2 })).toBeVisible();
+    await expect(page.getByText('Staff preview mode')).toHaveCount(0);
+    await expect(page.getByText(/Pending forms/i)).toBeVisible();
+
+    await page.getByRole('tab', { name: 'Profile' }).click();
+    await page.getByLabel('Preferred name').fill(`Sarah ${suffix}`);
+    await page.getByRole('button', { name: 'Save profile' }).click();
+    await expect(page.getByText('Profile saved')).toBeVisible();
+
+    await page.getByRole('tab', { name: 'Appointments' }).click();
+    await page.getByRole('textbox', { name: 'Request type' }).click();
+    await page.getByRole('option', { name: 'Request follow-up' }).click();
+    await page.getByLabel('Preferred start').fill(preferredStartAt);
+    await page.getByLabel('Preferred end').fill(preferredEndAt);
+    await page.getByLabel('Notes').fill('Client requested a follow-up session.');
+    await page.getByRole('button', { name: 'Submit request' }).click();
+
+    await expect(page.getByText('Request sent')).toBeVisible();
+    await expect(page.getByText(/Client requested a follow-up session\./i).first()).toBeVisible();
+  });
+
   test('public client can submit a portal intake request from the portal landing page', async ({ page }) => {
     const suffix = String(Date.now()).slice(-6);
 

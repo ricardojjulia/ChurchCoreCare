@@ -4,8 +4,8 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## Version
 
-- Current release: `3.0.7`
-- Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI + revamped ops/monitoring + explicit health probes + OTEL health export + full Scheduling module with Waitlist, Reminders & Calendar DB support + waitlist-to-appointment promotion + audit UUID hardening + deep DB engine monitoring dashboard + full Audit Intelligence UI redesign + structured PHI-safe API logging + live dashboard appointment and audit metrics + full Reporting tab UI redesign + repaired Swagger UI proxy/docs delivery + redesigned About experience + static file server query-string fix + operations header/session card refresh + versioned web asset delivery + UI enhancements across main shell, monitoring, and operations surfaces + desktop sidebar toggle fix + sidebar options icon refresh + schema fixes for availability_overrides and appointment_series + utilization GROUP BY fix + appointment identity integrity for renamed counselors and clients + repaired Workspace Studio document assignment workflow + synced tracked web build artifacts + lint-clean documentation and generated monitoring outputs + full Electronic Documents module with four clinical forms, GAD-7 auto-scoring, C-SSRS risk stratification, Christian counseling faith dimensions, and a generic form renderer + **full-surface Spanish localization pass with 54 new i18n keys, covering client detail, counselor detail, and Workspace Studio deeper surfaces — plus dedicated Playwright localization regression spec**)
+- Current release: `3.5.0`
+- Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI + revamped ops/monitoring + explicit health probes + OTEL health export + full Scheduling module with Waitlist, Reminders & Calendar DB support + waitlist-to-appointment promotion + audit UUID hardening + deep DB engine monitoring dashboard + full Audit Intelligence UI redesign + structured PHI-safe API logging + live dashboard appointment and audit metrics + full Reporting tab UI redesign + repaired Swagger UI proxy/docs delivery + redesigned About experience + static file server query-string fix + operations header/session card refresh + versioned web asset delivery + UI enhancements across main shell, monitoring, and operations surfaces + desktop sidebar toggle fix + sidebar options icon refresh + schema fixes for availability_overrides and appointment_series + utilization GROUP BY fix + appointment identity integrity for renamed counselors and clients + repaired Workspace Studio document assignment workflow + synced tracked web build artifacts + lint-clean documentation and generated monitoring outputs + full Electronic Documents module with four clinical forms, GAD-7 auto-scoring, C-SSRS risk stratification, Christian counseling faith dimensions, and a generic form renderer + full-surface Spanish localization pass with 54 new i18n keys, covering client detail, counselor detail, and Workspace Studio deeper surfaces + tenant-configurable public portal branding and intake + authenticated client portal shell with real portal-client sign-in, profile/preferences, and appointment self-service)
 
 ## Translation Guardian Agent
 
@@ -22,12 +22,56 @@ The service listens on `http://127.0.0.1:8098` by default.
 
 ## Unreleased
 
-- Added tenant-configurable portal settings for the public client portal and Workspace Studio portal administration.
-- Added `GET /v1/portal/public-config` and `GET/PATCH /v1/portal/settings`.
-- Public `/portal` now supports practice branding, configurable create-account / care / scheduling entry points, and lightweight public-surface telemetry.
-- Portal signup defaults can now be controlled per practice through `defaultSignupFormKeys`, which overrides catalog-level standard-on-signup defaults when configured.
-- Added richer public portal intake capture for request type, preferred contact method, and contact window.
-- Workspace Studio Portal now includes a public-request review queue with status actions for `requested`, `reviewing`, `approved`, and `declined`.
+- uploads and published document workflows for authenticated portal clients
+- counselor directory and counselor detail views inside the client portal
+- dedicated financial portal page, plus GDPR-style export/delete request workflows
+
+## v3.5.0 — Authenticated Client Portal Access + Self-Service Foundation (March 29, 2026)
+
+### v3.5.0 Overview
+
+This release moves the portal from staff preview into real client authentication. Portal accounts can now sign in through the shared auth surface, land directly in the authenticated client portal, manage profile/preferences, and submit appointment requests against tenant-scoped data in DB mode.
+
+### v3.5.0 — Identity and Session Layer
+
+- Added dedicated portal-account credential support with hashed passwords, failed-attempt tracking, and lockout handling.
+- Added `portal_sessions` persistence and `portal_session` cookie handling for authenticated client users.
+- Extended `/v1/auth/login`, `/v1/auth/logout`, and `/v1/auth/me` to support real portal-client sessions alongside staff sessions.
+- Added development migration/backfill support so the seeded portal client account is available outside first-run bootstrap scenarios.
+- Workspace Studio portal-account creation now generates and returns a one-time temporary password for secure invitation handoff.
+
+### v3.5.0 — Client Portal Experience
+
+- The main app now routes authenticated `client` users directly to the `portal` surface after sign-in and session restore.
+- Client navigation is restricted to `portal`, `about`, and `monitor`.
+- Added authenticated client dashboard coverage for:
+  - next appointment summary
+  - pending forms/documents summary
+  - assigned counselor preview
+  - resource preview
+  - balance or voluntary-offering summary
+- Added client-owned `GET/PATCH /v1/portal/profile` usage in the authenticated portal UI for:
+  - preferred name
+  - contact email
+  - contact phone
+  - contact preferences
+  - demographics
+  - education
+  - affiliations
+- Added client appointment-request composition and history in the authenticated portal.
+- Added Playwright coverage for both admin preview and real portal-client sign-in flows.
+
+### v3.5.0 — Validation
+
+- `node --env-file=.env apps/api/src/db/migrate.js`
+- `pnpm lint`
+- `pnpm --filter @faith/web build`
+- `pnpm test:e2e` — passed (`5/5`)
+- `pnpm test:launch-readiness` — passed (`3/3`)
+
+### v3.5.0 Breaking Changes
+
+None. The portal auth work is additive and preserves the existing staff-preview path for admins.
 
 ## v3.0.7 — Full-Surface Localization Pass 2 + Playwright Regression Coverage (April 2026)
 

@@ -14,6 +14,7 @@ import ClientPickerModal from './components/ClientPickerModal.jsx';
 import WorkspaceStudioPage from './components/WorkspaceStudio/WorkspaceStudioPage.jsx';
 import SchedulingPage from './components/SchedulingPage.jsx';
 import DocumentsPage from './components/Documents/DocumentsPage.jsx';
+import ClientPortalPage from './components/Portal/ClientPortalPage.jsx';
 import { csrfHeaders } from './lib/csrf.js';
 import { frontendTelemetry } from './lib/frontendTelemetry.js';
 import { useSurfaceTelemetry } from './lib/useSurfaceTelemetry.js';
@@ -45,6 +46,8 @@ function normalizeSessionUser(profile) {
   return {
     staffId: firstString(profile.staffId, profile.staffMemberId, profile.staff_account_id) ?? profile.staffAccountId ?? null,
     staffAccountId: profile.staffAccountId ?? profile.staff_account_id ?? null,
+    clientId: firstString(profile.clientId, profile.client_id) ?? null,
+    portalAccountId: firstString(profile.portalAccountId, profile.portal_account_id) ?? null,
     tenantId: firstString(profile.tenantId, profile.tenant_id) ?? null,
     role: firstString(profile.role, profile.userRole) ?? null,
     name: firstString(directName, nestedName, combinedName, profile.displayName) ?? null,
@@ -56,6 +59,10 @@ function defaultCalendarView(role) {
   return ['platform_admin', 'practice_owner', 'practice_admin', 'scheduler_biller'].includes(role || '')
     ? 'practice'
     : 'counselor';
+}
+
+function defaultViewForRole(role) {
+  return role === 'client' ? 'portal' : 'dashboard';
 }
 
 function toValidDate(value) {
@@ -130,7 +137,13 @@ export default function App() {
     let cancelled = false;
     fetch('/api/v1/auth/me', { credentials: 'include' })
       .then(async (res) => { if (!res.ok) throw new Error(); return res.json(); })
-      .then((profile) => { if (cancelled) return; setCurrentUser(normalizeSessionUser(profile)); setIsAuthenticated(true); })
+      .then((profile) => {
+        if (cancelled) return;
+        const normalized = normalizeSessionUser(profile);
+        setCurrentUser(normalized);
+        setIsAuthenticated(true);
+        setCurrentView(defaultViewForRole(normalized?.role ?? null));
+      })
       .catch(() => { if (cancelled) return; setIsAuthenticated(false); setCurrentUser(null); })
       .finally(() => { if (cancelled) return; setAuthBootstrapping(false); });
     return () => { cancelled = true; };
@@ -138,6 +151,10 @@ export default function App() {
 
   useEffect(() => {
     if (!isAuthenticated) return;
+    if (userRole === 'client') {
+      setClientsData({ items: [], loading: false, error: null });
+      return;
+    }
     let isCancelled = false;
     fetch('/api/v1/clients', { credentials: 'include' })
       .then((res) => { if (!res.ok) throw new Error(); return res.json(); })
@@ -150,10 +167,11 @@ export default function App() {
         setClientsData({ items: [], loading: false, error: t('clients.error.loadFailed') });
       });
     return () => { isCancelled = true; };
-  }, [refreshClientsKey, isAuthenticated, t]);
+  }, [refreshClientsKey, isAuthenticated, t, userRole]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
+    if (userRole === 'client') return;
     fetch('/api/v1/appointments', { credentials: 'include' })
       .then((res) => { if (!res.ok) throw new Error(); return res.json(); })
       .then((payload) => {
@@ -168,7 +186,7 @@ export default function App() {
         }));
       })
       .catch(() => {});
-  }, [isAuthenticated, t]);
+  }, [isAuthenticated, t, userRole]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -202,11 +220,12 @@ export default function App() {
   }, [isAuthenticated, userRole, t]);
 
   const handleAuthContinue = (profile) => {
-    setCurrentUser(normalizeSessionUser(profile));
+    const normalized = normalizeSessionUser(profile);
+    setCurrentUser(normalized);
     setIsAuthenticated(true);
     setSelectedClientId(null);
     setSelectedCounselorId(null);
-    setCurrentView('dashboard');
+    setCurrentView(defaultViewForRole(normalized?.role ?? null));
   };
 
   const handleSignOut = async () => {
@@ -263,7 +282,8 @@ export default function App() {
   const showScheduling       = currentView === 'scheduling';
   const showWorkspaceStudio  = currentView === 'workspace-studio';
   const showDocuments        = currentView === 'documents';
-  const showClientsWorkspace = currentView === 'clients' || (!showDashboard && !showUsers && !showCounselors && !showScheduling && !showWorkspaceStudio && !showDocuments);
+  const showPortal           = currentView === 'portal';
+  const showClientsWorkspace = currentView === 'clients' || (!showDashboard && !showUsers && !showCounselors && !showScheduling && !showWorkspaceStudio && !showDocuments && !showPortal);
   const topLevelSurfaceId = !isAuthenticated
     ? 'auth'
     : selectedClientId || selectedCounselorId
@@ -287,7 +307,7 @@ export default function App() {
   useSurfaceTelemetry(topLevelSurfaceId, {
     surfaceKind: 'view',
     workflow: 'navigation',
-    emptyState: ['clinical', 'billing', 'portal', 'faith'].includes(topLevelSurfaceId) ? 'placeholder' : null,
+    emptyState: ['clinical', 'billing', 'faith'].includes(topLevelSurfaceId) ? 'placeholder' : null,
   });
 
   useEffect(() => {
@@ -323,6 +343,7 @@ export default function App() {
           opened={navOpened}
           onMenuToggle={toggleNav}
           onSignOut={handleSignOut}
+          currentUser={currentUser}
         />
       </AppShell.Header>
 
@@ -389,6 +410,8 @@ export default function App() {
           />
         ) : showDocuments ? (
           <DocumentsPage />
+        ) : showPortal ? (
+          <ClientPortalPage currentUser={currentUser} clients={clientsData.items} />
         ) : (
           <>
             {showDashboard ? <Metrics data={metricsData} currentUser={currentUser} /> : null}

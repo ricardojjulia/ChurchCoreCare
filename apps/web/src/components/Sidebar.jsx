@@ -19,6 +19,9 @@ const NAV_ITEMS = [
 ];
 
 function canViewNavItem(item, role) {
+  if (role === 'client') {
+    return ['portal', 'about', 'monitor'].includes(item.key);
+  }
   if (item.key === 'users' || item.key === 'counselors') {
     return ['platform_admin', 'practice_owner', 'practice_admin'].includes(role || '');
   }

@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import argon2 from 'argon2';
 import {
   appointmentTypes,
   appointmentStatuses,
@@ -54,6 +55,7 @@ import {
   adminResetStaffPassword,
   adminUnlockStaffAccount,
   adminDeactivateStaffAccount,
+  validatePasswordStrength,
 } from './lib/auth.js';
 import {
   listStaff, getStaffById, createStaff, updateStaff,
@@ -106,6 +108,7 @@ import {
 import {
   getPortalSettings, upsertPortalSettings,
   getPortalAccount, createPortalAccount, updatePortalAccount,
+  getPortalClientProfile, upsertPortalClientProfile,
   listPortalResources, createPortalResource, updatePortalResource,
   listPortalMessageThreads, getPortalMessageThread, createPortalMessageThread, updatePortalMessageThread,
   listPortalMessages, createPortalMessage,
@@ -794,6 +797,36 @@ const portalAccounts = [
   },
 ];
 
+const portalClientProfiles = [
+  {
+    id: 'pcp-001',
+    tenantId: 'system',
+    clientId: 'c-001',
+    preferredName: 'Sarah',
+    contactEmail: 'sarah.kim@example.test',
+    contactPhone: '555-0122',
+    contactPreferences: {
+      preferredContactMethod: 'email',
+      okToText: true,
+      okToLeaveMessage: true,
+      enabledChannels: ['email', 'sms', 'portal_message'],
+    },
+    profileDetails: {
+      demographics: {
+        pronouns: 'she/her',
+        maritalStatus: 'married',
+      },
+      education: {
+        level: 'bachelors',
+        occupation: 'Teacher',
+      },
+      affiliations: ['Church volunteer', 'Women’s Bible study'],
+    },
+    createdAt: new Date(Date.now() - 21 * 24 * 60 * 60 * 1000).toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+];
+
 const portalSettingsRecords = [
   {
     id: 'ps-001',
@@ -1311,7 +1344,7 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (requestUrl.pathname === '/v1/portal/overview') {
-      await handlePortalOverview(request, response, requestUrl);
+      await handlePortalOverview(request, response, requestUrl, session);
       return;
     }
 
@@ -1330,8 +1363,13 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (requestUrl.pathname === '/v1/portal/profile') {
+      await handlePortalProfile(request, response, requestUrl, session);
+      return;
+    }
+
     if (requestUrl.pathname === '/v1/portal/intake-packets') {
-      await handlePortalIntakePackets(request, response, requestUrl);
+      await handlePortalIntakePackets(request, response, requestUrl, session);
       return;
     }
 
@@ -1341,17 +1379,17 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (requestUrl.pathname === '/v1/portal/appointment-requests') {
-      await handlePortalAppointmentRequests(request, response, requestUrl);
+      await handlePortalAppointmentRequests(request, response, requestUrl, session);
       return;
     }
 
     if (requestUrl.pathname === '/v1/portal/messages') {
-      await handlePortalMessages(request, response, requestUrl);
+      await handlePortalMessages(request, response, requestUrl, session);
       return;
     }
 
     if (requestUrl.pathname === '/v1/portal/resources') {
-      await handlePortalResources(request, response, requestUrl);
+      await handlePortalResources(request, response, requestUrl, session);
       return;
     }
 
@@ -1645,7 +1683,12 @@ async function handleAuthLogin(request, response) {
   const payload = await readJsonBody(request);
   try {
     const profile = await login(payload.email, payload.password, response);
-    await emitAudit(request, 'session.login', 'staff_account', profile.staffId);
+    await emitAudit(
+      request,
+      'session.login',
+      profile.role === 'client' ? 'portal_account' : 'staff_account',
+      profile.portalAccountId ?? profile.clientId ?? profile.staffId,
+    );
     writeJson(response, 200, { profile });
   } catch (err) {
     writeJson(response, err.statusCode || 500, { error: err.error || err.message });
@@ -1654,8 +1697,9 @@ async function handleAuthLogin(request, response) {
 
 async function handleAuthLogout(request, response, session) {
   await logout(request, response);
-  const actorId = session?.staff_account_id ?? 'anonymous';
-  await emitAudit(request, 'session.logout', 'staff_account', actorId, session);
+  const actorId = session?.staff_account_id ?? session?.client_id ?? 'anonymous';
+  const targetId = session?.portal_account_id ?? session?.staff_account_id ?? session?.client_id ?? 'anonymous';
+  await emitAudit(request, 'session.logout', session?.role === 'client' ? 'portal_account' : 'staff_account', targetId, session);
   writeJson(response, 200, { ok: true });
 }
 
@@ -1664,7 +1708,25 @@ async function handleAuthMe(request, response, session) {
     writeJson(response, 401, { error: 'Authentication required' });
     return;
   }
-  // Fetch display name from staff_members
+  if (session.role === 'client') {
+    const [rows] = await pool.query(
+      'SELECT pa.email_enc, c.first_name_enc, c.last_name_enc FROM portal_accounts pa ' +
+      'JOIN clients c ON c.id = pa.client_id AND c.tenant_id = pa.tenant_id ' +
+      'WHERE pa.id = ?',
+      [session.portal_account_id],
+    );
+    const row = rows[0];
+    writeJson(response, 200, {
+      clientId: session.client_id,
+      portalAccountId: session.portal_account_id,
+      tenantId: session.tenant_id,
+      role: session.role,
+      name: row ? `${decrypt(row.first_name_enc)} ${decrypt(row.last_name_enc)}` : null,
+      email: row?.email_enc ? decrypt(row.email_enc) : null,
+    });
+    return;
+  }
+
   const [rows] = await pool.query(
     'SELECT sm.first_name_enc, sm.last_name_enc, sa.email, sa.email_enc FROM staff_accounts sa ' +
     'JOIN staff_members sm ON sm.id = sa.staff_member_id ' +
@@ -1684,6 +1746,10 @@ async function handleAuthMe(request, response, session) {
 async function handleAuthChangePassword(request, response, session) {
   if (!session) {
     writeJson(response, 401, { error: 'Authentication required' });
+    return;
+  }
+  if (session.role === 'client') {
+    writeJson(response, 403, { error: 'Portal password change is not yet available from this surface' });
     return;
   }
   const payload = await readJsonBody(request);
@@ -5969,34 +6035,110 @@ async function handlePortalSettings(request, response, session) {
   writeJson(response, 200, { item });
 }
 
-async function handlePortalOverview(request, response, requestUrl) {
+async function handlePortalOverview(request, response, requestUrl, session) {
   if (request.method !== 'GET') {
     writeJson(response, 405, { error: 'Method not allowed' });
     return;
   }
 
-  const client = await resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50));
+  const client = await resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50), session);
   if (!client) return;
 
-  const account = portalAccounts.find((item) => item.clientId === client.id && item.tenantId === client.tenantId) ?? null;
-  const forms = intakePackets.filter((item) => item.clientId === client.id && item.tenantId === client.tenantId);
-  const documents = documentAssignments
-    .filter((item) => item.tenantId === client.tenantId)
-    .filter((item) => item.assigneeType === 'client' && item.assigneeId === client.id)
-    .map((item) => ({
-      ...item,
-      templateTitle: documentTemplates.find((template) => template.id === item.templateId)?.title ?? 'Document',
-    }));
-  const balanceItems = invoices.filter((item) => item.clientId === client.id && item.tenantId === client.tenantId);
-  const resources = portalResources.filter((item) => item.tenantId === client.tenantId && item.clientId === client.id);
-  const messageThreads = portalMessageThreads
-    .filter((item) => item.tenantId === client.tenantId && item.clientId === client.id)
-    .map((thread) => ({
-      ...thread,
-      unreadForClient: 0,
-      messageCount: portalMessages.filter((message) => message.threadId === thread.id).length,
-    }));
-  const appointmentRequests = portalAppointmentRequests.filter((item) => item.tenantId === client.tenantId && item.clientId === client.id);
+  const settings = process.env.DB_NAME
+    ? await getPortalSettings(client.tenantId)
+    : (portalSettingsRecords.find((item) => item.tenantId === client.tenantId) ?? buildDefaultPortalSettings(client.tenantId));
+
+  let account = null;
+  let forms = [];
+  let assignedForms = [];
+  let documents = [];
+  let balanceItems = [];
+  let resources = [];
+  let messageThreads = [];
+  let appointmentRequests = [];
+  let upcomingAppointments = [];
+  let assignedCounselor = null;
+
+  if (process.env.DB_NAME) {
+    account = await getPortalAccount(client.id, client.tenantId);
+    forms = await listFormAssignments(client.tenantId, { clientId: client.id });
+    assignedForms = forms.filter((item) => item.status !== 'completed');
+    documents = await listDocumentAssignments(client.tenantId, { clientId: client.id });
+    balanceItems = await listInvoices(client.tenantId, client.id);
+    resources = (await listPortalResources(client.tenantId))
+      .filter((item) => ['all', 'client', 'clients'].includes(item.audience ?? 'all'));
+    const threads = await listPortalMessageThreads(client.tenantId, client.id);
+    messageThreads = await Promise.all(
+      threads.map(async (thread) => ({
+        ...thread,
+        unreadForClient: 0,
+        messageCount: (await listPortalMessages(thread.id, client.tenantId)).length,
+      }))
+    );
+    appointmentRequests = await listPortalAppointmentRequests(client.tenantId, client.id);
+    const allAppointments = await listAppointments(client.tenantId);
+    upcomingAppointments = allAppointments
+      .filter((item) => item.clientId === client.id)
+      .filter((item) => {
+        if (!item.startsAt) return false;
+        if (item.status === 'cancelled' || item.status === 'canceled') return false;
+        return new Date(item.startsAt).getTime() >= Date.now() - (12 * 60 * 60 * 1000);
+      })
+      .sort((left, right) => new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime());
+
+    const assignedCounselorId = upcomingAppointments.find((item) => item.counselorId)?.counselorId ?? null;
+    if (assignedCounselorId) {
+      const counselor = await getStaffById(assignedCounselorId, client.tenantId);
+      if (counselor) {
+        assignedCounselor = {
+          staffId: counselor.id,
+          firstName: counselor.firstName,
+          lastName: counselor.lastName,
+          role: counselor.role,
+          bio: counselor.bio ?? '',
+        };
+      }
+    }
+  } else {
+    account = portalAccounts.find((item) => item.clientId === client.id && item.tenantId === client.tenantId) ?? null;
+    forms = intakePackets.filter((item) => item.clientId === client.id && item.tenantId === client.tenantId);
+    assignedForms = formWorkflowAssignments.filter((item) => item.clientId === client.id && item.tenantId === client.tenantId && item.status !== 'completed');
+    documents = documentAssignments
+      .filter((item) => item.tenantId === client.tenantId)
+      .filter((item) => item.assigneeType === 'client' && item.assigneeId === client.id)
+      .map((item) => ({
+        ...item,
+        templateTitle: documentTemplates.find((template) => template.id === item.templateId)?.title ?? 'Document',
+      }));
+    balanceItems = invoices.filter((item) => item.clientId === client.id && item.tenantId === client.tenantId);
+    resources = portalResources.filter((item) => item.tenantId === client.tenantId && item.clientId === client.id);
+    messageThreads = portalMessageThreads
+      .filter((item) => item.tenantId === client.tenantId && item.clientId === client.id)
+      .map((thread) => ({
+        ...thread,
+        unreadForClient: 0,
+        messageCount: portalMessages.filter((message) => message.threadId === thread.id).length,
+      }));
+    appointmentRequests = portalAppointmentRequests.filter((item) => item.tenantId === client.tenantId && item.clientId === client.id);
+    upcomingAppointments = appointments
+      .filter((item) => item.tenantId === client.tenantId && item.clientId === client.id)
+      .filter((item) => item.status !== 'cancelled' && item.status !== 'canceled')
+      .sort((left, right) => new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime());
+
+    const nextCounselorName = upcomingAppointments.find((item) => item.counselorName)?.counselorName ?? null;
+    if (nextCounselorName) {
+      const counselor = staffMembers.find((item) => `${item.firstName} ${item.lastName}` === nextCounselorName) ?? null;
+      if (counselor) {
+        assignedCounselor = {
+          staffId: counselor.id,
+          firstName: counselor.firstName,
+          lastName: counselor.lastName,
+          role: counselor.role,
+          bio: counselor.bio ?? '',
+        };
+      }
+    }
+  }
 
   emitAudit(request, 'portal.overview.read', 'portal', client.id);
   writeJson(response, 200, {
@@ -6008,7 +6150,17 @@ async function handlePortalOverview(request, response, requestUrl) {
     },
     account,
     forms,
+    assignedForms,
     documents,
+    upcomingAppointments,
+    assignedCounselor,
+    settings: settings
+      ? {
+        practiceName: settings.practiceName,
+        financialMode: settings.financialMode,
+        contactPreferenceOptions: settings.contactPreferenceOptions ?? [],
+      }
+      : null,
     balances: {
       total: normalizeCurrency(balanceItems.reduce((sum, item) => sum + normalizeCurrency(item.total), 0)),
       paid: normalizeCurrency(balanceItems.reduce((sum, item) => sum + normalizeCurrency(item.amountPaid), 0)),
@@ -6021,9 +6173,145 @@ async function handlePortalOverview(request, response, requestUrl) {
   });
 }
 
+function buildDefaultPortalClientProfile(client, account = null, settings = null) {
+  const contactPreferenceOptions = Array.isArray(settings?.contactPreferenceOptions)
+    ? settings.contactPreferenceOptions.filter((value) => typeof value === 'string' && value.trim())
+    : [];
+  const defaultChannel = contactPreferenceOptions[0] ?? 'email';
+
+  return {
+    id: null,
+    tenantId: client.tenantId,
+    clientId: client.id,
+    preferredName: client.firstName ?? '',
+    contactEmail: account?.email ?? '',
+    contactPhone: '',
+    contactPreferences: {
+      preferredContactMethod: defaultChannel,
+      okToText: false,
+      okToLeaveMessage: true,
+      enabledChannels: contactPreferenceOptions.length ? contactPreferenceOptions : ['email'],
+    },
+    profileDetails: {
+      demographics: {
+        pronouns: '',
+        maritalStatus: '',
+      },
+      education: {
+        level: '',
+        occupation: '',
+      },
+      affiliations: [],
+    },
+    createdAt: null,
+    updatedAt: null,
+  };
+}
+
+async function handlePortalProfile(request, response, requestUrl, session) {
+  const client = await resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50), session);
+  if (!client) return;
+
+  const settings = process.env.DB_NAME
+    ? await getPortalSettings(client.tenantId)
+    : (portalSettingsRecords.find((item) => item.tenantId === client.tenantId) ?? buildDefaultPortalSettings(client.tenantId));
+
+  if (request.method === 'GET') {
+    let item;
+    if (process.env.DB_NAME) {
+      const account = await getPortalAccount(client.id, client.tenantId);
+      item = await getPortalClientProfile(client.id, client.tenantId);
+      item = item ?? buildDefaultPortalClientProfile(client, account, settings);
+    } else {
+      const account = portalAccounts.find((entry) => entry.clientId === client.id && entry.tenantId === client.tenantId) ?? null;
+      item = portalClientProfiles.find((entry) => entry.clientId === client.id && entry.tenantId === client.tenantId)
+        ?? buildDefaultPortalClientProfile(client, account, settings);
+    }
+
+    emitAudit(request, 'portal.profile.read', 'portal_client_profile', client.id, session);
+    writeJson(response, 200, { item });
+    return;
+  }
+
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const allowedContactMethods = Array.isArray(settings?.contactPreferenceOptions)
+    ? settings.contactPreferenceOptions.filter((value) => typeof value === 'string' && value.trim())
+    : ['email', 'sms', 'phone', 'portal_message'];
+  const enabledChannels = Array.isArray(payload.contactPreferences?.enabledChannels)
+    ? payload.contactPreferences.enabledChannels
+      .map((value) => sanitizeStr(String(value), 64))
+      .filter((value) => value && allowedContactMethods.includes(value))
+    : [];
+  const preferredContactMethod = sanitizeStr(payload.contactPreferences?.preferredContactMethod, 64);
+  const profile = {
+    preferredName: sanitizeStr(payload.preferredName, 120) ?? '',
+    contactEmail: sanitizeStr(payload.contactEmail, 200) ?? '',
+    contactPhone: sanitizeStr(payload.contactPhone, 64) ?? '',
+    contactPreferences: {
+      preferredContactMethod: preferredContactMethod && allowedContactMethods.includes(preferredContactMethod)
+        ? preferredContactMethod
+        : (allowedContactMethods[0] ?? 'email'),
+      okToText: Boolean(payload.contactPreferences?.okToText),
+      okToLeaveMessage: payload.contactPreferences?.okToLeaveMessage !== false,
+      enabledChannels: enabledChannels.length ? enabledChannels : allowedContactMethods.slice(0, 1),
+    },
+    profileDetails: {
+      demographics: {
+        pronouns: sanitizeStr(payload.profileDetails?.demographics?.pronouns, 80) ?? '',
+        maritalStatus: sanitizeStr(payload.profileDetails?.demographics?.maritalStatus, 64) ?? '',
+      },
+      education: {
+        level: sanitizeStr(payload.profileDetails?.education?.level, 64) ?? '',
+        occupation: sanitizeStr(payload.profileDetails?.education?.occupation, 120) ?? '',
+      },
+      affiliations: Array.isArray(payload.profileDetails?.affiliations)
+        ? payload.profileDetails.affiliations
+          .map((value) => sanitizeStr(String(value), 120))
+          .filter(Boolean)
+          .slice(0, 10)
+        : [],
+    },
+  };
+
+  let item;
+  if (process.env.DB_NAME) {
+    item = await upsertPortalClientProfile({
+      id: genId('pcp'),
+      tenantId: client.tenantId,
+      clientId: client.id,
+      ...profile,
+    });
+  } else {
+    const existingIndex = portalClientProfiles.findIndex((entry) => entry.clientId === client.id && entry.tenantId === client.tenantId);
+    const now = new Date().toISOString();
+    item = {
+      id: existingIndex >= 0 ? portalClientProfiles[existingIndex].id : createId('pcp', portalClientProfiles),
+      tenantId: client.tenantId,
+      clientId: client.id,
+      ...profile,
+      createdAt: existingIndex >= 0 ? portalClientProfiles[existingIndex].createdAt : now,
+      updatedAt: now,
+    };
+    if (existingIndex >= 0) {
+      portalClientProfiles[existingIndex] = item;
+    } else {
+      portalClientProfiles.push(item);
+    }
+  }
+
+  telemetry.recordMutation('portal.profile.update');
+  emitAudit(request, 'portal.profile.update', 'portal_client_profile', item.id, session);
+  writeJson(response, 200, { item });
+}
+
 async function handlePortalAccounts(request, response, requestUrl, session) {
   if (request.method === 'GET') {
-    const client = await resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50));
+    const client = await resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50), session);
     if (!client) return;
     if (process.env.DB_NAME) {
       const item = await getPortalAccount(client.id, client.tenantId);
@@ -6066,11 +6354,24 @@ async function handlePortalAccounts(request, response, requestUrl, session) {
         writeJson(response, 400, { error: 'status must be valid' });
         return;
       }
+      const temporaryPassword = sanitizeStr(payload.temporaryPassword, 128) ?? generateTemporaryPassword();
+      const passwordError = validatePasswordStrength(temporaryPassword);
+      if (passwordError) {
+        writeJson(response, 400, { error: passwordError });
+        return;
+      }
+      const passwordHash = await argon2.hash(temporaryPassword, {
+        type: argon2.argon2id,
+        memoryCost: 65536,
+        timeCost: 3,
+        parallelism: 1,
+      });
       const item = await createPortalAccount({
         id: genId('pa'),
         clientId,
         tenantId,
         email: sanitizeStr(payload.email, 200) ?? '',
+        passwordHash,
         status,
         mfaEnabled: Boolean(payload.mfaEnabled),
       });
@@ -6081,7 +6382,7 @@ async function handlePortalAccounts(request, response, requestUrl, session) {
       });
       telemetry.recordMutation('portal.account.create');
       emitAudit(request, 'portal.account.create', 'portal_account', item.id, session);
-      writeJson(response, 201, { item, assignedForms });
+      writeJson(response, 201, { item, assignedForms, temporaryPassword });
       return;
     }
 
@@ -6090,9 +6391,27 @@ async function handlePortalAccounts(request, response, requestUrl, session) {
       writeJson(response, 400, { error: 'status must be valid' });
       return;
     }
+    const temporaryPassword = typeof payload.temporaryPassword === 'string'
+      ? sanitizeStr(payload.temporaryPassword, 128)
+      : undefined;
+    if (temporaryPassword) {
+      const passwordError = validatePasswordStrength(temporaryPassword);
+      if (passwordError) {
+        writeJson(response, 400, { error: passwordError });
+        return;
+      }
+    }
     const item = await updatePortalAccount(clientId, tenantId, {
       status,
       email: typeof payload.email === 'string' ? sanitizeStr(payload.email, 200) : undefined,
+      passwordHash: temporaryPassword
+        ? await argon2.hash(payload.temporaryPassword, {
+          type: argon2.argon2id,
+          memoryCost: 65536,
+          timeCost: 3,
+          parallelism: 1,
+        })
+        : undefined,
       mfaEnabled: payload.mfaEnabled !== undefined ? Boolean(payload.mfaEnabled) : undefined,
     });
     if (!item) {
@@ -6124,6 +6443,7 @@ async function handlePortalAccounts(request, response, requestUrl, session) {
       return;
     }
 
+    const temporaryPassword = sanitizeStr(payload.temporaryPassword, 128) ?? generateTemporaryPassword();
     const item = {
       id: createId('pa', portalAccounts),
       tenantId: client.tenantId,
@@ -6131,6 +6451,7 @@ async function handlePortalAccounts(request, response, requestUrl, session) {
       status,
       email: sanitizeStr(payload.email, 200) ?? '',
       mfaEnabled: Boolean(payload.mfaEnabled),
+      temporaryPassword,
       lastLoginAt: null,
       invitedAt: new Date().toISOString(),
     };
@@ -6143,7 +6464,7 @@ async function handlePortalAccounts(request, response, requestUrl, session) {
     });
     telemetry.recordMutation('portal.account.create');
     emitAudit(request, 'portal.account.create', 'portal_account', item.id);
-    writeJson(response, 201, { item, assignedForms });
+    writeJson(response, 201, { item, assignedForms, temporaryPassword });
     return;
   }
 
@@ -6171,8 +6492,8 @@ async function handlePortalAccounts(request, response, requestUrl, session) {
   writeJson(response, 200, { item });
 }
 
-async function handlePortalIntakePackets(request, response, requestUrl) {
-  const client = await resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50));
+async function handlePortalIntakePackets(request, response, requestUrl, session) {
+  const client = await resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50), session);
   if (!client) return;
 
   if (request.method === 'GET') {
@@ -6237,7 +6558,7 @@ async function handlePortalIntakePackets(request, response, requestUrl) {
 }
 
 async function handlePortalDocuments(request, response, requestUrl, session) {
-  const client = await resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50));
+  const client = await resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50), session);
   if (!client) return;
 
   if (request.method === 'GET') {
@@ -6339,7 +6660,7 @@ async function handlePortalDocuments(request, response, requestUrl, session) {
     {
       action: nextStatus === 'signed' ? 'signed' : 'completed',
       at: new Date().toISOString(),
-      actorRole: callerRole(request) || 'client',
+      actorRole: callerRole(request, session) || 'client',
     },
   ];
 
@@ -6348,14 +6669,17 @@ async function handlePortalDocuments(request, response, requestUrl, session) {
   writeJson(response, 200, { item });
 }
 
-async function handlePortalAppointmentRequests(request, response, requestUrl) {
-  const client = await resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50));
+async function handlePortalAppointmentRequests(request, response, requestUrl, session) {
+  const client = await resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50), session);
   if (!client) return;
 
   if (request.method === 'GET') {
-    const items = portalAppointmentRequests
-      .filter((item) => item.tenantId === client.tenantId && item.clientId === client.id)
-      .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+    const items = process.env.DB_NAME
+      ? (await listPortalAppointmentRequests(client.tenantId, client.id))
+        .sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt)))
+      : portalAppointmentRequests
+        .filter((item) => item.tenantId === client.tenantId && item.clientId === client.id)
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
     emitAudit(request, 'portal.appointment_request.read', 'portal_appointment_request', client.id);
     writeJson(response, 200, { items });
     return;
@@ -6381,20 +6705,39 @@ async function handlePortalAppointmentRequests(request, response, requestUrl) {
       return;
     }
 
-    const item = {
-      id: createId('par', portalAppointmentRequests),
-      tenantId: client.tenantId,
-      clientId: client.id,
-      preferredStartAt,
-      preferredEndAt,
-      mode: payload.mode === 'in_person' ? 'in_person' : 'remote',
-      status,
-      notes: sanitizeStr(payload.notes, 500) ?? '',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+    let item;
+    if (process.env.DB_NAME) {
+      item = await createPortalAppointmentRequest({
+        id: genId('par'),
+        tenantId: client.tenantId,
+        clientId: client.id,
+        requestedType: sanitizeStr(payload.requestedType, 64) ?? 'session',
+        preferredTimes: [{
+          startAt: preferredStartAt,
+          endAt: preferredEndAt,
+          mode: payload.mode === 'in_person' ? 'in_person' : 'remote',
+        }],
+        notes: sanitizeStr(payload.notes, 500) ?? '',
+        status,
+        resolvedAt: null,
+      });
+    } else {
+      item = {
+        id: createId('par', portalAppointmentRequests),
+        tenantId: client.tenantId,
+        clientId: client.id,
+        requestedType: sanitizeStr(payload.requestedType, 64) ?? 'session',
+        preferredStartAt,
+        preferredEndAt,
+        mode: payload.mode === 'in_person' ? 'in_person' : 'remote',
+        status,
+        notes: sanitizeStr(payload.notes, 500) ?? '',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      portalAppointmentRequests.push(item);
+    }
 
-    portalAppointmentRequests.push(item);
     telemetry.recordMutation('portal.appointment_request.create');
     emitAudit(request, 'portal.appointment_request.create', 'portal_appointment_request', item.id);
     writeJson(response, 201, { item });
@@ -6402,13 +6745,15 @@ async function handlePortalAppointmentRequests(request, response, requestUrl) {
   }
 
   const requestId = sanitizeStr(payload.requestId, 50);
-  const item = portalAppointmentRequests.find((entry) => entry.id === requestId);
+  const item = process.env.DB_NAME
+    ? (await listPortalAppointmentRequests(client.tenantId, client.id)).find((entry) => entry.id === requestId)
+    : portalAppointmentRequests.find((entry) => entry.id === requestId);
   if (!item) {
     writeJson(response, 404, { error: 'Appointment request not found' });
     return;
   }
   if (enforceTenantScope(request, response, item.tenantId)) return;
-  if (item.clientId !== client.id && callerRole(request) === 'client') {
+  if (item.clientId !== client.id && callerRole(request, session) === 'client') {
     writeJson(response, 403, { error: 'Access to this resource is not permitted' });
     return;
   }
@@ -6419,17 +6764,27 @@ async function handlePortalAppointmentRequests(request, response, requestUrl) {
     return;
   }
 
-  item.status = status;
-  item.updatedAt = new Date().toISOString();
-  if (typeof payload.notes === 'string') item.notes = sanitizeStr(payload.notes, 500) ?? item.notes;
+  let updatedItem = item;
+  if (process.env.DB_NAME) {
+    updatedItem = await updatePortalAppointmentRequest(requestId, client.tenantId, {
+      status,
+      notes: typeof payload.notes === 'string' ? sanitizeStr(payload.notes, 500) : undefined,
+      resolvedAt: status === 'approved' || status === 'declined' || status === 'scheduled' ? new Date().toISOString() : undefined,
+    });
+  } else {
+    item.status = status;
+    item.updatedAt = new Date().toISOString();
+    if (typeof payload.notes === 'string') item.notes = sanitizeStr(payload.notes, 500) ?? item.notes;
+    updatedItem = item;
+  }
 
   telemetry.recordMutation('portal.appointment_request.update');
-  emitAudit(request, 'portal.appointment_request.update', 'portal_appointment_request', item.id);
-  writeJson(response, 200, { item });
+  emitAudit(request, 'portal.appointment_request.update', 'portal_appointment_request', updatedItem.id);
+  writeJson(response, 200, { item: updatedItem });
 }
 
-async function handlePortalMessages(request, response, requestUrl) {
-  const client = await resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50));
+async function handlePortalMessages(request, response, requestUrl, session) {
+  const client = await resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50), session);
   if (!client) return;
 
   if (request.method === 'GET') {
@@ -6492,7 +6847,7 @@ async function handlePortalMessages(request, response, requestUrl) {
     portalMessageThreads.push(thread);
   }
 
-  const senderRole = callerRole(request) === 'client' ? 'client' : callerRole(request) || 'staff';
+  const senderRole = callerRole(request, session) === 'client' ? 'client' : callerRole(request, session) || 'staff';
   const message = {
     id: createId('pm', portalMessages),
     tenantId: client.tenantId,
@@ -6512,8 +6867,8 @@ async function handlePortalMessages(request, response, requestUrl) {
   writeJson(response, 201, { thread, message });
 }
 
-async function handlePortalResources(request, response, requestUrl) {
-  const client = await resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50));
+async function handlePortalResources(request, response, requestUrl, session) {
+  const client = await resolvePortalClient(request, response, sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50), session);
   if (!client) return;
 
   if (request.method === 'GET') {
@@ -6530,7 +6885,7 @@ async function handlePortalResources(request, response, requestUrl) {
     return;
   }
 
-  if (callerRole(request) === 'client') {
+  if (callerRole(request, session) === 'client') {
     writeJson(response, 403, { error: 'Insufficient permissions' });
     return;
   }
@@ -6557,7 +6912,7 @@ async function handlePortalResources(request, response, requestUrl) {
     resourceType,
     content,
     publishedAt: new Date().toISOString(),
-    publishedByRole: callerRole(request) || 'staff',
+    publishedByRole: callerRole(request, session) || 'staff',
   };
 
   portalResources.push(item);
@@ -6572,7 +6927,7 @@ async function handleFaithOverview(request, response, requestUrl) {
     return;
   }
 
-  if (callerRole(request) === 'client') {
+  if (callerRole(request, session) === 'client') {
     writeJson(response, 403, { error: 'Insufficient permissions' });
     return;
   }
@@ -9781,7 +10136,8 @@ function callerRole(request, session) {
   return (request.headers['x-staff-role'] || '').trim().toLowerCase();
 }
 
-function callerClientId(request) {
+function callerClientId(request, session) {
+  if (session?.client_id) return sanitizeStr(session.client_id, 50);
   return sanitizeStr(request.headers['x-client-id'] || '', 50);
 }
 
@@ -9803,13 +10159,12 @@ function requirePlatformAdmin(request, response, session) {
   return true;
 }
 
-async function resolvePortalClient(request, response, requestedClientId) {
-  const role = callerRole(request);
-  const tenantId = callerTenant(request);
+async function resolvePortalClient(request, response, requestedClientId, session = null) {
+  const role = callerRole(request, session);
   const requested = sanitizeStr(requestedClientId, 50);
 
   if (role === 'client') {
-    const callerClient = callerClientId(request) ?? requested;
+    const callerClient = callerClientId(request, session) ?? requested;
     if (!callerClient) {
       writeJson(response, 401, { error: 'Client identity required' });
       return null;
@@ -9828,7 +10183,7 @@ async function resolvePortalClient(request, response, requestedClientId) {
       return null;
     }
 
-    if (enforceTenantScope(request, response, client.tenantId)) return null;
+    if (enforceTenantScope(request, response, client.tenantId, session)) return null;
     if (requested && requested !== callerClient) {
       writeJson(response, 403, { error: 'Access to this resource is not permitted' });
       return null;
@@ -9850,7 +10205,7 @@ async function resolvePortalClient(request, response, requestedClientId) {
       writeJson(response, 400, { error: 'Valid clientId is required' });
       return null;
     }
-    if (enforceTenantScope(request, response, client.tenantId)) return null;
+    if (enforceTenantScope(request, response, client.tenantId, session)) return null;
     return client;
   }
 
@@ -10035,6 +10390,7 @@ function resolveRoute(pathname) {
   if (pathname === '/v1/portal/settings') return '/v1/portal/settings';
   if (pathname === '/v1/portal/overview') return '/v1/portal/overview';
   if (pathname === '/v1/portal/accounts') return '/v1/portal/accounts';
+  if (pathname === '/v1/portal/profile') return '/v1/portal/profile';
   if (pathname === '/v1/portal/intake-packets') return '/v1/portal/intake-packets';
   if (pathname === '/v1/portal/documents') return '/v1/portal/documents';
   if (pathname === '/v1/portal/appointment-requests') return '/v1/portal/appointment-requests';

@@ -196,6 +196,7 @@ export function enforceRbac(request, response, route, session = null) {
 
   // Auth endpoints are public (no session needed to log in)
   if (route === '/v1/auth/login' || route === '/v1/auth/logout') return false;
+  if (route === '/v1/auth/me') return false;
   if (route === '/v1/portal/public-requests' && request.method === 'POST') return false;
   if (route === '/v1/portal/public-config' && request.method === 'GET') return false;
 
@@ -291,7 +292,13 @@ export function enforceTenantScope(request, response, resourceTenantId, session 
  */
 export function callerIdentity(request, session) {
   if (session) {
-    return { role: session.role, tenantId: session.tenant_id };
+    return {
+      role: session.role,
+      tenantId: session.tenant_id,
+      staffAccountId: session.staff_account_id ?? null,
+      clientId: session.client_id ?? null,
+      actorType: session.actor_type ?? 'user',
+    };
   }
   return {
     role:     (request.headers['x-staff-role'] || '').trim().toLowerCase(),

@@ -15,6 +15,10 @@ const TEST_ACCOUNTS = {
     email:    process.env.TEST_ADMIN_EMAIL    || 'admin@faithcounseling.local',
     password: process.env.TEST_ADMIN_PASSWORD || 'ChangeMe!Dev2024#',
   },
+  client: {
+    email: process.env.TEST_CLIENT_EMAIL || 'sarah.kim@example.test',
+    password: process.env.TEST_CLIENT_PASSWORD || 'ChangeMe!Client2026#',
+  },
 };
 
 /**

@@ -52,12 +52,19 @@ function AccountSection({ account, clientId, onRefresh }) {
   const createAccount = async () => {
     setSaving(true);
     try {
-      await apiFetch('/api/v1/portal/accounts', {
+      const data = await apiFetch('/api/v1/portal/accounts', {
         method: 'POST',
         headers: csrfHeaders(),
         body: JSON.stringify({ clientId, email: email.trim(), status: 'invited' }),
       });
-      notifications.show({ title: 'Invited', message: 'Portal account created and invitation queued.', color: 'green' });
+      notifications.show({
+        title: 'Invited',
+        message: data?.temporaryPassword
+          ? `Portal account created. Temporary password: ${data.temporaryPassword}`
+          : 'Portal account created and invitation queued.',
+        color: 'green',
+        autoClose: false,
+      });
       onRefresh();
     } catch (err) {
       notifications.show({ title: 'Error', message: err.message, color: 'red' });

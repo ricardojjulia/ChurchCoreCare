@@ -1,8 +1,13 @@
 import { Burger, Group, Select, Text, Box, Button } from '@mantine/core';
 import { useI18n } from '../lib/i18nContext.jsx';
 
-export default function TopBar({ opened, onMenuToggle, onSignOut }) {
+export default function TopBar({ opened, onMenuToggle, onSignOut, currentUser }) {
   const { locale, locales, setLocale, t, loading } = useI18n();
+  const isClient = currentUser?.role === 'client';
+  const title = isClient ? 'Client Portal' : t('topbar.title');
+  const subtitle = isClient
+    ? 'Appointments, forms, billing, and secure profile updates in one place.'
+    : t('topbar.subtitle');
 
   return (
     <Group className="workspace-topbar" h="100%" px="md" justify="space-between" wrap="nowrap">
@@ -22,9 +27,9 @@ export default function TopBar({ opened, onMenuToggle, onSignOut }) {
         </Box>
         <Box className="workspace-topbar-copy">
           <Text className="workspace-topbar-kicker">{t('topbar.kicker')}</Text>
-          <Text component="h1" className="workspace-topbar-title" style={{ margin: 0 }}>{t('topbar.title')}</Text>
+          <Text component="h1" className="workspace-topbar-title" style={{ margin: 0 }}>{title}</Text>
           <Text className="workspace-topbar-subtitle">
-            {t('topbar.subtitle')}
+            {subtitle}
           </Text>
         </Box>
       </Group>
