@@ -104,6 +104,7 @@ import {
   listDocumentAssignments, createDocumentAssignment, updateDocumentAssignment,
 } from './db/queries/documents.js';
 import {
+  getPortalSettings, upsertPortalSettings,
   getPortalAccount, createPortalAccount, updatePortalAccount,
   listPortalResources, createPortalResource, updatePortalResource,
   listPortalMessageThreads, getPortalMessageThread, createPortalMessageThread, updatePortalMessageThread,
@@ -114,7 +115,7 @@ import {
   listFormCatalog, createFormCatalogItem, updateFormCatalogItem, getFormCatalogItemByKey,
   listFormAssignments, createFormAssignment, updateFormAssignment, getFormAssignmentById,
   listFormSubmissions, createFormSubmission, getNextSubmissionVersion,
-  createPortalRegistrationRequest,
+  listPortalRegistrationRequests, createPortalRegistrationRequest, updatePortalRegistrationRequest,
 } from './db/queries/formWorkflows.js';
 import {
   listFaithNoteTemplates, createFaithNoteTemplate, updateFaithNoteTemplate,
@@ -425,7 +426,24 @@ const formWorkflowSubmissions = [
   },
 ];
 
-const portalRegistrationRequests = [];
+const portalRegistrationRequests = [
+  {
+    id: 'pr-001',
+    tenantId: 'system',
+    requestType: 'care_request',
+    firstName: 'Leah',
+    lastName: 'Carter',
+    email: 'leah.carter@example.test',
+    phone: '555-0199',
+    preferredContactMethod: 'email',
+    preferredContactWindow: 'Weekday afternoons',
+    requestedServices: ['care_request', 'individual', 'faith_integrated'],
+    notes: 'Interested in beginning Christian counseling and open to virtual sessions.',
+    status: 'requested',
+    createdAt: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
+    updatedAt: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
+  },
+];
 
 const appointments = [
   { id: 'a-001', tenantId: 'system', clientId: 'c-001', clientName: 'Sarah Kim', counselorName: 'Rachel Jordan', startsAt: atToday(9, 0), endsAt: atToday(9, 50), status: 'scheduled', appointmentType: 'individual_therapy', locationName: 'Cedar Room', remoteSession: false },
@@ -552,9 +570,13 @@ const portalAccountStatuses = Object.freeze(['invited', 'active', 'locked']);
 const portalMessageThreadStatuses = Object.freeze(['open', 'closed']);
 const portalAppointmentRequestStatuses = Object.freeze(['requested', 'approved', 'declined', 'scheduled']);
 const portalResourceTypes = Object.freeze(['document', 'education', 'devotional', 'form']);
+const portalRegistrationModes = Object.freeze(['invite_only', 'review_required', 'instant_activation']);
+const portalFinancialModes = Object.freeze(['billing', 'offerings']);
+const portalContactPreferenceOptions = Object.freeze(['email', 'sms', 'phone', 'portal_message']);
 const formAssignmentTypes = Object.freeze(['next_session', 'future_session', 'scheduled_recurring', 'account_signup']);
 const formAssignmentWorkflowStatuses = Object.freeze(['assigned', 'in_progress', 'completed', 'cancelled']);
 const portalRegistrationStatuses = Object.freeze(['requested', 'reviewing', 'approved', 'declined']);
+const portalRequestTypes = Object.freeze(['care_request', 'scheduling_request', 'account_signup']);
 
 const DEFAULT_FORM_CATALOG = Object.freeze([
   { formKey: 'ShortIntakeForm', title: 'Short Intake Form', category: 'intake', isStandardOnSignup: true },
@@ -769,6 +791,31 @@ const portalAccounts = [
     mfaEnabled: false,
     lastLoginAt: null,
     invitedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+];
+
+const portalSettingsRecords = [
+  {
+    id: 'ps-001',
+    tenantId: 'system',
+    practiceName: 'FaithCounseling',
+    logoUrl: '',
+    brandColor: '#1f7a8c',
+    accentColor: '#f0f7f8',
+    welcomeHeadline: 'FaithCounseling Client Portal',
+    welcomeMessage: 'Current clients can sign in to their account. New or possible clients can request care, request scheduling, or start an account request for intake onboarding.',
+    helpMessage: 'If you need help accessing the portal, contact your counselor or the practice front desk.',
+    supportEmail: '',
+    registrationMode: 'review_required',
+    allowCreateAccount: true,
+    allowCareRequests: true,
+    allowSchedulingRequests: true,
+    showPublicCounselorDirectory: false,
+    financialMode: 'billing',
+    contactPreferenceOptions: ['email', 'sms', 'phone', 'portal_message'],
+    defaultSignupFormKeys: [],
+    createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+    updatedAt: new Date().toISOString(),
   },
 ];
 
@@ -1265,6 +1312,16 @@ const server = http.createServer(async (request, response) => {
 
     if (requestUrl.pathname === '/v1/portal/overview') {
       await handlePortalOverview(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/portal/public-config') {
+      await handlePortalPublicConfig(request, response, requestUrl, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/portal/settings') {
+      await handlePortalSettings(request, response, session);
       return;
     }
 
@@ -4038,31 +4095,61 @@ async function handlePortalPublicRequests(request, response, requestUrl, session
     if (requirePracticeAdmin(request, response, session)) return;
     const tenantId = callerTenant(request, session);
     if (process.env.DB_NAME) {
-      const [rows] = await pool.query(
-        'SELECT id, tenant_id, status, created_at, updated_at FROM portal_registration_requests WHERE tenant_id = ? ORDER BY created_at DESC LIMIT 200',
-        [tenantId],
-      );
+      const items = await listPortalRegistrationRequests(tenantId);
       emitAudit(request, 'portal.public_request.read', 'portal_registration_request', 'collection', session);
-      writeJson(response, 200, { items: rows.map((row) => ({
-        id: row.id,
-        tenantId: row.tenant_id,
-        status: row.status,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-      })) });
+      writeJson(response, 200, { items });
       return;
     }
     const items = portalRegistrationRequests
       .filter((item) => item.tenantId === tenantId)
-      .map((item) => ({
-        id: item.id,
-        tenantId: item.tenantId,
-        status: item.status,
-        createdAt: item.createdAt,
-        updatedAt: item.updatedAt,
-      }));
+      .slice()
+      .sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt)));
     emitAudit(request, 'portal.public_request.read', 'portal_registration_request', 'collection');
     writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method === 'PATCH') {
+    if (requirePracticeAdmin(request, response, session)) return;
+    const tenantId = callerTenant(request, session);
+    const payload = await readJsonBody(request);
+    const requestId = sanitizeStr(payload.requestId, 64);
+    const status = normalizePortalRegistrationStatus(payload.status);
+    if (!requestId) {
+      writeJson(response, 400, { error: 'requestId is required' });
+      return;
+    }
+    if (!status) {
+      writeJson(response, 400, { error: 'status must be valid' });
+      return;
+    }
+
+    if (process.env.DB_NAME) {
+      const items = await listPortalRegistrationRequests(tenantId);
+      const existing = items.find((item) => item.id === requestId);
+      if (!existing) {
+        writeJson(response, 404, { error: 'Portal registration request not found' });
+        return;
+      }
+      await updatePortalRegistrationRequest(requestId, tenantId, { status });
+      const updatedItems = await listPortalRegistrationRequests(tenantId);
+      const item = updatedItems.find((entry) => entry.id === requestId) ?? null;
+      telemetry.recordMutation('portal.public_request.update');
+      emitAudit(request, 'portal.public_request.update', 'portal_registration_request', requestId, session);
+      writeJson(response, 200, { item });
+      return;
+    }
+
+    const item = portalRegistrationRequests.find((entry) => entry.id === requestId && entry.tenantId === tenantId);
+    if (!item) {
+      writeJson(response, 404, { error: 'Portal registration request not found' });
+      return;
+    }
+    item.status = status;
+    item.updatedAt = new Date().toISOString();
+    telemetry.recordMutation('portal.public_request.update');
+    emitAudit(request, 'portal.public_request.update', 'portal_registration_request', requestId, session);
+    writeJson(response, 200, { item });
     return;
   }
 
@@ -4072,13 +4159,16 @@ async function handlePortalPublicRequests(request, response, requestUrl, session
   }
 
   const payload = await readJsonBody(request);
+  const requestType = normalizePortalRequestType(payload.requestType ?? payload.requestIntent ?? 'care_request') ?? 'care_request';
   const firstName = sanitizeStr(payload.firstName, 120);
   const lastName = sanitizeStr(payload.lastName, 120);
   const email = sanitizeStr(payload.email, 200);
   const phone = sanitizeStr(payload.phone, 40);
+  const preferredContactMethod = sanitizeStr(payload.preferredContactMethod, 64);
+  const preferredContactWindow = sanitizeStr(payload.preferredContactWindow, 128);
   const notes = sanitizeStr(payload.notes, 500);
   const requestedServices = Array.isArray(payload.requestedServices)
-    ? payload.requestedServices.map((entry) => sanitizeStr(String(entry), 120)).filter(Boolean)
+    ? [...new Set(payload.requestedServices.map((entry) => sanitizeStr(String(entry), 120)).filter(Boolean))]
     : [];
 
   // Public portal submissions must never choose an arbitrary tenant or internal
@@ -4087,9 +4177,23 @@ async function handlePortalPublicRequests(request, response, requestUrl, session
   const tenantId = session
     ? callerTenant(request, session)
     : (normalizeTenantId(process.env.PUBLIC_PORTAL_TENANT_ID) ?? 'system');
+  const portalSettings = await ensurePortalSettings(tenantId);
 
   if (!firstName || !lastName || !email) {
     writeJson(response, 400, { error: 'firstName, lastName, and email are required' });
+    return;
+  }
+
+  if (!portalSettings.allowCreateAccount && (requestType === 'account_signup' || requestedServices.includes('account_signup'))) {
+    writeJson(response, 403, { error: 'Account creation requests are not enabled for this portal' });
+    return;
+  }
+  if (!portalSettings.allowSchedulingRequests && (requestType === 'scheduling_request' || requestedServices.includes('scheduling_request'))) {
+    writeJson(response, 403, { error: 'Scheduling requests are not enabled for this portal' });
+    return;
+  }
+  if (!portalSettings.allowCareRequests && (requestType === 'care_request' || requestedServices.includes('care_request'))) {
+    writeJson(response, 403, { error: 'Care requests are not enabled for this portal' });
     return;
   }
 
@@ -4102,10 +4206,13 @@ async function handlePortalPublicRequests(request, response, requestUrl, session
     await createPortalRegistrationRequest({
       id,
       tenantId,
+      requestType,
       firstName,
       lastName,
       email,
       phone,
+      preferredContactMethod,
+      preferredContactWindow,
       requestedServices,
       notes,
       status,
@@ -4120,10 +4227,13 @@ async function handlePortalPublicRequests(request, response, requestUrl, session
   const item = {
     id: createId('pr', portalRegistrationRequests),
     tenantId,
+    requestType,
     firstName,
     lastName,
     email,
     phone,
+    preferredContactMethod,
+    preferredContactWindow,
     requestedServices,
     notes,
     status,
@@ -5740,6 +5850,123 @@ async function handleAgingReport(request, response, requestUrl, session) {
   const report = buildAgingReport(filterByTenant(invoices, request), asOf);
   emitAudit(request, 'billing.report.aging.read', 'billing_report', 'aging');
   writeJson(response, 200, { asOf, report });
+}
+
+async function handlePortalPublicConfig(request, response, requestUrl, session) {
+  if (request.method !== 'GET') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const tenantId = getPublicPortalTenantId(request, session);
+  const item = await ensurePortalSettings(tenantId);
+  writeJson(response, 200, { item: toPortalPublicConfig(item) });
+}
+
+async function handlePortalSettings(request, response, session) {
+  if (request.method === 'GET') {
+    if (requirePracticeAdmin(request, response, session)) return;
+    const tenantId = callerTenant(request, session);
+    const item = await ensurePortalSettings(tenantId);
+    emitAudit(request, 'portal.settings.read', 'portal_settings', tenantId, session);
+    writeJson(response, 200, { item });
+    return;
+  }
+
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (requirePracticeAdmin(request, response, session)) return;
+  const tenantId = callerTenant(request, session);
+  const payload = await readJsonBody(request);
+  const current = await ensurePortalSettings(tenantId);
+
+  if (payload.contactPreferenceOptions !== undefined && !Array.isArray(payload.contactPreferenceOptions)) {
+    writeJson(response, 400, { error: 'contactPreferenceOptions must be an array' });
+    return;
+  }
+  if (payload.defaultSignupFormKeys !== undefined && !Array.isArray(payload.defaultSignupFormKeys)) {
+    writeJson(response, 400, { error: 'defaultSignupFormKeys must be an array' });
+    return;
+  }
+
+  let registrationMode = current.registrationMode;
+  if (payload.registrationMode !== undefined) {
+    registrationMode = normalizePortalRegistrationMode(payload.registrationMode);
+    if (!registrationMode) {
+      writeJson(response, 400, { error: 'registrationMode must be valid' });
+      return;
+    }
+  }
+
+  let financialMode = current.financialMode;
+  if (payload.financialMode !== undefined) {
+    financialMode = normalizePortalFinancialMode(payload.financialMode);
+    if (!financialMode) {
+      writeJson(response, 400, { error: 'financialMode must be valid' });
+      return;
+    }
+  }
+
+  const contactPreferenceOptions = payload.contactPreferenceOptions !== undefined
+    ? normalizePortalContactPreferenceOptions(payload.contactPreferenceOptions)
+    : current.contactPreferenceOptions;
+
+  const catalog = await ensureFormCatalogSeeded(tenantId);
+  const allowedFormKeys = new Set(catalog.map((item) => item.formKey));
+  const defaultSignupFormKeys = payload.defaultSignupFormKeys !== undefined
+    ? [...new Set(payload.defaultSignupFormKeys
+      .map((entry) => sanitizeStr(String(entry), 120))
+      .filter((entry) => entry && allowedFormKeys.has(entry)))]
+    : current.defaultSignupFormKeys;
+
+  const next = {
+    id: current.id ?? genId('ps'),
+    tenantId,
+    practiceName: sanitizeStr(payload.practiceName, 255) ?? current.practiceName,
+    logoUrl: typeof payload.logoUrl === 'string' ? (sanitizeStr(payload.logoUrl, 500) ?? '') : current.logoUrl,
+    brandColor: payload.brandColor !== undefined ? normalizeHexColor(payload.brandColor, current.brandColor) : current.brandColor,
+    accentColor: payload.accentColor !== undefined ? normalizeHexColor(payload.accentColor, current.accentColor) : current.accentColor,
+    welcomeHeadline: sanitizeStr(payload.welcomeHeadline, 255) ?? current.welcomeHeadline,
+    welcomeMessage: typeof payload.welcomeMessage === 'string' ? (sanitizeStr(payload.welcomeMessage, 2000) ?? current.welcomeMessage) : current.welcomeMessage,
+    helpMessage: typeof payload.helpMessage === 'string' ? (sanitizeStr(payload.helpMessage, 1000) ?? '') : current.helpMessage,
+    supportEmail: typeof payload.supportEmail === 'string' ? (sanitizeStr(payload.supportEmail, 320) ?? '') : current.supportEmail,
+    registrationMode,
+    allowCreateAccount: payload.allowCreateAccount !== undefined ? Boolean(payload.allowCreateAccount) : current.allowCreateAccount,
+    allowCareRequests: payload.allowCareRequests !== undefined ? Boolean(payload.allowCareRequests) : current.allowCareRequests,
+    allowSchedulingRequests: payload.allowSchedulingRequests !== undefined ? Boolean(payload.allowSchedulingRequests) : current.allowSchedulingRequests,
+    showPublicCounselorDirectory: payload.showPublicCounselorDirectory !== undefined
+      ? Boolean(payload.showPublicCounselorDirectory)
+      : current.showPublicCounselorDirectory,
+    financialMode,
+    contactPreferenceOptions,
+    defaultSignupFormKeys,
+  };
+
+  let item;
+  if (process.env.DB_NAME) {
+    item = await upsertPortalSettings(next);
+  } else {
+    const existingIndex = portalSettingsRecords.findIndex((entry) => entry.tenantId === tenantId);
+    const now = new Date().toISOString();
+    item = {
+      ...current,
+      ...next,
+      createdAt: current.createdAt ?? now,
+      updatedAt: now,
+    };
+    if (existingIndex >= 0) {
+      portalSettingsRecords[existingIndex] = item;
+    } else {
+      portalSettingsRecords.push(item);
+    }
+  }
+
+  telemetry.recordMutation('portal.settings.update');
+  emitAudit(request, 'portal.settings.update', 'portal_settings', tenantId, session);
+  writeJson(response, 200, { item });
 }
 
 async function handlePortalOverview(request, response, requestUrl) {
@@ -8929,6 +9156,90 @@ function normalizePortalRegistrationStatus(value) {
   return portalRegistrationStatuses.includes(value) ? value : null;
 }
 
+function normalizePortalRequestType(value) {
+  return portalRequestTypes.includes(value) ? value : null;
+}
+
+function normalizePortalRegistrationMode(value) {
+  return portalRegistrationModes.includes(value) ? value : null;
+}
+
+function normalizePortalFinancialMode(value) {
+  return portalFinancialModes.includes(value) ? value : null;
+}
+
+function normalizeHexColor(value, fallback) {
+  if (typeof value !== 'string') return fallback;
+  const candidate = value.trim();
+  if (!candidate) return fallback;
+  return /^#[0-9a-f]{6}$/i.test(candidate) ? candidate.toLowerCase() : fallback;
+}
+
+function normalizePortalContactPreferenceOptions(value) {
+  if (!Array.isArray(value)) return null;
+  return [...new Set(value
+    .map((entry) => sanitizeStr(String(entry), 64))
+    .filter((entry) => portalContactPreferenceOptions.includes(entry)))];
+}
+
+function buildDefaultPortalSettings(tenantId = 'system') {
+  return {
+    id: `ps-${tenantId}`,
+    tenantId,
+    practiceName: 'FaithCounseling',
+    logoUrl: '',
+    brandColor: '#1f7a8c',
+    accentColor: '#f0f7f8',
+    welcomeHeadline: 'FaithCounseling Client Portal',
+    welcomeMessage: 'Current clients can sign in to their account. New or possible clients can request care, request scheduling, or start an account request for intake onboarding.',
+    helpMessage: 'If you need help accessing the portal, contact your counselor or the practice front desk.',
+    supportEmail: '',
+    registrationMode: 'review_required',
+    allowCreateAccount: true,
+    allowCareRequests: true,
+    allowSchedulingRequests: true,
+    showPublicCounselorDirectory: false,
+    financialMode: 'billing',
+    contactPreferenceOptions: [...portalContactPreferenceOptions],
+    defaultSignupFormKeys: [],
+    createdAt: null,
+    updatedAt: null,
+  };
+}
+
+function getPublicPortalTenantId(request, session) {
+  if (session) return callerTenant(request, session);
+  return normalizeTenantId(process.env.PUBLIC_PORTAL_TENANT_ID) ?? 'system';
+}
+
+async function ensurePortalSettings(tenantId) {
+  if (!tenantId) return buildDefaultPortalSettings('system');
+  if (process.env.DB_NAME) {
+    return (await getPortalSettings(tenantId)) ?? buildDefaultPortalSettings(tenantId);
+  }
+  return portalSettingsRecords.find((item) => item.tenantId === tenantId) ?? buildDefaultPortalSettings(tenantId);
+}
+
+function toPortalPublicConfig(settings) {
+  return {
+    practiceName: settings.practiceName,
+    logoUrl: settings.logoUrl,
+    brandColor: settings.brandColor,
+    accentColor: settings.accentColor,
+    welcomeHeadline: settings.welcomeHeadline,
+    welcomeMessage: settings.welcomeMessage,
+    helpMessage: settings.helpMessage,
+    supportEmail: settings.supportEmail,
+    registrationMode: settings.registrationMode,
+    allowCreateAccount: settings.allowCreateAccount,
+    allowCareRequests: settings.allowCareRequests,
+    allowSchedulingRequests: settings.allowSchedulingRequests,
+    showPublicCounselorDirectory: settings.showPublicCounselorDirectory,
+    financialMode: settings.financialMode,
+    contactPreferenceOptions: settings.contactPreferenceOptions,
+  };
+}
+
 function buildDefaultCatalogRows(tenantId) {
   return DEFAULT_FORM_CATALOG.map((entry, idx) => ({
     id: `fc-${tenantId}-${String(idx + 1).padStart(3, '0')}`,
@@ -8968,7 +9279,14 @@ async function ensureFormCatalogSeeded(tenantId) {
 async function autoAssignStandardSignupForms({ tenantId, clientId, assignedBy }) {
   if (!tenantId || !clientId) return [];
   const catalog = await ensureFormCatalogSeeded(tenantId);
-  const defaults = (catalog || []).filter((item) => item.isStandardOnSignup && item.isActive !== false);
+  const settings = await ensurePortalSettings(tenantId);
+  const configuredKeys = Array.isArray(settings?.defaultSignupFormKeys) ? settings.defaultSignupFormKeys : [];
+  const configuredSet = new Set(configuredKeys);
+  const defaults = (catalog || []).filter((item) => {
+    if (item.isActive === false) return false;
+    if (configuredSet.size > 0) return configuredSet.has(item.formKey);
+    return item.isStandardOnSignup;
+  });
   if (!defaults.length) return [];
 
   if (process.env.DB_NAME) {
@@ -9713,6 +10031,8 @@ function resolveRoute(pathname) {
   if (pathname === '/v1/billing/superbills') return '/v1/billing/superbills';
   if (pathname === '/v1/billing/claims') return '/v1/billing/claims';
   if (pathname === '/v1/billing/reports/aging') return '/v1/billing/reports/aging';
+  if (pathname === '/v1/portal/public-config') return '/v1/portal/public-config';
+  if (pathname === '/v1/portal/settings') return '/v1/portal/settings';
   if (pathname === '/v1/portal/overview') return '/v1/portal/overview';
   if (pathname === '/v1/portal/accounts') return '/v1/portal/accounts';
   if (pathname === '/v1/portal/intake-packets') return '/v1/portal/intake-packets';

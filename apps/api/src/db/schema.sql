@@ -575,6 +575,33 @@ CREATE TABLE IF NOT EXISTS portal_accounts (
   INDEX idx_portal_account_tenant (tenant_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- ─── Portal settings ─────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS portal_settings (
+  id                              VARCHAR(64)  NOT NULL,
+  tenant_id                       VARCHAR(64)  NOT NULL,
+  practice_name                   VARCHAR(255) NOT NULL,
+  logo_url                        VARCHAR(500) NULL,
+  brand_color                     VARCHAR(16)  NOT NULL DEFAULT '#1f7a8c',
+  accent_color                    VARCHAR(16)  NOT NULL DEFAULT '#f0f7f8',
+  welcome_headline                VARCHAR(255) NOT NULL,
+  welcome_message                 TEXT         NOT NULL,
+  help_message                    TEXT         NULL,
+  support_email_enc               TEXT         NULL, -- encrypted PII
+  registration_mode               VARCHAR(64)  NOT NULL DEFAULT 'review_required',
+  allow_create_account            TINYINT(1)   NOT NULL DEFAULT 1,
+  allow_care_requests             TINYINT(1)   NOT NULL DEFAULT 1,
+  allow_scheduling_requests       TINYINT(1)   NOT NULL DEFAULT 1,
+  show_public_counselor_directory TINYINT(1)   NOT NULL DEFAULT 0,
+  financial_mode                  VARCHAR(64)  NOT NULL DEFAULT 'billing',
+  contact_preference_options      JSON         NULL,
+  default_signup_form_keys        JSON         NULL,
+  created_at                      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at                      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_portal_settings_tenant (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ─── Portal resources ─────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS portal_resources (
@@ -975,10 +1002,13 @@ CREATE TABLE IF NOT EXISTS form_submissions (
 CREATE TABLE IF NOT EXISTS portal_registration_requests (
   id                     VARCHAR(64)  NOT NULL,
   tenant_id              VARCHAR(64)  NOT NULL,
+  request_type           VARCHAR(64)  NOT NULL DEFAULT 'care_request',
   first_name_enc         TEXT         NOT NULL,
   last_name_enc          TEXT         NOT NULL,
   email_enc              TEXT         NOT NULL,
   phone_enc              TEXT         NULL,
+  preferred_contact_method VARCHAR(64) NULL,
+  preferred_contact_window VARCHAR(128) NULL,
   requested_services     JSON,
   notes_enc              TEXT         NULL,
   status                 VARCHAR(64)  NOT NULL DEFAULT 'requested',

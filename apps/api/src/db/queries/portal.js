@@ -89,6 +89,43 @@ function rowToPortalAppointmentRequest(row) {
   };
 }
 
+function parseJsonArray(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  if (typeof value !== 'string') return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function rowToPortalSettings(row) {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    practiceName: row.practice_name,
+    logoUrl: row.logo_url ?? '',
+    brandColor: row.brand_color ?? '#1f7a8c',
+    accentColor: row.accent_color ?? '#f0f7f8',
+    welcomeHeadline: row.welcome_headline,
+    welcomeMessage: row.welcome_message,
+    helpMessage: row.help_message ?? '',
+    supportEmail: row.support_email_enc ? decrypt(row.support_email_enc) : '',
+    registrationMode: row.registration_mode,
+    allowCreateAccount: Boolean(row.allow_create_account),
+    allowCareRequests: Boolean(row.allow_care_requests),
+    allowSchedulingRequests: Boolean(row.allow_scheduling_requests),
+    showPublicCounselorDirectory: Boolean(row.show_public_counselor_directory),
+    financialMode: row.financial_mode ?? 'billing',
+    contactPreferenceOptions: parseJsonArray(row.contact_preference_options),
+    defaultSignupFormKeys: parseJsonArray(row.default_signup_form_keys),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Portal Accounts
 // ---------------------------------------------------------------------------
@@ -128,6 +165,93 @@ export async function updatePortalAccount(clientId, tenantId, fields) {
     values
   );
   return getPortalAccount(clientId, tenantId);
+}
+
+// ---------------------------------------------------------------------------
+// Portal Settings
+// ---------------------------------------------------------------------------
+
+export async function getPortalSettings(tenantId) {
+  const [rows] = await pool.query(
+    'SELECT * FROM portal_settings WHERE tenant_id = ? LIMIT 1',
+    [tenantId]
+  );
+  if (!rows.length) return null;
+  return rowToPortalSettings(rows[0]);
+}
+
+export async function upsertPortalSettings({
+  id,
+  tenantId,
+  practiceName,
+  logoUrl,
+  brandColor,
+  accentColor,
+  welcomeHeadline,
+  welcomeMessage,
+  helpMessage,
+  supportEmail,
+  registrationMode,
+  allowCreateAccount,
+  allowCareRequests,
+  allowSchedulingRequests,
+  showPublicCounselorDirectory,
+  financialMode,
+  contactPreferenceOptions,
+  defaultSignupFormKeys,
+}) {
+  const existing = await getPortalSettings(tenantId);
+  const targetId = existing?.id ?? id;
+  if (!targetId) {
+    throw new Error('Portal settings id is required');
+  }
+
+  await pool.query(
+    `INSERT INTO portal_settings
+      (id, tenant_id, practice_name, logo_url, brand_color, accent_color, welcome_headline, welcome_message, help_message,
+       support_email_enc, registration_mode, allow_create_account, allow_care_requests, allow_scheduling_requests,
+       show_public_counselor_directory, financial_mode, contact_preference_options, default_signup_form_keys)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE
+       practice_name = VALUES(practice_name),
+       logo_url = VALUES(logo_url),
+       brand_color = VALUES(brand_color),
+       accent_color = VALUES(accent_color),
+       welcome_headline = VALUES(welcome_headline),
+       welcome_message = VALUES(welcome_message),
+       help_message = VALUES(help_message),
+       support_email_enc = VALUES(support_email_enc),
+       registration_mode = VALUES(registration_mode),
+       allow_create_account = VALUES(allow_create_account),
+       allow_care_requests = VALUES(allow_care_requests),
+       allow_scheduling_requests = VALUES(allow_scheduling_requests),
+       show_public_counselor_directory = VALUES(show_public_counselor_directory),
+       financial_mode = VALUES(financial_mode),
+       contact_preference_options = VALUES(contact_preference_options),
+       default_signup_form_keys = VALUES(default_signup_form_keys)`,
+    [
+      targetId,
+      tenantId,
+      practiceName,
+      logoUrl,
+      brandColor,
+      accentColor,
+      welcomeHeadline,
+      welcomeMessage,
+      helpMessage,
+      supportEmail ? encrypt(supportEmail) : null,
+      registrationMode,
+      allowCreateAccount ? 1 : 0,
+      allowCareRequests ? 1 : 0,
+      allowSchedulingRequests ? 1 : 0,
+      showPublicCounselorDirectory ? 1 : 0,
+      financialMode,
+      JSON.stringify(contactPreferenceOptions ?? []),
+      JSON.stringify(defaultSignupFormKeys ?? []),
+    ],
+  );
+
+  return getPortalSettings(tenantId);
 }
 
 // ---------------------------------------------------------------------------

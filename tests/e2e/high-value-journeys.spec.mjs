@@ -46,7 +46,8 @@ test.describe('high-value UI journeys', () => {
     await openPrimaryNav(page, 'workspace-studio');
     await expect(page.getByRole('heading', { name: /Workspace Studio|Estudio del Espacio/i })).toBeVisible();
     await expect(page.getByText('Client Portal Access')).toBeVisible();
-    await expect(page.getByRole('tab', { name: 'Portal' })).toBeVisible();
+    await page.getByRole('tab', { name: 'Portal' }).click();
+    await expect(page.getByText('Public Requests')).toBeVisible();
 
     await page.goto('/monitor.html');
     await expect(page.getByText('Surface Monitoring')).toBeVisible();

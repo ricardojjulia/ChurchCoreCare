@@ -2,6 +2,51 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## Unreleased
+
+**Date:** March 29, 2026
+**Type:** Portal expansion foundation
+
+### Summary
+
+Introduces the first configurable public-portal foundation for the broader client portal plan. Practices can now manage public portal branding and access policy from Workspace Studio, while `/portal` consumes tenant-configurable public settings instead of being fully hard-coded.
+
+### Added
+
+- `portal_settings` schema for tenant-specific public portal branding and access policy
+- `GET /v1/portal/public-config`
+- `GET/PATCH /v1/portal/settings`
+- richer public portal request capture:
+  - `request_type`
+  - `preferred_contact_method`
+  - `preferred_contact_window`
+- Workspace Studio Portal settings editor for:
+  - practice name
+  - portal messaging
+  - brand colors
+  - support email
+  - registration policy
+  - create-account / care / scheduling toggles
+  - contact preference options
+  - default signup forms
+  - billing vs voluntary offering presentation mode
+- Workspace Studio public-request review queue with review/approve/decline actions
+
+### Changed
+
+- `apps/web/public/portal.html`
+- `apps/web/public/portal.js`
+- `apps/web/src/components/WorkspaceStudio/tabs/PortalTab.jsx`
+- `apps/api/src/index.js`
+- `apps/api/src/db/queries/portal.js`
+- `apps/api/src/db/schema.sql`
+- `apps/api/src/lib/security.js`
+
+### Notes
+
+- This slice adds the create-account entry point and practice customization layer, but it does not yet deliver the full authenticated client self-service portal.
+- Public portal telemetry remains on the existing `portal` surface in this slice; deeper split-out portal surfaces are still part of the broader expansion plan.
+
 ## v3.0.7 — Full-Surface Localization Pass 2 + Playwright Regression Coverage
 
 **Date:** April 2026

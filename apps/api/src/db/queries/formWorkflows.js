@@ -72,10 +72,13 @@ function rowToPortalRegistrationRequest(row) {
   return {
     id: row.id,
     tenantId: row.tenant_id,
+    requestType: row.request_type ?? 'care_request',
     firstName: decrypt(row.first_name_enc),
     lastName: decrypt(row.last_name_enc),
     email: decrypt(row.email_enc),
     phone: row.phone_enc ? decrypt(row.phone_enc) : null,
+    preferredContactMethod: row.preferred_contact_method ?? null,
+    preferredContactWindow: row.preferred_contact_window ?? null,
     requestedServices: row.requested_services
       ? (typeof row.requested_services === 'string' ? JSON.parse(row.requested_services) : row.requested_services)
       : [],
@@ -289,28 +292,46 @@ export async function listPortalRegistrationRequests(tenantId) {
 export async function createPortalRegistrationRequest({
   id,
   tenantId,
+  requestType,
   firstName,
   lastName,
   email,
   phone,
+  preferredContactMethod,
+  preferredContactWindow,
   requestedServices,
   notes,
   status,
 }) {
   await pool.query(
     `INSERT INTO portal_registration_requests
-      (id, tenant_id, first_name_enc, last_name_enc, email_enc, phone_enc, requested_services, notes_enc, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (id, tenant_id, request_type, first_name_enc, last_name_enc, email_enc, phone_enc, preferred_contact_method, preferred_contact_window, requested_services, notes_enc, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       tenantId,
+      requestType,
       encrypt(firstName),
       encrypt(lastName),
       encrypt(email),
       phone ? encrypt(phone) : null,
+      preferredContactMethod ?? null,
+      preferredContactWindow ?? null,
       JSON.stringify(requestedServices ?? []),
       notes ? encrypt(notes) : null,
       status,
     ],
   );
+}
+
+export async function updatePortalRegistrationRequest(id, tenantId, fields) {
+  const pairs = [];
+  if (fields.status !== undefined) pairs.push(['status = ?', fields.status]);
+  if (fields.requestType !== undefined) pairs.push(['request_type = ?', fields.requestType]);
+  if (fields.preferredContactMethod !== undefined) pairs.push(['preferred_contact_method = ?', fields.preferredContactMethod]);
+  if (fields.preferredContactWindow !== undefined) pairs.push(['preferred_contact_window = ?', fields.preferredContactWindow]);
+  if (!pairs.length) return;
+  const setSql = pairs.map(([sql]) => sql).join(', ');
+  const values = pairs.map(([, value]) => value);
+  await pool.query(`UPDATE portal_registration_requests SET ${setSql} WHERE id = ? AND tenant_id = ?`, [...values, id, tenantId]);
 }

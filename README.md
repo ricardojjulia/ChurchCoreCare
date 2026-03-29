@@ -20,6 +20,15 @@ pnpm agent:translation:run
 
 The service listens on `http://127.0.0.1:8098` by default.
 
+## Unreleased
+
+- Added tenant-configurable portal settings for the public client portal and Workspace Studio portal administration.
+- Added `GET /v1/portal/public-config` and `GET/PATCH /v1/portal/settings`.
+- Public `/portal` now supports practice branding, configurable create-account / care / scheduling entry points, and lightweight public-surface telemetry.
+- Portal signup defaults can now be controlled per practice through `defaultSignupFormKeys`, which overrides catalog-level standard-on-signup defaults when configured.
+- Added richer public portal intake capture for request type, preferred contact method, and contact window.
+- Workspace Studio Portal now includes a public-request review queue with status actions for `requested`, `reviewing`, `approved`, and `declined`.
+
 ## v3.0.7 — Full-Surface Localization Pass 2 + Playwright Regression Coverage (April 2026)
 
 ### v3.0.7 Overview

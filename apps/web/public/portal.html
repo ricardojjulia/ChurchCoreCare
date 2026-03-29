@@ -6,6 +6,11 @@
     <title>Client Portal | FaithCounseling</title>
     <link rel="stylesheet" href="/styles.css" />
     <style>
+      :root {
+        --portal-brand: #1f7a8c;
+        --portal-accent: #f0f7f8;
+        --portal-brand-deep: #165d69;
+      }
       body.portal-page {
         margin: 0;
         min-height: 100vh;
@@ -24,6 +29,36 @@
         border-radius: 20px;
         padding: 28px;
         backdrop-filter: blur(4px);
+      }
+      .portal-hero-head {
+        display: flex;
+        gap: 16px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .portal-logo {
+        width: 72px;
+        height: 72px;
+        object-fit: contain;
+        border-radius: 16px;
+        background: #fff;
+        border: 1px solid #d8e0e8;
+        padding: 8px;
+        display: none;
+      }
+      .portal-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 6px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: var(--portal-accent);
+        color: var(--portal-brand-deep);
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
       }
       .portal-hero h1 {
         margin: 0;
@@ -83,13 +118,43 @@
         cursor: pointer;
       }
       .portal-btn-primary {
-        background: #1f7a8c;
+        background: var(--portal-brand);
         color: #fff;
       }
       .portal-btn-secondary {
         background: #f0f4f8;
         color: #243b53;
         border: 1px solid #c9d4df;
+      }
+      .portal-intent-grid {
+        display: grid;
+        gap: 8px;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        margin: 12px 0;
+      }
+      .portal-intent-btn {
+        border: 1px solid #c8d2dc;
+        background: #fff;
+        color: #243b53;
+        border-radius: 12px;
+        padding: 10px 12px;
+        text-align: left;
+        cursor: pointer;
+      }
+      .portal-intent-btn.active {
+        border-color: var(--portal-brand);
+        background: var(--portal-accent);
+        color: #143642;
+      }
+      .portal-intent-btn strong {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 0.9rem;
+      }
+      .portal-intent-btn span {
+        display: block;
+        font-size: 0.8rem;
+        color: #52606d;
       }
       .portal-note {
         margin-top: 14px;
@@ -107,28 +172,57 @@
   <body class="portal-page">
     <main class="portal-shell">
       <section class="portal-hero">
-        <h1>FaithCounseling Client Portal</h1>
-        <p>
-          Current clients can sign in to their account. New or possible clients can submit a secure request
-          for account setup and intake onboarding.
-        </p>
+        <div class="portal-hero-head">
+          <img id="portalLogo" class="portal-logo" alt="Practice logo" />
+          <div class="portal-hero-copy">
+            <div class="portal-kicker">Client Portal</div>
+            <h1 id="portalHeadline">FaithCounseling Client Portal</h1>
+            <p id="portalWelcome">
+              Current clients can sign in to their account. New or possible clients can submit a secure request
+              for account setup and intake onboarding.
+            </p>
+          </div>
+        </div>
 
         <div class="portal-grid">
           <article class="portal-card">
             <h2>I already have an account</h2>
-            <p>Use your invited credentials to access appointments, forms, and secure messages.</p>
+            <p id="portalExistingCopy">Use your invited credentials to access appointments, forms, and secure messages.</p>
             <a href="/" class="portal-btn portal-btn-primary" style="display:inline-block;text-decoration:none;">Go to Sign In</a>
-            <div class="portal-note">If your account is locked or not yet invited, contact your counselor.</div>
+            <div id="portalHelpMessage" class="portal-note">If your account is locked or not yet invited, contact your counselor.</div>
           </article>
 
           <article class="portal-card">
-            <h2>I am a new or possible client</h2>
-            <p>Submit a request and our team will review and follow up with next steps.</p>
+            <h2 id="portalRequestHeading">I am a new or possible client</h2>
+            <p id="portalRequestIntro">Choose what you need help with and our team will guide the next step.</p>
+            <div id="portalIntentOptions" class="portal-intent-grid" role="group" aria-label="Request intent">
+              <button type="button" class="portal-intent-btn active" data-intent="care_request">
+                <strong>Request Care</strong>
+                <span>Start the intake conversation</span>
+              </button>
+              <button type="button" class="portal-intent-btn" data-intent="scheduling_request">
+                <strong>Get Scheduled</strong>
+                <span>Ask for appointment help</span>
+              </button>
+              <button type="button" class="portal-intent-btn" data-intent="account_signup">
+                <strong>Create Account</strong>
+                <span>Request secure portal access</span>
+              </button>
+            </div>
             <form id="portalRequestForm" novalidate>
+              <input type="hidden" id="requestIntent" name="requestIntent" value="care_request" />
               <input class="portal-input" id="firstName" name="firstName" placeholder="First name" required />
               <input class="portal-input" id="lastName" name="lastName" placeholder="Last name" required />
               <input class="portal-input" id="email" name="email" type="email" placeholder="Email" required />
               <input class="portal-input" id="phone" name="phone" placeholder="Phone (optional)" />
+              <select class="portal-input" id="preferredContactMethod" name="preferredContactMethod">
+                <option value="">Preferred contact method</option>
+                <option value="email">Email</option>
+                <option value="sms">SMS</option>
+                <option value="phone">Phone</option>
+                <option value="portal_message">Portal message</option>
+              </select>
+              <input class="portal-input" id="preferredContactWindow" name="preferredContactWindow" placeholder="Best time to contact you (optional)" />
               <div class="portal-services">
                 <label><input type="checkbox" value="individual" /> Individual</label>
                 <label><input type="checkbox" value="couples" /> Couples</label>
@@ -136,7 +230,7 @@
                 <label><input type="checkbox" value="faith_integrated" /> Faith-integrated</label>
               </div>
               <textarea class="portal-input" id="notes" name="notes" rows="3" placeholder="Briefly share what kind of support you are looking for (optional)"></textarea>
-              <button type="submit" class="portal-btn portal-btn-primary">Submit Request</button>
+              <button id="portalSubmitButton" type="submit" class="portal-btn portal-btn-primary">Submit Request</button>
             </form>
             <div id="portalRequestStatus" class="portal-status" aria-live="polite"></div>
           </article>

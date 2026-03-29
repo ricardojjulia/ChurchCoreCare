@@ -193,6 +193,10 @@ async function applyColumnMigrations(conn) {
   await addColumnIfMissing('clients', 'primary_counselor_id', 'VARCHAR(64) NULL');
   await addIndexIfMissing('clients', 'idx_clients_counselor', '(primary_counselor_id)');
 
+  await addColumnIfMissing('portal_registration_requests', 'request_type', "VARCHAR(64) NOT NULL DEFAULT 'care_request' AFTER tenant_id");
+  await addColumnIfMissing('portal_registration_requests', 'preferred_contact_method', 'VARCHAR(64) NULL AFTER phone_enc');
+  await addColumnIfMissing('portal_registration_requests', 'preferred_contact_window', 'VARCHAR(128) NULL AFTER preferred_contact_method');
+
   // Appointments: rename scheduled_at → starts_at, add ends_at / location_name / timezone
   await addColumnIfMissing('appointments', 'counselor_id', 'VARCHAR(64) NULL AFTER client_id');
   await addColumnIfMissing('appointments', 'starts_at',     'TIMESTAMP NULL AFTER status');

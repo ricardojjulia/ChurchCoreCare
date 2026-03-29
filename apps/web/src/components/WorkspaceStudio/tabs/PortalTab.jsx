@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Stack, Select, Accordion, Badge, Group, Text, Button, Paper, Title,
   Divider, Loader, Alert, TextInput, ActionIcon, Tooltip, SimpleGrid,
-  ThemeIcon, Box,
+  ThemeIcon, Box, Textarea, Switch, MultiSelect,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { csrfHeaders } from '../../../lib/csrf.js';
@@ -282,6 +282,154 @@ function ResourcesSection({ resources, clientId, onRefresh }) {
   );
 }
 
+function PortalSettingsSection({
+  settingsDraft,
+  onSettingsChange,
+  onSave,
+  saving,
+  loading,
+  catalogOptions,
+}) {
+  if (loading) {
+    return (
+      <Paper withBorder radius="md" p="md">
+        <Group justify="center" py="md"><Loader size="sm" /></Group>
+      </Paper>
+    );
+  }
+
+  return (
+    <Paper withBorder radius="md" p="md">
+      <Stack gap="md">
+        <Group justify="space-between" align="flex-start" wrap="wrap">
+          <Box>
+            <Title order={3} fz="md">Portal Branding & Access</Title>
+            <Text fz="sm" c="dimmed">
+              Control what aspiring and active clients see on the public portal before deeper client self-service ships.
+            </Text>
+          </Box>
+          <Button size="xs" onClick={onSave} loading={saving}>Save Portal Settings</Button>
+        </Group>
+
+        <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
+          <TextInput
+            label="Practice Name"
+            value={settingsDraft.practiceName ?? ''}
+            onChange={(event) => onSettingsChange('practiceName', event.currentTarget.value)}
+          />
+          <TextInput
+            label="Support Email"
+            type="email"
+            value={settingsDraft.supportEmail ?? ''}
+            onChange={(event) => onSettingsChange('supportEmail', event.currentTarget.value)}
+          />
+          <TextInput
+            label="Logo URL"
+            placeholder="https://example.com/logo.png"
+            value={settingsDraft.logoUrl ?? ''}
+            onChange={(event) => onSettingsChange('logoUrl', event.currentTarget.value)}
+          />
+          <Select
+            label="Registration Policy"
+            data={[
+              { value: 'invite_only', label: 'Invite only' },
+              { value: 'review_required', label: 'Self-register with review' },
+              { value: 'instant_activation', label: 'Immediate activation' },
+            ]}
+            value={settingsDraft.registrationMode ?? 'review_required'}
+            onChange={(value) => onSettingsChange('registrationMode', value ?? 'review_required')}
+          />
+          <TextInput
+            label="Brand Color"
+            placeholder="#1f7a8c"
+            value={settingsDraft.brandColor ?? ''}
+            onChange={(event) => onSettingsChange('brandColor', event.currentTarget.value)}
+          />
+          <TextInput
+            label="Accent Color"
+            placeholder="#f0f7f8"
+            value={settingsDraft.accentColor ?? ''}
+            onChange={(event) => onSettingsChange('accentColor', event.currentTarget.value)}
+          />
+        </SimpleGrid>
+
+        <TextInput
+          label="Portal Headline"
+          value={settingsDraft.welcomeHeadline ?? ''}
+          onChange={(event) => onSettingsChange('welcomeHeadline', event.currentTarget.value)}
+        />
+        <Textarea
+          label="Welcome Message"
+          minRows={3}
+          value={settingsDraft.welcomeMessage ?? ''}
+          onChange={(event) => onSettingsChange('welcomeMessage', event.currentTarget.value)}
+        />
+        <Textarea
+          label="Help Message"
+          minRows={2}
+          value={settingsDraft.helpMessage ?? ''}
+          onChange={(event) => onSettingsChange('helpMessage', event.currentTarget.value)}
+        />
+
+        <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
+          <MultiSelect
+            label="Client-Managed Contact Preferences"
+            data={[
+              { value: 'email', label: 'Email' },
+              { value: 'sms', label: 'SMS' },
+              { value: 'phone', label: 'Phone' },
+              { value: 'portal_message', label: 'Portal message' },
+            ]}
+            value={settingsDraft.contactPreferenceOptions ?? []}
+            onChange={(value) => onSettingsChange('contactPreferenceOptions', value)}
+          />
+          <MultiSelect
+            label="Default Signup Forms"
+            data={catalogOptions}
+            searchable
+            value={settingsDraft.defaultSignupFormKeys ?? []}
+            onChange={(value) => onSettingsChange('defaultSignupFormKeys', value)}
+          />
+        </SimpleGrid>
+
+        <Select
+          label="Financial Presentation"
+          data={[
+            { value: 'billing', label: 'Billing balances and payments' },
+            { value: 'offerings', label: 'Voluntary offerings' },
+          ]}
+          value={settingsDraft.financialMode ?? 'billing'}
+          onChange={(value) => onSettingsChange('financialMode', value ?? 'billing')}
+          maw={360}
+        />
+
+        <Group gap="lg" wrap="wrap">
+          <Switch
+            label="Show Create Account"
+            checked={Boolean(settingsDraft.allowCreateAccount)}
+            onChange={(event) => onSettingsChange('allowCreateAccount', event.currentTarget.checked)}
+          />
+          <Switch
+            label="Allow Care Requests"
+            checked={Boolean(settingsDraft.allowCareRequests)}
+            onChange={(event) => onSettingsChange('allowCareRequests', event.currentTarget.checked)}
+          />
+          <Switch
+            label="Allow Scheduling Requests"
+            checked={Boolean(settingsDraft.allowSchedulingRequests)}
+            onChange={(event) => onSettingsChange('allowSchedulingRequests', event.currentTarget.checked)}
+          />
+          <Switch
+            label="Show Public Counselor Directory"
+            checked={Boolean(settingsDraft.showPublicCounselorDirectory)}
+            onChange={(event) => onSettingsChange('showPublicCounselorDirectory', event.currentTarget.checked)}
+          />
+        </Group>
+      </Stack>
+    </Paper>
+  );
+}
+
 function MessagesSection({ messageThreads, clientId }) {
   if (!messageThreads?.length) {
     return <Text c="dimmed" fz="sm">No message threads.</Text>;
@@ -423,6 +571,145 @@ function BalanceSection({ balances }) {
   );
 }
 
+function PublicRequestsSection({ items, loading, onRefresh }) {
+  const [updatingId, setUpdatingId] = useState(null);
+
+  const setStatus = async (requestId, status) => {
+    setUpdatingId(requestId);
+    try {
+      await apiFetch('/api/v1/portal/public-requests', {
+        method: 'PATCH',
+        headers: csrfHeaders(),
+        body: JSON.stringify({ requestId, status }),
+      });
+      notifications.show({ title: 'Updated', message: `Request marked ${status}.`, color: 'green' });
+      onRefresh();
+    } catch (err) {
+      notifications.show({ title: 'Error', message: err.message, color: 'red' });
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <Paper withBorder radius="md" p="md">
+        <Group justify="center" py="md"><Loader size="sm" /></Group>
+      </Paper>
+    );
+  }
+
+  if (!items.length) {
+    return (
+      <Paper withBorder radius="md" p="md">
+        <Stack gap="sm">
+          <Group justify="space-between" align="center">
+            <Box>
+              <Title order={3} fz="md">Public Requests</Title>
+              <Text fz="sm" c="dimmed">
+                Review create-account, care, and scheduling requests coming from the public portal.
+              </Text>
+            </Box>
+            <Button size="xs" variant="default" onClick={onRefresh}>Refresh Queue</Button>
+          </Group>
+          <Text c="dimmed" fz="sm">No public portal requests yet.</Text>
+        </Stack>
+      </Paper>
+    );
+  }
+
+  return (
+    <Paper withBorder radius="md" p="md">
+      <Stack gap="sm">
+        <Group justify="space-between" align="center">
+          <Box>
+            <Title order={3} fz="md">Public Requests</Title>
+            <Text fz="sm" c="dimmed">
+              Review create-account, care, and scheduling requests coming from the public portal.
+            </Text>
+          </Box>
+          <Button size="xs" variant="default" onClick={onRefresh}>Refresh Queue</Button>
+        </Group>
+
+        {items.map((item) => (
+          <Paper key={item.id} withBorder radius="sm" p="sm">
+            <Group justify="space-between" align="flex-start" wrap="wrap">
+              <Box maw={520}>
+                <Group gap="xs" mb={4} wrap="wrap">
+                  <Badge variant="light" color={item.status === 'requested' ? 'orange' : item.status === 'approved' ? 'green' : item.status === 'declined' ? 'red' : 'blue'}>
+                    {item.status}
+                  </Badge>
+                  <Badge variant="outline" color="gray">
+                    {item.requestType?.replaceAll('_', ' ') ?? 'request'}
+                  </Badge>
+                </Group>
+                <Text fz="sm" fw={600}>{item.firstName} {item.lastName}</Text>
+                <Text fz="xs" c="dimmed">{item.email}{item.phone ? ` • ${item.phone}` : ''}</Text>
+                {(item.preferredContactMethod || item.preferredContactWindow) && (
+                  <Text fz="xs" c="dimmed" mt={4}>
+                    Preferred contact: {item.preferredContactMethod || 'unspecified'}
+                    {item.preferredContactWindow ? ` • ${item.preferredContactWindow}` : ''}
+                  </Text>
+                )}
+                {item.requestedServices?.length > 0 && (
+                  <Group gap={6} mt={6} wrap="wrap">
+                    {item.requestedServices.map((service) => (
+                      <Badge key={service} size="xs" variant="dot" color="teal">
+                        {service.replaceAll('_', ' ')}
+                      </Badge>
+                    ))}
+                  </Group>
+                )}
+                {item.notes && (
+                  <Text fz="xs" c="dimmed" mt={6}>
+                    {item.notes}
+                  </Text>
+                )}
+                <Text fz="xs" c="dimmed" mt={6}>Submitted {fmtDateTime(item.createdAt)}</Text>
+              </Box>
+
+              <Group gap="xs" wrap="wrap">
+                {item.status === 'requested' && (
+                  <Button
+                    size="xs"
+                    variant="default"
+                    loading={updatingId === item.id}
+                    onClick={() => setStatus(item.id, 'reviewing')}
+                  >
+                    Start Review
+                  </Button>
+                )}
+                {item.status !== 'approved' && (
+                  <Button
+                    size="xs"
+                    color="green"
+                    variant="light"
+                    loading={updatingId === item.id}
+                    onClick={() => setStatus(item.id, 'approved')}
+                  >
+                    Approve
+                  </Button>
+                )}
+                {item.status !== 'declined' && (
+                  <Button
+                    size="xs"
+                    color="red"
+                    variant="light"
+                    loading={updatingId === item.id}
+                    onClick={() => setStatus(item.id, 'declined')}
+                  >
+                    Decline
+                  </Button>
+                )}
+              </Group>
+            </Group>
+          </Paper>
+        ))}
+      </Stack>
+    </Paper>
+  );
+}
+
 // ── accordion item label helper ───────────────────────────────────────────────
 
 function AccordionLabel({ title, count, countColor }) {
@@ -446,6 +733,29 @@ export default function PortalTab({ onSchedulePortalRequest }) {
   const [overview,       setOverview]       = useState(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [overviewError,  setOverviewError]  = useState(null);
+  const [settingsLoading, setSettingsLoading] = useState(true);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [publicRequestsLoading, setPublicRequestsLoading] = useState(true);
+  const [publicRequests, setPublicRequests] = useState([]);
+  const [settingsDraft, setSettingsDraft] = useState({
+    practiceName: 'FaithCounseling',
+    logoUrl: '',
+    brandColor: '#1f7a8c',
+    accentColor: '#f0f7f8',
+    welcomeHeadline: 'FaithCounseling Client Portal',
+    welcomeMessage: '',
+    helpMessage: '',
+    supportEmail: '',
+    registrationMode: 'review_required',
+    allowCreateAccount: true,
+    allowCareRequests: true,
+    allowSchedulingRequests: true,
+    showPublicCounselorDirectory: false,
+    financialMode: 'billing',
+    contactPreferenceOptions: ['email', 'sms', 'phone', 'portal_message'],
+    defaultSignupFormKeys: [],
+  });
+  const [catalogOptions, setCatalogOptions] = useState([]);
 
   // Load client list for the picker
   useEffect(() => {
@@ -458,6 +768,41 @@ export default function PortalTab({ onSchedulePortalRequest }) {
         })));
       })
       .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    Promise.all([
+      apiFetch('/api/v1/portal/settings'),
+      apiFetch('/api/v1/forms/catalog'),
+      apiFetch('/api/v1/portal/public-requests'),
+    ])
+      .then(([settingsData, formData, publicRequestData]) => {
+        const item = settingsData?.item ?? {};
+        setSettingsDraft((current) => ({ ...current, ...item }));
+        const options = (formData?.items ?? []).map((entry) => ({
+          value: entry.formKey,
+          label: entry.title ?? entry.formKey,
+        }));
+        setCatalogOptions(options);
+        setPublicRequests(publicRequestData?.items ?? []);
+      })
+      .catch((err) => {
+        notifications.show({ title: 'Portal settings unavailable', message: err.message, color: 'red' });
+      })
+      .finally(() => {
+        setSettingsLoading(false);
+        setPublicRequestsLoading(false);
+      });
+  }, []);
+
+  const loadPublicRequests = useCallback(() => {
+    setPublicRequestsLoading(true);
+    apiFetch('/api/v1/portal/public-requests')
+      .then((data) => setPublicRequests(data?.items ?? []))
+      .catch((err) => {
+        notifications.show({ title: 'Portal requests unavailable', message: err.message, color: 'red' });
+      })
+      .finally(() => setPublicRequestsLoading(false));
   }, []);
 
   const loadOverview = useCallback((cid) => {
@@ -473,6 +818,27 @@ export default function PortalTab({ onSchedulePortalRequest }) {
   const handleClientChange = (val) => {
     setClientId(val);
     loadOverview(val);
+  };
+
+  const handleSettingsChange = (field, value) => {
+    setSettingsDraft((current) => ({ ...current, [field]: value }));
+  };
+
+  const saveSettings = async () => {
+    setSettingsSaving(true);
+    try {
+      const data = await apiFetch('/api/v1/portal/settings', {
+        method: 'PATCH',
+        headers: csrfHeaders(),
+        body: JSON.stringify(settingsDraft),
+      });
+      setSettingsDraft((current) => ({ ...current, ...(data?.item ?? {}) }));
+      notifications.show({ title: 'Saved', message: 'Portal settings updated.', color: 'green' });
+    } catch (err) {
+      notifications.show({ title: 'Error', message: err.message, color: 'red' });
+    } finally {
+      setSettingsSaving(false);
+    }
   };
 
   const pendingApptRequests = (overview?.appointmentRequests ?? []).filter((r) => r.status === 'requested').length;
@@ -491,6 +857,21 @@ export default function PortalTab({ onSchedulePortalRequest }) {
           </Button>
         </Group>
       </Alert>
+
+      <PortalSettingsSection
+        settingsDraft={settingsDraft}
+        onSettingsChange={handleSettingsChange}
+        onSave={saveSettings}
+        saving={settingsSaving}
+        loading={settingsLoading}
+        catalogOptions={catalogOptions}
+      />
+
+      <PublicRequestsSection
+        items={publicRequests}
+        loading={publicRequestsLoading}
+        onRefresh={loadPublicRequests}
+      />
 
       {/* Client picker */}
       <Select
