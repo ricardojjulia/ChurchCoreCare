@@ -9,7 +9,7 @@ test.describe('high-value UI journeys', () => {
     await expect(page.getByText(/Counselors with entries|Consejeros con entradas/i)).toBeVisible();
     await expect(page.getByText(/Priority Queue|Cola prioritaria/i)).toBeVisible();
     await expect(page.getByText(/Compliance Watch|Vigilancia de cumplimiento/i)).toBeVisible();
-    await expect(page.getByText(/Portal requests|Solicitudes del portal/i)).toBeVisible();
+    await expect(page.getByText(/^Portal requests$|^Solicitudes del portal$/i)).toBeVisible();
 
     const payload = await page.evaluate(async () => {
       const response = await fetch('/api/v1/operations/summary', { credentials: 'include' });
@@ -36,6 +36,12 @@ test.describe('high-value UI journeys', () => {
     await page.getByLabel('Faith background').fill('Christian');
     await page.getByLabel('High touchpoint').check();
     await page.getByRole('button', { name: /Create Client|Crear cliente/i }).click();
+
+    const highTouchpointAlert = page.locator('.mantine-Alert-root').filter({ hasText: /High-touchpoint clients are unscheduled/i }).first();
+    await expect(highTouchpointAlert).toBeVisible();
+    await highTouchpointAlert.getByRole('button', { name: /Review queue/i }).click();
+    await expect(page.getByRole('dialog')).toContainText(`${firstName} ${lastName}`);
+    await page.keyboard.press('Escape');
 
     await expect(page.getByRole('button', { name: /High-touchpoint clients/i })).toBeVisible();
     await page.getByRole('button', { name: /High-touchpoint clients/i }).click();

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+  Alert,
   Badge,
   Box,
   Button,
@@ -15,6 +16,7 @@ import {
   Title,
   UnstyledButton,
 } from '@mantine/core';
+import { frontendTelemetry } from '../lib/frontendTelemetry.js';
 import { useI18n } from '../lib/i18nContext.jsx';
 import ClientModal from './ClientModal';
 
@@ -110,12 +112,60 @@ export default function WorkspaceGrid({
   const noteGapClients = complianceWatch?.noteGapClients ?? {};
   const outstandingAssignments = complianceWatch?.outstandingAssignments ?? {};
   const portalRequests = clientsBox?.portalRequests ?? {};
+  const alertItems = Array.isArray(summary?.alerts?.items) ? summary.alerts.items : [];
 
   const openDrilldown = (type, title, items = []) => {
     setDrilldown({ type, title, items: Array.isArray(items) ? items : [] });
   };
 
   const closeDrilldown = () => setDrilldown({ type: null, title: '', items: [] });
+
+  const openAlertAction = (item) => {
+    frontendTelemetry.trackAction('dashboard', 'alert_open', 'success', {
+      workflow: 'operations_alerts',
+      action: item?.id ?? 'unknown',
+      result: item?.severity ?? 'success',
+    });
+
+    switch (item?.actionType) {
+      case 'highTouchpointUnscheduled':
+        openDrilldown(
+          'unscheduledClients',
+          t('dashboard.drilldown.highTouchpointUnscheduledTitle'),
+          (clientsBox.unscheduledClientItems || []).filter((client) => client.highTouchpoint),
+        );
+        return;
+      case 'noteGap1Day':
+        openDrilldown(
+          'noteGap',
+          t('dashboard.drilldown.noteGapOneDayTitle'),
+          (complianceWatch.noteGapItems || []).filter((entry) => Number(entry.daysWithoutNote ?? 0) >= 1),
+        );
+        return;
+      case 'noteGap3Days':
+        openDrilldown(
+          'noteGap',
+          t('dashboard.drilldown.noteGapThreeDayTitle'),
+          (complianceWatch.noteGapItems || []).filter((entry) => Number(entry.daysWithoutNote ?? 0) >= 3),
+        );
+        return;
+      case 'noteGap7Days':
+        openDrilldown(
+          'noteGap',
+          t('dashboard.drilldown.noteGapOneWeekTitle'),
+          (complianceWatch.noteGapItems || []).filter((entry) => Number(entry.daysWithoutNote ?? 0) >= 7),
+        );
+        return;
+      case 'portalRequests':
+        openDrilldown('portalRequests', t('dashboard.drilldown.portalRequestsTitle'), portalRequests.items);
+        return;
+      case 'calendar':
+        onViewCalendar?.();
+        return;
+      default:
+        break;
+    }
+  };
 
   const renderSummaryState = () => {
     if (loading) {
@@ -295,6 +345,19 @@ export default function WorkspaceGrid({
     return null;
   };
 
+  const renderAlertDescription = (item) => {
+    if (!item?.id) return t('dashboard.alerts.none');
+    return t(`dashboard.alert.${item.id}.description`, {
+      count: item.count ?? 0,
+      threshold: item.threshold ?? 0,
+    });
+  };
+
+  const renderAlertActionLabel = (item) => {
+    if (item?.actionType === 'calendar') return t('dashboard.alerts.openCalendar');
+    return t('dashboard.alerts.reviewQueue');
+  };
+
   return (
     <Stack gap="md" p="md">
       <Modal
@@ -308,6 +371,49 @@ export default function WorkspaceGrid({
           {renderDrilldownItems()}
         </ScrollArea.Autosize>
       </Modal>
+
+      <Paper withBorder radius="md" p="md">
+        <Group justify="space-between" mb="sm">
+          <Title order={3} fz="md">{t('dashboard.alerts.title')}</Title>
+          <Badge color={alertItems.length ? 'red' : 'green'} variant="light">
+            {alertItems.length}
+          </Badge>
+        </Group>
+
+        {renderSummaryState() || (
+          alertItems.length === 0 ? (
+            <Alert color="green" variant="light">
+              <Text fw={600} fz="sm">{t('dashboard.alerts.clearTitle')}</Text>
+              <Text c="dimmed" fz="sm">{t('dashboard.alerts.clearDescription')}</Text>
+            </Alert>
+          ) : (
+            <Stack gap="sm">
+              {alertItems.map((item) => (
+                <Alert
+                  key={item.id}
+                  color={item.severity === 'critical' ? 'red' : 'yellow'}
+                  variant="light"
+                >
+                  <Group justify="space-between" align="flex-start" wrap="nowrap">
+                    <Stack gap={4} style={{ flex: 1 }}>
+                      <Group gap="xs">
+                        <Text fw={600} fz="sm">{t(`dashboard.alert.${item.id}.title`)}</Text>
+                        <Badge color={item.severity === 'critical' ? 'red' : 'yellow'} variant="filled">
+                          {t(`dashboard.alerts.severity.${item.severity}`)}
+                        </Badge>
+                      </Group>
+                      <Text fz="sm">{renderAlertDescription(item)}</Text>
+                    </Stack>
+                    <Button size="xs" variant="white" onClick={() => openAlertAction(item)}>
+                      {renderAlertActionLabel(item)}
+                    </Button>
+                  </Group>
+                </Alert>
+              ))}
+            </Stack>
+          )
+        )}
+      </Paper>
 
       <Paper withBorder radius="md" p="md">
         <Group justify="space-between" mb="sm">

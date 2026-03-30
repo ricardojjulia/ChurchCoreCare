@@ -201,3 +201,42 @@ Validation results for this step:
 Operational note:
 
 - full Playwright suites were rerun serially because both target the shared `3001/3002` local stack; concurrent startup still produces expected `EADDRINUSE` contention
+
+### Step 6 — Operational alerts and thresholds completed
+
+Implemented:
+
+- added backend-derived operational alerts on top of the dashboard summary
+- introduced env-backed alert thresholds for:
+  - high-touchpoint clients without future appointments
+  - note gaps over 1 day
+  - note gaps over 3 days
+  - note gaps over 1 week
+  - portal request backlog
+- added a capacity alert when no tracked counselor 1-hour gaps remain for the rest of the day
+- added a dashboard alert strip with severity badges and direct action buttons back into the existing drill-down queues or calendar
+- kept alert telemetry low-cardinality by tracking only alert action ids and severity, without client or counselor identifiers
+
+Default thresholds in this pass:
+
+- high-touchpoint unscheduled clients: `1`
+- note-gap over 1 day: `5`
+- note-gap over 3 days: `3`
+- note-gap over 7 days: `1`
+- portal request backlog: `5`
+
+Files touched in this step:
+
+- `apps/api/src/index.js`
+- `apps/web/src/components/WorkspaceGrid.jsx`
+- `packages/i18n/src/index.js`
+- `tests/e2e/high-value-journeys.spec.mjs`
+
+Validation results for this step:
+
+- `pnpm lint` — passed
+- `pnpm --filter @faith/api exec node --check src/index.js` — passed
+- `pnpm --filter @faith/web build` — passed
+- `npx playwright test tests/e2e/high-value-journeys.spec.mjs --grep "practice admin can drill into dashboard queues and open actionable client details|practice admin dashboard renders the upgraded operations summary cards and payload shape"` — passed
+- `pnpm test:e2e` — passed (`10/10`)
+- `pnpm test:launch-readiness` — passed (`3/3`)

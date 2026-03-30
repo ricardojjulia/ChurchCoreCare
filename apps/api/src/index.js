@@ -11130,6 +11130,28 @@ const DEFAULT_WORKDAY_WINDOWS = Object.freeze([
   { start: 9 * 60, end: 12 * 60 },
   { start: 13 * 60, end: 17 * 60 },
 ]);
+const DEFAULT_OPERATIONS_ALERT_THRESHOLDS = Object.freeze({
+  highTouchpointWithoutFutureAppointment: 1,
+  noteGapOver1Day: 5,
+  noteGapOver3Days: 3,
+  noteGapOver7Days: 1,
+  portalBacklogTotal: 5,
+});
+
+function readPositiveEnvInt(name, fallback) {
+  const parsed = Number.parseInt(process.env[name] ?? '', 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function getOperationsAlertThresholds() {
+  return {
+    highTouchpointWithoutFutureAppointment: readPositiveEnvInt('OPERATIONS_ALERT_HIGH_TOUCHPOINT_UNSCHEDULED_THRESHOLD', DEFAULT_OPERATIONS_ALERT_THRESHOLDS.highTouchpointWithoutFutureAppointment),
+    noteGapOver1Day: readPositiveEnvInt('OPERATIONS_ALERT_NOTE_GAP_1DAY_THRESHOLD', DEFAULT_OPERATIONS_ALERT_THRESHOLDS.noteGapOver1Day),
+    noteGapOver3Days: readPositiveEnvInt('OPERATIONS_ALERT_NOTE_GAP_3DAY_THRESHOLD', DEFAULT_OPERATIONS_ALERT_THRESHOLDS.noteGapOver3Days),
+    noteGapOver7Days: readPositiveEnvInt('OPERATIONS_ALERT_NOTE_GAP_7DAY_THRESHOLD', DEFAULT_OPERATIONS_ALERT_THRESHOLDS.noteGapOver7Days),
+    portalBacklogTotal: readPositiveEnvInt('OPERATIONS_ALERT_PORTAL_BACKLOG_THRESHOLD', DEFAULT_OPERATIONS_ALERT_THRESHOLDS.portalBacklogTotal),
+  };
+}
 
 function getAppointmentStart(item) {
   return item?.startsAt ?? item?.scheduledAt ?? item?.starts_at ?? item?.scheduled_at ?? null;
@@ -11500,6 +11522,7 @@ async function buildOperationsSummary(request, timezone, session) {
   const incompleteDocuments = (data.documentAssignments ?? []).filter((item) => item.status !== 'completed' && item.status !== 'signed');
   const incompleteForms = (data.formAssignments ?? []).filter((item) => item.status !== 'completed');
   const highTouchpointClients = (data.clients ?? []).filter((client) => client.highTouchpoint).length;
+  const highTouchpointWithoutFutureAppointmentItems = unscheduledClientItems.filter((item) => item.highTouchpoint);
   const highTouchpointItems = (data.clients ?? [])
     .filter((client) => client.highTouchpoint)
     .map((client) => ({
@@ -11558,6 +11581,63 @@ async function buildOperationsSummary(request, timezone, session) {
   ].sort((left, right) => String(right.requestedAt ?? '').localeCompare(String(left.requestedAt ?? '')));
   const counselorsWithEntries = new Set(todayAppointments.map((item) => item.counselorId || item.counselorName).filter(Boolean)).size;
   const oneHourGapsTotal = counselorWorkload.reduce((sum, item) => sum + item.oneHourGapCount, 0);
+  const thresholds = getOperationsAlertThresholds();
+  const alerts = [];
+
+  if (highTouchpointWithoutFutureAppointmentItems.length >= thresholds.highTouchpointWithoutFutureAppointment) {
+    alerts.push({
+      id: 'high_touchpoint_unscheduled',
+      severity: 'warning',
+      count: highTouchpointWithoutFutureAppointmentItems.length,
+      threshold: thresholds.highTouchpointWithoutFutureAppointment,
+      actionType: 'highTouchpointUnscheduled',
+    });
+  }
+  if (noteGapClients.over1Day >= thresholds.noteGapOver1Day) {
+    alerts.push({
+      id: 'note_gap_over_1day',
+      severity: 'warning',
+      count: noteGapClients.over1Day,
+      threshold: thresholds.noteGapOver1Day,
+      actionType: 'noteGap1Day',
+    });
+  }
+  if (noteGapClients.over3Days >= thresholds.noteGapOver3Days) {
+    alerts.push({
+      id: 'note_gap_over_3days',
+      severity: 'warning',
+      count: noteGapClients.over3Days,
+      threshold: thresholds.noteGapOver3Days,
+      actionType: 'noteGap3Days',
+    });
+  }
+  if (noteGapClients.over7Days >= thresholds.noteGapOver7Days) {
+    alerts.push({
+      id: 'note_gap_over_7days',
+      severity: 'critical',
+      count: noteGapClients.over7Days,
+      threshold: thresholds.noteGapOver7Days,
+      actionType: 'noteGap7Days',
+    });
+  }
+  if (counselorWorkload.length > 0 && oneHourGapsTotal <= 0) {
+    alerts.push({
+      id: 'no_capacity_remaining',
+      severity: 'critical',
+      count: 0,
+      threshold: 0,
+      actionType: 'calendar',
+    });
+  }
+  if (portalRequestItems.length >= thresholds.portalBacklogTotal) {
+    alerts.push({
+      id: 'portal_request_backlog',
+      severity: 'warning',
+      count: portalRequestItems.length,
+      threshold: thresholds.portalBacklogTotal,
+      actionType: 'portalRequests',
+    });
+  }
 
   const priorityItems = [
     {
@@ -11620,7 +11700,9 @@ async function buildOperationsSummary(request, timezone, session) {
       },
     },
     counts: {
+      activeAlerts: alerts.length,
       highTouchpointClients,
+      highTouchpointWithoutFutureAppointment: highTouchpointWithoutFutureAppointmentItems.length,
       noteGapOver1Day: noteGapClients.over1Day,
       noteGapOver3Days: noteGapClients.over3Days,
       noteGapOver7Days: noteGapClients.over7Days,
@@ -11630,6 +11712,10 @@ async function buildOperationsSummary(request, timezone, session) {
       portalRequests: (data.portalRegistrationRequests?.length ?? 0) + (data.portalAppointmentRequests?.length ?? 0),
       counselorsWithEntries,
       oneHourGapsTotal,
+    },
+    alerts: {
+      thresholds,
+      items: alerts,
     },
     priorityItems,
     complianceItems,

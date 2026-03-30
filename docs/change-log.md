@@ -29,18 +29,25 @@ Upgrades the Operations Dashboard from placeholder cards to a real staff-facing 
   - outstanding assigned work
   - unscheduled clients
   - portal request backlog
+- dashboard alert thresholds for:
+  - unscheduled high-touchpoint clients
+  - note-gap backlog
+  - same-day counselor capacity exhaustion
+  - portal request backlog
 
 ### Changed
 
 - `apps/api/src/index.js`
   - replaced the old placeholder operations summary with DB-aware counselor workload, note-gap, assignment, and portal-request aggregation
   - added dashboard-safe detail arrays so the UI can open targeted drill-down queues without extra fetches
+  - added backend-derived operational alerts with environment-backed thresholds
 - `apps/web/src/App.jsx`
   - added staff-side operations-summary fetch and timed dashboard refresh
   - added navigation callbacks for dashboard drill-down actions into Documents and Workspace Studio Portal
 - `apps/web/src/components/WorkspaceGrid.jsx`
   - replaced placeholder cards and the dashboard client roster with metrics-focused summary cards
   - added actionable dashboard drill-down modals and row-level action buttons
+  - added operational alert strip with severity badges and queue/calendar actions
 - `apps/web/src/components/SchedulingPage.jsx`
   - now notifies the dashboard summary after appointment mutations
 - `apps/web/src/components/ClientForm.jsx`
@@ -50,6 +57,7 @@ Upgrades the Operations Dashboard from placeholder cards to a real staff-facing 
 - `packages/i18n/src/index.js`
   - added dashboard summary labels and explanations for the new cards
   - added drill-down modal labels and action text
+  - added dashboard alert titles, descriptions, severity labels, and action text
 
 ### Validation
 

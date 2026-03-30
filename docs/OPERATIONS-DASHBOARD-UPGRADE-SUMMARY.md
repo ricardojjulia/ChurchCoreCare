@@ -1,7 +1,7 @@
 # Operations Dashboard Upgrade Summary
 
 **Date:** March 30, 2026
-**Status:** Implemented, validated, and extended with dashboard drill-downs
+**Status:** Implemented, validated, and extended with dashboard drill-downs and alert thresholds
 **Plan:** [PLANS/OPERATIONS-DASHBOARD-UPGRADE.md](../PLANS/OPERATIONS-DASHBOARD-UPGRADE.md)
 **Implementation log:** [docs/OPERATIONS-DASHBOARD-IMPLEMENTATION-LOG-2026-03-30.md](./OPERATIONS-DASHBOARD-IMPLEMENTATION-LOG-2026-03-30.md)
 
@@ -9,7 +9,7 @@
 
 The Operations Dashboard is now backed by a real operations-summary API instead of placeholder text.
 
-It also now supports in-dashboard drill-down workflows so staff can open the underlying queues directly from the summary metrics.
+It also now supports in-dashboard drill-down workflows so staff can open the underlying queues directly from the summary metrics, plus operational alerts when key thresholds are crossed.
 
 ### Today's Schedule
 
@@ -29,6 +29,7 @@ Availability math now:
 - now shows the count of clients explicitly marked `high touchpoint`
 - includes staff-facing explanation text so the metric is self-describing
 - supports direct drill-down into the flagged-client queue with one-click access to client detail
+- now contributes to an alert when flagged clients do not have a future appointment
 
 ### Compliance Watch
 
@@ -63,6 +64,25 @@ The dashboard now also supports direct drill-downs for:
 - outstanding document/form assignments
 - portal request backlog
 
+### Operational Alerts
+
+The dashboard now raises alerts for:
+
+- high-touchpoint clients without a future appointment
+- note-gap backlogs that cross configured thresholds
+- no remaining counselor capacity for the current day
+- portal request backlog crossing the configured target
+
+Default thresholds in this release:
+
+- high-touchpoint unscheduled clients: `1`
+- note gaps over 1 day: `5`
+- note gaps over 3 days: `3`
+- note gaps over 7 days: `1`
+- portal request backlog: `5`
+
+Thresholds are backend-configured with environment variables, while the dashboard alert strip stays on the existing `dashboard` surface.
+
 ## Technical changes
 
 - added `high_touchpoint` to `clients`
@@ -75,6 +95,7 @@ The dashboard now also supports direct drill-downs for:
   - scheduling mutations
   - timed dashboard refresh while visible
 - added drill-down detail payloads and modal actions without creating a new dashboard surface id
+- added backend-derived alert objects and env-backed threshold configuration
 - rebuilt the served web bundle and refreshed `apps/web/public/index.html`
 
 ## Validation
@@ -85,4 +106,4 @@ The dashboard now also supports direct drill-downs for:
 - `pnpm --filter @faith/web build`
 - `pnpm test:e2e` — passed (`10/10`)
 - `pnpm test:launch-readiness` — passed (`3/3`)
-- `npx playwright test tests/e2e/high-value-journeys.spec.mjs --grep "practice admin can drill into dashboard queues and open actionable client details|practice admin dashboard renders the upgraded operations summary cards and payload shape"`
+- `npx playwright test tests/e2e/high-value-journeys.spec.mjs --grep "practice admin can drill into dashboard queues and open actionable client details|practice admin dashboard renders the upgraded operations summary cards and payload shape"` — passed
