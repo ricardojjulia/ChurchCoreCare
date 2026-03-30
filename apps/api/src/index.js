@@ -1741,7 +1741,7 @@ async function handleAuthLogin(request, response) {
 }
 
 async function handleAuthLogout(request, response, session) {
-  await logout(request, response);
+  await logout(request, response, session);
   const actorId = session?.staff_account_id ?? session?.client_id ?? 'anonymous';
   const targetId = session?.portal_account_id ?? session?.staff_account_id ?? session?.client_id ?? 'anonymous';
   await emitAudit(request, 'session.logout', session?.role === 'client' ? 'portal_account' : 'staff_account', targetId, session);

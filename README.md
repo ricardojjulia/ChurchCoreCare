@@ -4,7 +4,7 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## Version
 
-- Current release: `4.5.0`
+- Current release: `4.6.0`
 - Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI + revamped ops/monitoring + explicit health probes + OTEL health export + full Scheduling module with Waitlist, Reminders & Calendar DB support + waitlist-to-appointment promotion + audit UUID hardening + deep DB engine monitoring dashboard + full Audit Intelligence UI redesign + structured PHI-safe API logging + live dashboard appointment and audit metrics + full Reporting tab UI redesign + repaired Swagger UI proxy/docs delivery + redesigned About experience + static file server query-string fix + operations header/session card refresh + versioned web asset delivery + UI enhancements across main shell, monitoring, and operations surfaces + desktop sidebar toggle fix + sidebar options icon refresh + schema fixes for availability_overrides and appointment_series + utilization GROUP BY fix + appointment identity integrity for renamed counselors and clients + repaired Workspace Studio document assignment workflow + synced tracked web build artifacts + lint-clean documentation and generated monitoring outputs + full Electronic Documents module with four clinical forms, GAD-7 auto-scoring, C-SSRS risk stratification, Christian counseling faith dimensions, and a generic form renderer + deeper public portal onboarding with structured intake and instant activation support + authenticated client portal completion across profile, appointments, documents, uploads, data rights, counselor, financials, and resources + localized portal auth and client shell + policy-aware portal deletion review and fulfillment + validated security, localization, and launch-readiness coverage)
 
 ## Translation Guardian Agent
@@ -19,6 +19,23 @@ pnpm agent:translation:run
 ```
 
 The service listens on `http://127.0.0.1:8098` by default.
+
+## v4.6.0 — CRITICAL FIX: Complete Logout Session Invalidation (March 29, 2026)
+
+### v4.6.0 Overview
+
+This is a critical logout hardening release for the completed client portal work. It closes the session-restoration gap where a browser refresh could pick the user session back up after sign-out if stale auth cookies or active session rows remained.
+
+The server now clears both staff and portal auth cookies with explicit expiry, revokes all active sessions for the authenticated account on logout, and clears the opposite auth cookie on login so refresh or role switching cannot silently restore a session.
+
+### v4.6.0 — Validation
+
+- `pnpm lint`
+- raw auth verification:
+  - login clears the opposite auth cookie
+  - logout clears both auth cookies
+  - `GET /v1/auth/me` returns `401` immediately after logout
+- `npx playwright test tests/e2e/high-value-journeys.spec.mjs --grep "shared sign-in gate links new clients into the portal create-account flow|sign out fully invalidates the browser session after refresh"`
 
 ## v4.5.0 — Final Portal Signoff + Agent Validation (March 29, 2026)
 

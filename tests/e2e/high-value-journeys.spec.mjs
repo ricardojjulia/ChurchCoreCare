@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { ensureCounselor, futureDateTimeLocal, getTestAccount, openPrimaryNav, signInAs, signInWithCredentials } from './helpers.mjs';
+import { ensureCounselor, futureDateTimeLocal, getTestAccount, openPrimaryNav, signInAs, signInWithCredentials, signOut } from './helpers.mjs';
 
 test.describe('high-value UI journeys', () => {
   test('shared sign-in gate links new clients into the portal create-account flow', async ({ page }) => {
@@ -10,6 +10,17 @@ test.describe('high-value UI journeys', () => {
 
     await expect(page).toHaveURL(/\/portal\?intent=account_signup$/);
     await expect(page.locator('#portalRequestHeading')).toContainText('create a portal account');
+  });
+
+  test('sign out fully invalidates the browser session after refresh', async ({ page }) => {
+    await signInAs(page, 'practice_admin');
+    await expect(page.locator('.workspace-topbar')).toBeVisible();
+
+    await signOut(page);
+    await page.reload();
+
+    await expect(page.locator('#loginEmail')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('.workspace-topbar')).toHaveCount(0);
   });
 
   test('practice admin can create a client and schedule an appointment from the current workspace flow', async ({ page }) => {

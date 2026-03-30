@@ -92,8 +92,29 @@ function buildSessionCookie(cookieName, rawToken, role) {
   return parts.join('; ');
 }
 
+function setAuthCookies(response, cookies) {
+  const existing = response.getHeader('Set-Cookie');
+  const current = Array.isArray(existing)
+    ? existing
+    : existing
+      ? [String(existing)]
+      : [];
+  response.setHeader('Set-Cookie', [...current, ...cookies]);
+}
+
 function clearSessionCookie(cookieName) {
-  return `${cookieName}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`;
+  const parts = [
+    `${cookieName}=`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Strict',
+    'Max-Age=0',
+    'Expires=Thu, 01 Jan 1970 00:00:00 GMT',
+  ];
+  if (process.env.NODE_ENV === 'production') {
+    parts.push('Secure');
+  }
+  return parts.join('; ');
 }
 
 function normalizeEmail(email) {
@@ -160,7 +181,10 @@ async function createStaffSession(account, response) {
     [tokenHash, account.id, account.tenant_id, account.role, expiresAt],
   );
 
-  response.setHeader('Set-Cookie', buildSessionCookie(STAFF_SESSION_COOKIE, rawToken, account.role));
+  setAuthCookies(response, [
+    buildSessionCookie(STAFF_SESSION_COOKIE, rawToken, account.role),
+    clearSessionCookie(PORTAL_SESSION_COOKIE),
+  ]);
 
   return {
     actorType: 'staff',
@@ -185,7 +209,10 @@ async function createPortalSession(account, response) {
     [tokenHash, account.id, account.client_id, account.tenant_id, 'client', expiresAt],
   );
 
-  response.setHeader('Set-Cookie', buildSessionCookie(PORTAL_SESSION_COOKIE, rawToken, 'client'));
+  setAuthCookies(response, [
+    buildSessionCookie(PORTAL_SESSION_COOKIE, rawToken, 'client'),
+    clearSessionCookie(STAFF_SESSION_COOKIE),
+  ]);
 
   return {
     actorType: 'client',
@@ -299,7 +326,7 @@ export async function login(email, password, response) {
 
 // ─── Logout ──────────────────────────────────────────────────────────────────
 
-export async function logout(request, response) {
+export async function logout(request, response, session = null) {
   const cookies = parseCookies(request.headers.cookie);
   const rawStaffToken = cookies[STAFF_SESSION_COOKIE];
   if (rawStaffToken) {
@@ -311,7 +338,13 @@ export async function logout(request, response) {
     const tokenHash = hashToken(rawPortalToken);
     await pool.query('UPDATE portal_sessions SET revoked = 1 WHERE id = ?', [tokenHash]);
   }
-  response.setHeader('Set-Cookie', [
+  if (session?.actor_type === 'staff' && session?.staff_account_id) {
+    await pool.query('UPDATE sessions SET revoked = 1 WHERE staff_account_id = ?', [session.staff_account_id]);
+  }
+  if (session?.actor_type === 'client' && session?.portal_account_id) {
+    await pool.query('UPDATE portal_sessions SET revoked = 1 WHERE portal_account_id = ?', [session.portal_account_id]);
+  }
+  setAuthCookies(response, [
     clearSessionCookie(STAFF_SESSION_COOKIE),
     clearSessionCookie(PORTAL_SESSION_COOKIE),
   ]);

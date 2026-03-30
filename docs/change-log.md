@@ -2,6 +2,27 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## v4.6.0 — CRITICAL FIX: Complete Logout Session Invalidation
+
+**Date:** March 29, 2026
+**Type:** Critical fix
+
+### Summary
+
+Closes the logout invalidation gap. Sign-out now clears both auth cookies with explicit expiry, revokes all active sessions for the authenticated account, and prevents refresh or cross-role cookie leftovers from silently restoring a session.
+
+### Added
+
+- logout now clears both auth cookies and revokes the authenticated account's active sessions so refresh cannot restore the session
+- login now clears the opposite auth cookie so stale staff and portal sessions cannot coexist in the browser
+- browser regression coverage for logout plus refresh invalidation
+
+### Validation
+
+- `pnpm lint` — passed
+- raw auth verification — passed
+- `npx playwright test tests/e2e/high-value-journeys.spec.mjs --grep "shared sign-in gate links new clients into the portal create-account flow|sign out fully invalidates the browser session after refresh"` — passed
+
 ## v4.5.0 — Final Portal Signoff + Agent Validation
 
 **Date:** March 29, 2026
