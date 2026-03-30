@@ -2,6 +2,34 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## v5.1.0 — UI Baseline & Regression Verification Agent
+
+**Date:** March 30, 2026
+**Type:** Infrastructure / Tooling
+
+### Summary
+
+Introduces the UI Baseline & Regression Verification agent — a reusable Playwright-based traversal tool that captures a structured navigation map and per-screen metadata snapshot across all application surfaces and all personas. On first run the agent operates in baseline mode, producing `test-results/screen-baseline.json` and `test-results/ui-map.json`. Future runs operate in compare mode, diffing the live application against the accepted baseline and classifying each change as regression, expected change, new screen, or informational. Two selector defects were found and corrected during the first baseline traversal.
+
+### Added
+
+- `.github/agents/ui-baseline-regression.agent.md` — custom agent definition for UI baseline capture and regression verification, covering all FaithCounseling surfaces, personas, and telemetry rules
+- `.github/skills/ui-baseline-regression/SKILL.md` — companion skill specifying traversal logic, per-screen metadata schema, comparison classification table, selector strategy priority, console/network monitoring, screenshot naming, and output conventions
+- `docs/UI-BASELINE-AGENT-RUN-2026-03-30.md` — first run report documenting agent creation, defects found, fixes applied, validation commands, and post-fix clean run confirmation
+
+### Changed
+
+- `tests/e2e/ui-baseline.mjs` — `clickTabByLabel` now uses `^${escaped}$` anchored regex instead of unanchored substring match; prevents "Profile" from matching "Faith Profile" in strict mode
+- `tests/e2e/ui-baseline.mjs` — corrected Workspace Studio tab label from `'Documents Studio'` (stale design name) to `'Documents & Inventories'` (actual rendered label)
+
+### Validation
+
+```bash
+node tests/e2e/ui-baseline.mjs    # exit code 0
+```
+
+---
+
 ## v5.0.0 — Operations Dashboard + Client Workspace Separation
 
 **Date:** March 30, 2026

@@ -4,9 +4,10 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## At a Glance
 
-- Version: `5.0.0`
+- Version: `5.1.0`
 - Status: `Beta Ready`
 - Release summary: [docs/v5.0.0-RELEASE-SUMMARY.md](docs/v5.0.0-RELEASE-SUMMARY.md)
+- UI Baseline agent run report: [docs/UI-BASELINE-AGENT-RUN-2026-03-30.md](docs/UI-BASELINE-AGENT-RUN-2026-03-30.md)
 - Operations Dashboard summary: [docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md](docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md)
 - Change log: [docs/change-log.md](docs/change-log.md)
 - Spanish translation report: [docs/TRANSLATION-GUARDIAN-ES-RUN-2026-03-30.md](docs/TRANSLATION-GUARDIAN-ES-RUN-2026-03-30.md)
@@ -39,6 +40,23 @@ The current build turns the operations and client-maintenance split back into a 
 - Portal plan: [PLANS/CLIENT-PORTAL-EXPANSION.md](PLANS/CLIENT-PORTAL-EXPANSION.md)
 - Monitoring baseline: [PLANS/FULL-SURFACE-MONITORING.md](PLANS/FULL-SURFACE-MONITORING.md)
 - Security baseline: [PLANS/FULL-SECURITY-AND-AUDITING.md](PLANS/FULL-SECURITY-AND-AUDITING.md)
+- UI Baseline run report: [docs/UI-BASELINE-AGENT-RUN-2026-03-30.md](docs/UI-BASELINE-AGENT-RUN-2026-03-30.md)
+
+## UI Baseline & Regression Verification Agent
+
+The UI baseline agent is defined at `.github/agents/ui-baseline-regression.agent.md` with its companion skill at `.github/skills/ui-baseline-regression/SKILL.md`. It traverses the full application across all personas, captures a structured navigation map and per-screen metadata, and can diff any future run against the accepted baseline to surface regressions automatically.
+
+Latest baseline run report:
+
+- [docs/UI-BASELINE-AGENT-RUN-2026-03-30.md](docs/UI-BASELINE-AGENT-RUN-2026-03-30.md)
+
+To capture a new baseline:
+
+```bash
+node tests/e2e/ui-baseline.mjs
+```
+
+The agent requires the web and API servers to be running. See `start-servers.js` or `ops/start-all.mjs` for the standard dev startup.
 
 ## Translation Guardian Agent
 
@@ -56,6 +74,25 @@ pnpm agent:translation:run
 ```
 
 The service listens on `http://127.0.0.1:8098` by default.
+
+## v5.1.0 — UI Baseline & Regression Verification Agent (March 30, 2026)
+
+### v5.1.0 Overview
+
+This release adds the UI Baseline & Regression Verification agent — a Playwright traversal tool that captures a structured navigation map and per-screen metadata snapshot across every application surface and all four user personas. The agent operates in two modes: baseline (first-run capture) and compare (diff against an accepted baseline). Two selector defects in `tests/e2e/ui-baseline.mjs` were caught and corrected during the first traversal: a stale tab label for the "Documents & Inventories" studio tab, and an unanchored regex in `clickTabByLabel` that caused "Profile" to match "Faith Profile" under Playwright strict mode.
+
+### v5.1.0 — What Changed
+
+- added the UI Baseline & Regression Verification agent (`.github/agents/ui-baseline-regression.agent.md`) and its companion skill (`.github/skills/ui-baseline-regression/SKILL.md`)
+- anchored `clickTabByLabel` regex in `tests/e2e/ui-baseline.mjs` to prevent substring collisions between tabs with shared label words (e.g. "Profile" vs "Faith Profile")
+- corrected Workspace Studio tab label from `'Documents Studio'` to `'Documents & Inventories'` in the baseline traversal script
+- all three post-fix baseline runs completed with exit code 0
+
+### v5.1.0 — Validation
+
+```bash
+node tests/e2e/ui-baseline.mjs
+```
 
 ## v5.0.0 — Operations Dashboard + Client Workspace Separation (March 30, 2026)
 
