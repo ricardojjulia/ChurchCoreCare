@@ -1205,6 +1205,7 @@ export default function SchedulingPage({
   initialPortalRequest = null,
   onComposerHandled,
   onPortalRequestScheduled,
+  onAppointmentsUpdated,
   onOpenClient,
 }) {
   const timezone = detectTimezone();
@@ -1298,6 +1299,7 @@ export default function SchedulingPage({
         color: 'green',
       });
       await loadScheduling();
+      onAppointmentsUpdated?.();
     } catch (updateError) {
       frontendTelemetry.trackInteraction(activeSchedulingSurface, 'appointment.status_change', performance.now() - startedAt, {
         workflow: 'scheduling',
@@ -1332,6 +1334,7 @@ export default function SchedulingPage({
         color: 'green',
       });
       await loadScheduling();
+      onAppointmentsUpdated?.();
     } catch (deleteError) {
       frontendTelemetry.trackInteraction(activeSchedulingSurface, 'appointment.delete', performance.now() - startedAt, {
         workflow: 'scheduling',
@@ -1433,7 +1436,10 @@ export default function SchedulingPage({
           setComposerClientId(initialClientId);
           onComposerHandled?.();
         }}
-        onCreated={loadScheduling}
+        onCreated={async () => {
+          await loadScheduling();
+          onAppointmentsUpdated?.();
+        }}
         clients={clients}
         counselors={counselors}
         appointmentTypes={appointmentTypes}

@@ -2,6 +2,52 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## v4.7.0 — Operations Dashboard Upgrade
+
+**Date:** March 30, 2026
+**Type:** Feature revision
+
+### Summary
+
+Upgrades the Operations Dashboard from placeholder cards to a real staff-facing daily summary. The dashboard now shows counselor workload, 1-hour availability gaps, high-touchpoint client counts, note-gap compliance thresholds, incomplete assigned work, and portal request status rollups.
+
+### Added
+
+- `PLANS/OPERATIONS-DASHBOARD-UPGRADE.md` — canonical implementation plan for the dashboard upgrade
+- `docs/OPERATIONS-DASHBOARD-IMPLEMENTATION-LOG-2026-03-30.md` — dated implementation log from planning checkpoint through final validation
+- `docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md` — shipped feature summary and validation record
+- `high_touchpoint` client flag with staff editing support
+- structured `GET /v1/operations/summary` sections:
+  - `todaySchedule`
+  - `priorityQueue`
+  - `complianceWatch`
+  - `clientsBox`
+- dashboard regression coverage for the upgraded operations summary payload and cards
+
+### Changed
+
+- `apps/api/src/index.js`
+  - replaced the old placeholder operations summary with DB-aware counselor workload, note-gap, assignment, and portal-request aggregation
+- `apps/web/src/App.jsx`
+  - added staff-side operations-summary fetch and timed dashboard refresh
+- `apps/web/src/components/WorkspaceGrid.jsx`
+  - replaced placeholder cards and the dashboard client roster with metrics-focused summary cards
+- `apps/web/src/components/SchedulingPage.jsx`
+  - now notifies the dashboard summary after appointment mutations
+- `apps/web/src/components/ClientForm.jsx`
+  - added `High touchpoint` staff editing support
+- `packages/i18n/src/index.js`
+  - added dashboard summary labels and explanations for the new cards
+
+### Validation
+
+- `node --env-file=.env apps/api/src/db/migrate.js` — passed
+- `pnpm --filter @faith/api exec node --check src/index.js` — passed
+- `pnpm lint` — passed
+- `pnpm --filter @faith/web build` — passed
+- `pnpm test:e2e` — passed (`9/9`)
+- `pnpm test:launch-readiness` — passed (`3/3`)
+
 ## v4.7.0 — Expanded Counseling Form Library
 
 **Date:** March 29, 2026

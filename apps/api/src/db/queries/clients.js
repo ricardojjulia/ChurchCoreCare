@@ -24,6 +24,7 @@ function rowToClient(row) {
     lastName: decrypt(row.last_name_enc),
     status: row.status,
     faithBackground: row.faith_background ?? null,
+    highTouchpoint: Boolean(row.high_touchpoint),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -108,7 +109,7 @@ export async function getClientById(id, tenantId) {
  * @param {{
  *   id: string, tenantId: string,
  *   firstName: string, lastName: string,
- *   status?: string, faithBackground?: string
+ *   status?: string, faithBackground?: string, highTouchpoint?: boolean
  * }} data
  * @returns {Promise<object>}
  */
@@ -119,12 +120,13 @@ export async function createClient({
   lastName,
   status = 'active',
   faithBackground = null,
+  highTouchpoint = false,
 }) {
   await pool.query(
     `INSERT INTO clients
-       (id, tenant_id, first_name_enc, last_name_enc, status, faith_background)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [id, tenantId, encrypt(firstName), encrypt(lastName), status, faithBackground],
+       (id, tenant_id, first_name_enc, last_name_enc, status, faith_background, high_touchpoint)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [id, tenantId, encrypt(firstName), encrypt(lastName), status, faithBackground, highTouchpoint ? 1 : 0],
   );
   return getClientById(id, tenantId);
 }
@@ -155,6 +157,10 @@ export async function updateClient(id, tenantId, fields) {
   if (fields.faithBackground !== undefined) {
     setClauses.push('faith_background = ?');
     values.push(fields.faithBackground);
+  }
+  if (fields.highTouchpoint !== undefined) {
+    setClauses.push('high_touchpoint = ?');
+    values.push(fields.highTouchpoint ? 1 : 0);
   }
 
   if (setClauses.length === 0) return getClientById(id, tenantId);

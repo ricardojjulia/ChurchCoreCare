@@ -197,6 +197,7 @@ async function applyColumnMigrations(conn) {
   }
 
   await addColumnIfMissing('clients', 'primary_counselor_id', 'VARCHAR(64) NULL');
+  await addColumnIfMissing('clients', 'high_touchpoint', 'TINYINT(1) NOT NULL DEFAULT 0');
   await addIndexIfMissing('clients', 'idx_clients_counselor', '(primary_counselor_id)');
 
   await addColumnIfMissing('portal_registration_requests', 'request_type', "VARCHAR(64) NOT NULL DEFAULT 'care_request' AFTER tenant_id");
@@ -364,8 +365,8 @@ async function seedDevData(conn) {
 
   await conn.query(
     `INSERT INTO clients
-       (id, tenant_id, first_name_enc, last_name_enc, status, faith_background)
-     VALUES (?, ?, ?, ?, ?, ?)`,
+       (id, tenant_id, first_name_enc, last_name_enc, status, faith_background, high_touchpoint)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [
       'c-001',
       'system',
@@ -373,6 +374,7 @@ async function seedDevData(conn) {
       encrypt('Kim'),
       'active',
       'Evangelical',
+      1,
     ],
   );
 
@@ -441,9 +443,14 @@ async function ensureDevPortalClient(conn) {
   if (!client) {
     await conn.query(
       `INSERT INTO clients
-         (id, tenant_id, first_name_enc, last_name_enc, status, faith_background)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      ['c-001', 'system', encrypt('Sarah'), encrypt('Kim'), 'active', 'Evangelical'],
+         (id, tenant_id, first_name_enc, last_name_enc, status, faith_background, high_touchpoint)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      ['c-001', 'system', encrypt('Sarah'), encrypt('Kim'), 'active', 'Evangelical', 1],
+    );
+  } else {
+    await conn.query(
+      'UPDATE clients SET high_touchpoint = 1 WHERE id = ? AND tenant_id = ?',
+      ['c-001', 'system'],
     );
   }
 

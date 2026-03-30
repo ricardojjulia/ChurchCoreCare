@@ -28,6 +28,11 @@ function withClientId(baseUrl, clientId) {
   return `${baseUrl}${separator}clientId=${encodeURIComponent(clientId)}`;
 }
 
+export function fetchOperationsSummary(timezone = null) {
+  const suffix = timezone ? `?timezone=${encodeURIComponent(timezone)}` : '';
+  return apiFetch(`/api/v1/operations/summary${suffix}`);
+}
+
 // ── Portal ───────────────────────────────────────────────────────────────────
 
 export function fetchPortalOverview(clientId = null) {

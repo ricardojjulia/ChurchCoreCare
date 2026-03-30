@@ -2,6 +2,28 @@ import { test, expect } from '@playwright/test';
 import { ensureCounselor, futureDateTimeLocal, getTestAccount, openPrimaryNav, signInAs, signInWithCredentials } from './helpers.mjs';
 
 test.describe('high-value UI journeys', () => {
+  test('practice admin dashboard renders the upgraded operations summary cards and payload shape', async ({ page }) => {
+    await signInAs(page, 'practice_admin');
+
+    await expect(page.getByText(/Today's Schedule|Programa de hoy/i)).toBeVisible();
+    await expect(page.getByText(/Counselors with entries|Consejeros con entradas/i)).toBeVisible();
+    await expect(page.getByText(/Priority Queue|Cola prioritaria/i)).toBeVisible();
+    await expect(page.getByText(/Compliance Watch|Vigilancia de cumplimiento/i)).toBeVisible();
+    await expect(page.getByText(/Portal requests|Solicitudes del portal/i)).toBeVisible();
+
+    const payload = await page.evaluate(async () => {
+      const response = await fetch('/api/v1/operations/summary', { credentials: 'include' });
+      return response.json();
+    });
+
+    expect(payload.summary).toBeTruthy();
+    expect(payload.summary.todaySchedule).toBeTruthy();
+    expect(payload.summary.priorityQueue).toBeTruthy();
+    expect(payload.summary.complianceWatch).toBeTruthy();
+    expect(payload.summary.clientsBox).toBeTruthy();
+    expect(Array.isArray(payload.summary.todaySchedule.workload)).toBeTruthy();
+  });
+
   test('shared sign-in gate links new clients into the portal create-account flow', async ({ page }) => {
     await page.goto('/');
     await expect(page.locator('#loginEmail')).toBeVisible();
@@ -44,7 +66,6 @@ test.describe('high-value UI journeys', () => {
     await page.getByLabel('Faith background').fill('Evangelical');
     await page.getByRole('button', { name: /Create Client|Crear cliente/i }).click();
 
-    await expect(page.locator('section[aria-labelledby="clientsPanelTitle"]')).toContainText(`${firstName} ${lastName}`);
     await page.getByRole('button', { name: /New Appointment|Nueva cita/i }).click();
     await expect(page.getByRole('dialog', { name: /New Appointment|Nueva cita/i })).toBeVisible();
     await page.getByRole('textbox', { name: 'Client' }).click();

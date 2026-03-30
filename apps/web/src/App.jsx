@@ -16,6 +16,7 @@ import SchedulingPage from './components/SchedulingPage.jsx';
 import DocumentsPage from './components/Documents/DocumentsPage.jsx';
 import ClientPortalPage from './components/Portal/ClientPortalPage.jsx';
 import { csrfHeaders } from './lib/csrf.js';
+import { fetchOperationsSummary } from './lib/clientApi.js';
 import { frontendTelemetry } from './lib/frontendTelemetry.js';
 import { useSurfaceTelemetry } from './lib/useSurfaceTelemetry.js';
 import { useI18n } from './lib/i18nContext.jsx';
@@ -114,7 +115,9 @@ export default function App() {
   });
   const [connectionStatus, setConnectionStatus] = useState('loading');
   const [clientsData, setClientsData] = useState({ items: [], loading: true, error: null });
+  const [operationsSummaryData, setOperationsSummaryData] = useState({ summary: null, loading: true, error: null });
   const [refreshClientsKey, setRefreshClientsKey] = useState(0);
+  const [refreshOperationsKey, setRefreshOperationsKey] = useState(0);
   const [selectedClientId, setSelectedClientId] = useState(null);
   const [selectedCounselorId, setSelectedCounselorId] = useState(null);
   const [currentView, setCurrentView] = useState('dashboard');
@@ -168,6 +171,46 @@ export default function App() {
       });
     return () => { isCancelled = true; };
   }, [refreshClientsKey, isAuthenticated, t, userRole]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    if (userRole === 'client') {
+      setOperationsSummaryData({ summary: null, loading: false, error: null });
+      return;
+    }
+
+    let cancelled = false;
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York';
+    setOperationsSummaryData((current) => ({ ...current, loading: true, error: null }));
+
+    fetchOperationsSummary(timezone)
+      .then((payload) => {
+        if (cancelled) return;
+        setOperationsSummaryData({
+          summary: payload?.summary ?? null,
+          loading: false,
+          error: null,
+        });
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setOperationsSummaryData({
+          summary: null,
+          loading: false,
+          error: error.message || t('state.unableToLoad'),
+        });
+      });
+
+    return () => { cancelled = true; };
+  }, [isAuthenticated, refreshOperationsKey, t, userRole]);
+
+  useEffect(() => {
+    if (!isAuthenticated || userRole === 'client' || currentView !== 'dashboard') return undefined;
+    const intervalId = window.setInterval(() => {
+      setRefreshOperationsKey((value) => value + 1);
+    }, 60_000);
+    return () => window.clearInterval(intervalId);
+  }, [currentView, isAuthenticated, userRole]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -247,6 +290,7 @@ export default function App() {
     setSelectedClientId(null);
     setSelectedCounselorId(null);
     setCurrentView('dashboard');
+    setOperationsSummaryData({ summary: null, loading: true, error: null });
   };
 
   const handleNavigate = (view) => {
@@ -408,6 +452,7 @@ export default function App() {
             initialPortalRequest={schedulingState.initialPortalRequest}
             onComposerHandled={() => setSchedulingState((state) => ({ ...state, composerOpen: false, initialPortalRequest: null }))}
             onPortalRequestScheduled={handlePortalRequestScheduled}
+            onAppointmentsUpdated={() => setRefreshOperationsKey((value) => value + 1)}
             onOpenClient={handleOpenClient}
           />
         ) : showWorkspaceStudio ? (
@@ -429,7 +474,11 @@ export default function App() {
             {showClientsWorkspace || showDashboard ? (
               <WorkspaceGrid
                 clientsData={clientsData}
-                onClientsUpdated={() => setRefreshClientsKey((k) => k + 1)}
+                operationsSummaryData={operationsSummaryData}
+                onClientsUpdated={() => {
+                  setRefreshClientsKey((k) => k + 1);
+                  setRefreshOperationsKey((value) => value + 1);
+                }}
                 onViewClient={handleOpenClient}
                 onViewCalendar={() => handleOpenScheduling({ initialView: defaultCalendarView(userRole) })}
                 onNewAppointment={() => handleOpenScheduling({ composerOpen: true, initialView: defaultCalendarView(userRole) })}

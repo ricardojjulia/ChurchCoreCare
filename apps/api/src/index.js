@@ -212,11 +212,11 @@ telemetry.updateHealth({
 });
 
 const clients = [
-  { id: 'c-001', tenantId: 'system', firstName: 'Sarah', lastName: 'Kim', status: 'active', faithBackground: 'Evangelical' },
-  { id: 'c-002', tenantId: 'system', firstName: 'David', lastName: 'Miller', status: 'active', faithBackground: 'Baptist' },
-  { id: 'c-003', tenantId: 'system', firstName: 'Emily', lastName: 'Reyes', status: 'waitlist', faithBackground: 'Catholic' },
-  { id: 'c-004', tenantId: 'system', firstName: 'Michael', lastName: 'Owens', status: 'inactive', faithBackground: 'Non-denominational' },
-  { id: 'c-005', tenantId: 'system', firstName: 'Olivia', lastName: 'Scott', status: 'discharged', faithBackground: 'Methodist' },
+  { id: 'c-001', tenantId: 'system', firstName: 'Sarah', lastName: 'Kim', status: 'active', faithBackground: 'Evangelical', highTouchpoint: true },
+  { id: 'c-002', tenantId: 'system', firstName: 'David', lastName: 'Miller', status: 'active', faithBackground: 'Baptist', highTouchpoint: false },
+  { id: 'c-003', tenantId: 'system', firstName: 'Emily', lastName: 'Reyes', status: 'waitlist', faithBackground: 'Catholic', highTouchpoint: true },
+  { id: 'c-004', tenantId: 'system', firstName: 'Michael', lastName: 'Owens', status: 'inactive', faithBackground: 'Non-denominational', highTouchpoint: false },
+  { id: 'c-005', tenantId: 'system', firstName: 'Olivia', lastName: 'Scott', status: 'discharged', faithBackground: 'Methodist', highTouchpoint: false },
 ];
 
 const clientLifecycles = {
@@ -1354,7 +1354,7 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (requestUrl.pathname === '/v1/operations/summary') {
-      await handleOperationsSummary(request, response, requestUrl);
+      await handleOperationsSummary(request, response, requestUrl, session);
       return;
     }
 
@@ -1900,6 +1900,7 @@ async function handleClientsCollection(request, response, requestUrl, session) {
   const firstName = sanitizeStr(payload.firstName);
   const lastName  = sanitizeStr(payload.lastName);
   const status    = normalizeClientStatus(payload.status);
+  const highTouchpoint = payload.highTouchpoint === true;
 
   if (!firstName || !lastName) {
     writeJson(response, 400, { error: 'firstName and lastName are required' });
@@ -1916,11 +1917,11 @@ async function handleClientsCollection(request, response, requestUrl, session) {
     const id = genId('c');
     const faithBackground = sanitizeStr(payload.faithBackground, 500) ?? 'Undeclared';
     await pool.query(
-      `INSERT INTO clients (id, tenant_id, first_name_enc, last_name_enc, status, faith_background)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [id, tenantId, encrypt(firstName), encrypt(lastName), status, faithBackground],
+      `INSERT INTO clients (id, tenant_id, first_name_enc, last_name_enc, status, faith_background, high_touchpoint)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [id, tenantId, encrypt(firstName), encrypt(lastName), status, faithBackground, highTouchpoint ? 1 : 0],
     );
-    const newClient = { id, tenantId, firstName, lastName, status, faithBackground };
+    const newClient = { id, tenantId, firstName, lastName, status, faithBackground, highTouchpoint };
     telemetry.recordMutation('client.create');
     await emitAudit(request, 'client.create', 'client', id, session);
     writeJson(response, 201, { item: newClient });
@@ -1932,6 +1933,7 @@ async function handleClientsCollection(request, response, requestUrl, session) {
       lastName,
       status,
       faithBackground: sanitizeStr(payload.faithBackground, 500) ?? 'Undeclared',
+      highTouchpoint,
     };
     clients.push(nextClient);
     telemetry.recordMutation('client.create');
@@ -1962,6 +1964,7 @@ function dbRowToClient(row) {
     email:                row.email_enc           ? decrypt(row.email_enc)          : null,
     isMinor:              Boolean(row.is_minor),
     courtOrdered:         Boolean(row.court_ordered),
+    highTouchpoint:       Boolean(row.high_touchpoint),
     referralSourceDetail: row.referral_source_detail ?? null,
     primaryCounselorId:   row.primary_counselor_id   ?? null,
     status:               row.status,
@@ -2068,12 +2071,13 @@ async function handleClientById(request, response, requestUrl, session) {
   const newFaith = (typeof payload.faithBackground === 'string' && payload.faithBackground.trim())
     ? (sanitizeStr(payload.faithBackground, 500) ?? client.faithBackground)
     : client.faithBackground;
+  const newHighTouchpoint = payload.highTouchpoint !== undefined ? Boolean(payload.highTouchpoint) : Boolean(client.highTouchpoint);
 
   if (process.env.DB_NAME) {
     const setClauses = [
-      'first_name_enc = ?', 'last_name_enc = ?', 'faith_background = ?', 'status = ?',
+      'first_name_enc = ?', 'last_name_enc = ?', 'faith_background = ?', 'status = ?', 'high_touchpoint = ?',
     ];
-    const setValues = [encrypt(newFirst), encrypt(newLast), newFaith, status];
+    const setValues = [encrypt(newFirst), encrypt(newLast), newFaith, status, newHighTouchpoint ? 1 : 0];
     const p = payload;
     if (p.middleName    !== undefined) { setClauses.push('middle_name_enc = ?');      setValues.push(p.middleName    ? encrypt(sanitizeStr(p.middleName, 120))    : null); }
     if (p.preferredName !== undefined) { setClauses.push('preferred_name_enc = ?');   setValues.push(p.preferredName ? encrypt(sanitizeStr(p.preferredName, 120)) : null); }
@@ -2107,12 +2111,13 @@ async function handleClientById(request, response, requestUrl, session) {
       mem.lastName  = newLast;
       mem.faithBackground = newFaith;
       mem.status = status;
+      mem.highTouchpoint = newHighTouchpoint;
       const fullName = `${newFirst} ${newLast}`;
       appointments.forEach((a) => { if (a.clientId === clientId) a.clientName = fullName; });
     }
   }
 
-  const updated = { ...client, firstName: newFirst, lastName: newLast, faithBackground: newFaith, status };
+  const updated = { ...client, firstName: newFirst, lastName: newLast, faithBackground: newFaith, highTouchpoint: newHighTouchpoint, status };
   telemetry.recordMutation('client.update');
   await emitAudit(request, 'client.update', 'client', client.id, session);
   writeJson(response, 200, { item: updated });
@@ -5453,7 +5458,7 @@ async function handleUtilization(request, response, requestUrl, session) {
   });
 }
 
-async function handleOperationsSummary(request, response, requestUrl) {
+async function handleOperationsSummary(request, response, requestUrl, session) {
   if (request.method !== 'GET') {
     writeJson(response, 405, { error: 'Method not allowed' });
     return;
@@ -5465,8 +5470,8 @@ async function handleOperationsSummary(request, response, requestUrl) {
     return;
   }
 
-  const summary = buildOperationsSummary(request, timezone);
-  emitAudit(request, 'operations.summary.read', 'system', 'operations-summary');
+  const summary = await buildOperationsSummary(request, timezone, session);
+  emitAudit(request, 'operations.summary.read', 'system', 'operations-summary', session);
   writeJson(response, 200, { summary });
 }
 
@@ -11120,60 +11125,387 @@ function groupBy(items, keyBuilder) {
   }, {});
 }
 
-function buildOperationsSummary(request, timezone) {
+const OPERATIONS_COUNSELOR_ROLES = new Set(['counselor', 'intern']);
+const DEFAULT_WORKDAY_WINDOWS = Object.freeze([
+  { start: 9 * 60, end: 12 * 60 },
+  { start: 13 * 60, end: 17 * 60 },
+]);
+
+function getAppointmentStart(item) {
+  return item?.startsAt ?? item?.scheduledAt ?? item?.starts_at ?? item?.scheduled_at ?? null;
+}
+
+function getAppointmentEnd(item) {
+  const directEnd = item?.endsAt ?? item?.ends_at ?? null;
+  if (directEnd) return directEnd;
+  const startsAt = getAppointmentStart(item);
+  if (!startsAt) return null;
+  const durationMinutes = Number(item?.durationMinutes ?? item?.duration_minutes ?? 50);
+  return new Date(new Date(startsAt).getTime() + (durationMinutes * 60_000)).toISOString();
+}
+
+function isCancelledAppointment(status) {
+  return status === 'cancelled' || status === 'canceled';
+}
+
+function timeToMinutes(value) {
+  if (typeof value !== 'string' || !value.includes(':')) return null;
+  const [hours, minutes] = value.split(':').map((part) => Number(part));
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+  return (hours * 60) + minutes;
+}
+
+function intervalDuration(interval) {
+  return Math.max(0, Number(interval?.end ?? 0) - Number(interval?.start ?? 0));
+}
+
+function mergeIntervals(intervals) {
+  const normalized = (intervals ?? [])
+    .filter((interval) => interval && Number.isFinite(interval.start) && Number.isFinite(interval.end) && interval.end > interval.start)
+    .map((interval) => ({ start: interval.start, end: interval.end }))
+    .sort((left, right) => left.start - right.start);
+
+  if (!normalized.length) return [];
+  const merged = [normalized[0]];
+
+  for (let index = 1; index < normalized.length; index += 1) {
+    const current = normalized[index];
+    const last = merged[merged.length - 1];
+    if (current.start <= last.end) {
+      last.end = Math.max(last.end, current.end);
+    } else {
+      merged.push({ ...current });
+    }
+  }
+
+  return merged;
+}
+
+function subtractInterval(baseInterval, removedInterval) {
+  if (!baseInterval || !removedInterval) return baseInterval ? [baseInterval] : [];
+  if (removedInterval.end <= baseInterval.start || removedInterval.start >= baseInterval.end) return [baseInterval];
+
+  const segments = [];
+  if (removedInterval.start > baseInterval.start) {
+    segments.push({ start: baseInterval.start, end: Math.min(removedInterval.start, baseInterval.end) });
+  }
+  if (removedInterval.end < baseInterval.end) {
+    segments.push({ start: Math.max(removedInterval.end, baseInterval.start), end: baseInterval.end });
+  }
+  return segments.filter((segment) => segment.end > segment.start);
+}
+
+function subtractIntervals(baseIntervals, removedIntervals) {
+  return (removedIntervals ?? []).reduce((current, removed) => (
+    current.flatMap((interval) => subtractInterval(interval, removed))
+  ), mergeIntervals(baseIntervals));
+}
+
+function weekdayInfoForDateKey(dayKey, timezone) {
+  const baseDate = new Date(`${dayKey}T12:00:00Z`);
+  const weekdayLong = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    weekday: 'long',
+  }).format(baseDate).toLowerCase();
+  const weekdayShort = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    weekday: 'short',
+  }).format(baseDate).toLowerCase();
+  const weekdayByName = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+  return {
+    long: weekdayLong,
+    short: weekdayShort,
+    dayOfWeek: weekdayByName.indexOf(weekdayLong),
+  };
+}
+
+function buildAvailabilityWindowsForDay(templateSlots, dayKey, timezone) {
+  const weekday = weekdayInfoForDateKey(dayKey, timezone);
+  const matchingWindows = (templateSlots ?? [])
+    .filter((slot) => {
+      if (typeof slot?.dayOfWeek === 'number') return slot.dayOfWeek === weekday.dayOfWeek;
+      const slotDay = typeof slot?.day === 'string' ? slot.day.toLowerCase() : '';
+      return slotDay === weekday.long || slotDay === weekday.short;
+    })
+    .map((slot) => {
+      const start = timeToMinutes(slot.startTime ?? slot.start);
+      const end = timeToMinutes(slot.endTime ?? slot.end);
+      return Number.isFinite(start) && Number.isFinite(end) && end > start ? { start, end } : null;
+    })
+    .filter(Boolean);
+
+  return mergeIntervals(matchingWindows.length ? matchingWindows : DEFAULT_WORKDAY_WINDOWS);
+}
+
+function buildOverrideWindows(override) {
+  if (!override) return [];
+  if (override.allDay) return [{ start: 0, end: 24 * 60 }];
+  const start = timeToMinutes(override.startTime);
+  const end = timeToMinutes(override.endTime);
+  return Number.isFinite(start) && Number.isFinite(end) && end > start ? [{ start, end }] : [];
+}
+
+function applyAvailabilityOverrides(baseWindows, overrides) {
+  let current = mergeIntervals(baseWindows);
+  for (const override of overrides ?? []) {
+    const overrideType = String(override.overrideType ?? '').toLowerCase();
+    const overrideWindows = buildOverrideWindows(override);
+    if (!overrideWindows.length) continue;
+    if (overrideType === 'block') {
+      current = subtractIntervals(current, overrideWindows);
+      continue;
+    }
+    if (overrideType === 'open' || overrideType === 'available') {
+      current = mergeIntervals([...current, ...overrideWindows]);
+    }
+  }
+  return current;
+}
+
+function appointmentIntervalForDate(appointment, dayKey, timezone) {
+  const startsAt = getAppointmentStart(appointment);
+  const endsAt = getAppointmentEnd(appointment);
+  if (!startsAt || !endsAt) return null;
+  if (dateKeyInTimezone(startsAt, timezone) !== dayKey) return null;
+
+  const startDate = new Date(startsAt);
+  const endDate = new Date(endsAt);
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) return null;
+  const formatter = new Intl.DateTimeFormat('en-GB', {
+    timeZone: timezone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  });
+  const minutesForDate = (date) => {
+    const parts = formatter.formatToParts(date);
+    const hour = Number(parts.find((part) => part.type === 'hour')?.value ?? '0');
+    const minute = Number(parts.find((part) => part.type === 'minute')?.value ?? '0');
+    return (hour * 60) + minute;
+  };
+  return {
+    start: minutesForDate(startDate),
+    end: minutesForDate(endDate),
+  };
+}
+
+function countOneHourWindows(intervals) {
+  return (intervals ?? []).reduce((total, interval) => total + Math.floor(intervalDuration(interval) / 60), 0);
+}
+
+function aggregateStatusCounts(items, statusAccessor = (item) => item?.status) {
+  return (items ?? []).reduce((counts, item) => {
+    const status = statusAccessor(item);
+    if (!status) return counts;
+    counts[status] = (counts[status] ?? 0) + 1;
+    return counts;
+  }, {});
+}
+
+function noteTimestampMs(note) {
+  const candidate = note?.signedAt ?? note?.createdAt ?? note?.signed_at ?? note?.created_at ?? null;
+  const timestamp = candidate ? new Date(candidate).getTime() : Number.NaN;
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function buildNotesByClient(notes) {
+  return (notes ?? []).reduce((result, note) => {
+    const key = note.clientId ?? note.client_id;
+    if (!key) return result;
+    if (!result[key]) result[key] = [];
+    result[key].push(note);
+    return result;
+  }, {});
+}
+
+function unresolvedLatestSessionAgeDays(appointment, clientNotes) {
+  if (!appointment) return null;
+  const endsAt = getAppointmentEnd(appointment);
+  const endsAtMs = endsAt ? new Date(endsAt).getTime() : Number.NaN;
+  if (!Number.isFinite(endsAtMs)) return null;
+
+  const hasLockedNote = (clientNotes ?? []).some((note) => {
+    if (!note?.locked) return false;
+    const timestamp = noteTimestampMs(note);
+    return timestamp !== null && timestamp >= endsAtMs;
+  });
+  if (hasLockedNote) return null;
+
+  return (Date.now() - endsAtMs) / (24 * 60 * 60 * 1000);
+}
+
+async function loadOperationsSummaryData(request, session) {
+  if (!process.env.DB_NAME) {
+    const tenantId = callerTenant(request, session);
+    return {
+      tenantId,
+      appointments: filterByTenant(appointments, request),
+      clients: filterByTenant(clients, request),
+      staff: filterByTenant(staffMembers, request),
+      notes: filterByTenant(progressNotes, request),
+      documentAssignments: filterByTenant(documentAssignments, request),
+      formAssignments: filterByTenant(formWorkflowAssignments, request),
+      portalRegistrationRequests: filterByTenant(portalRegistrationRequests, request),
+      portalAppointmentRequests: filterByTenant(portalAppointmentRequests, request),
+      availabilityTemplatesByStaffId: { ...availabilityTemplates },
+      availabilityOverrides: [],
+    };
+  }
+
+  const tenantId = callerTenant(request, session);
+  const [clientRows, notesRows, staff, allAppointments, docs, forms, publicRequests, appointmentRequests, templateRows, overrides] = await Promise.all([
+    pool.query('SELECT id, status, high_touchpoint FROM clients WHERE tenant_id = ?', [tenantId]),
+    pool.query('SELECT client_id, locked, signed_at, created_at FROM progress_notes WHERE tenant_id = ?', [tenantId]),
+    listStaff(tenantId),
+    listAppointments(tenantId),
+    listDocumentAssignments(tenantId),
+    listFormAssignments(tenantId),
+    listPortalRegistrationRequests(tenantId),
+    listPortalAppointmentRequests(tenantId),
+    pool.query('SELECT staff_id, slots FROM availability_templates WHERE tenant_id = ?', [tenantId]),
+    listAvailabilityOverrides(tenantId),
+  ]);
+
+  const clientsData = clientRows[0].map((row) => ({
+    id: row.id,
+    status: row.status,
+    highTouchpoint: Boolean(row.high_touchpoint),
+    tenantId,
+  }));
+  const notesData = notesRows[0].map((row) => ({
+    clientId: row.client_id,
+    locked: Boolean(row.locked),
+    signedAt: row.signed_at instanceof Date ? row.signed_at.toISOString() : row.signed_at,
+    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+  }));
+  const availabilityTemplatesByStaffId = templateRows[0].reduce((result, row) => {
+    result[row.staff_id] = typeof row.slots === 'string' ? JSON.parse(row.slots) : (row.slots ?? []);
+    return result;
+  }, {});
+
+  return {
+    tenantId,
+    appointments: allAppointments,
+    clients: clientsData,
+    staff,
+    notes: notesData,
+    documentAssignments: docs,
+    formAssignments: forms,
+    portalRegistrationRequests: publicRequests,
+    portalAppointmentRequests: appointmentRequests,
+    availabilityTemplatesByStaffId,
+    availabilityOverrides: overrides,
+  };
+}
+
+async function buildOperationsSummary(request, timezone, session) {
   const todayKey = dateKeyInTimezone(new Date().toISOString(), timezone);
-  const tenantAppointments = filterByTenant(appointments, request);
-  const todayAppointments = tenantAppointments
-    .filter((item) => dateKeyInTimezone(item.startsAt, timezone) === todayKey)
-    .sort((left, right) => left.startsAt.localeCompare(right.startsAt));
+  const data = await loadOperationsSummaryData(request, session);
+  const tenantAppointments = (data.appointments ?? [])
+    .filter((item) => !isCancelledAppointment(item.status))
+    .sort((left, right) => String(getAppointmentStart(left)).localeCompare(String(getAppointmentStart(right))));
+  const todayAppointments = tenantAppointments.filter((item) => dateKeyInTimezone(getAppointmentStart(item), timezone) === todayKey);
+  const notesByClient = buildNotesByClient(data.notes);
 
-  const now = Date.now();
-  const fourteenDaysFromNow = now + 14 * 24 * 60 * 60 * 1000;
-  const tenantConsents = filterByTenant(consentRecords, request);
-  const expiringConsents = tenantConsents.filter((consent) => {
-    if (!consent.effectiveTo) return false;
-    const expiresAt = new Date(consent.effectiveTo).getTime();
-    return Number.isFinite(expiresAt) && expiresAt >= now && expiresAt <= fourteenDaysFromNow;
+  const counselors = [
+    ...(data.staff ?? []).filter((item) => OPERATIONS_COUNSELOR_ROLES.has(item.role)),
+    ...Array.from(
+      new Map(
+        todayAppointments
+          .filter((item) => item.counselorName && !(data.staff ?? []).some((staff) => staff.id === item.counselorId || `${staff.firstName} ${staff.lastName}`.trim() === item.counselorName))
+          .map((item) => {
+            const counselorName = item.counselorName || 'Unassigned';
+            return [item.counselorId || counselorName, {
+              id: item.counselorId || counselorName,
+              firstName: counselorName,
+              lastName: '',
+              role: 'counselor',
+            }];
+          }),
+      ).values(),
+    ),
+  ];
+  const counselorWorkload = counselors
+    .map((staff) => {
+      const baseWindows = buildAvailabilityWindowsForDay(data.availabilityTemplatesByStaffId?.[staff.id] ?? [], todayKey, timezone);
+      const overrides = (data.availabilityOverrides ?? []).filter((item) => item.staffId === staff.id && item.overrideDate === todayKey);
+      const availableWindows = applyAvailabilityOverrides(baseWindows, overrides);
+      const counselorAppointments = todayAppointments.filter((item) => item.counselorId === staff.id || item.counselorName === `${staff.firstName} ${staff.lastName}`.trim());
+      const scheduledWindows = counselorAppointments
+        .map((item) => appointmentIntervalForDate(item, todayKey, timezone))
+        .filter(Boolean);
+      const openWindows = subtractIntervals(availableWindows, scheduledWindows);
+      const scheduledMinutes = counselorAppointments.reduce((sum, item) => sum + intervalDuration(appointmentIntervalForDate(item, todayKey, timezone) ?? { start: 0, end: 0 }), 0);
+      const availableMinutes = availableWindows.reduce((sum, interval) => sum + intervalDuration(interval), 0);
+      const counselorName = [staff.firstName, staff.lastName].filter(Boolean).join(' ').trim() || staff.id;
+
+      return {
+        counselorId: staff.id,
+        counselorName,
+        appointmentsCount: counselorAppointments.length,
+        scheduledMinutes,
+        availableMinutes,
+        utilizationPct: availableMinutes ? Number(((scheduledMinutes / availableMinutes) * 100).toFixed(1)) : 0,
+        oneHourGapCount: countOneHourWindows(openWindows),
+        hasDeclaredAvailability: Boolean((data.availabilityTemplatesByStaffId?.[staff.id] ?? []).length),
+      };
+    })
+    .sort((left, right) => right.scheduledMinutes - left.scheduledMinutes || left.counselorName.localeCompare(right.counselorName));
+
+  const clientsWithoutScheduledAppointment = (data.clients ?? []).filter((client) => (
+    ['active', 'waitlist'].includes(client.status)
+    && !tenantAppointments.some((appointment) => (
+      appointment.clientId === client.id
+      && new Date(getAppointmentStart(appointment)).getTime() >= Date.now()
+    ))
+  ));
+
+  const noteGapClients = { over1Day: 0, over3Days: 0, over7Days: 0 };
+  const latestRelevantAppointmentByClient = {};
+  for (const appointment of tenantAppointments) {
+    if (appointment.status !== 'completed' && appointment.status !== 'checked_in') continue;
+    if (!appointment.clientId) continue;
+    const startsAt = getAppointmentStart(appointment);
+    const current = latestRelevantAppointmentByClient[appointment.clientId];
+    if (!current || String(startsAt).localeCompare(String(getAppointmentStart(current))) > 0) {
+      latestRelevantAppointmentByClient[appointment.clientId] = appointment;
+    }
+  }
+  Object.values(latestRelevantAppointmentByClient).forEach((appointment) => {
+    const ageDays = unresolvedLatestSessionAgeDays(appointment, notesByClient[appointment.clientId] ?? []);
+    if (ageDays === null) return;
+    if (ageDays >= 1) noteGapClients.over1Day += 1;
+    if (ageDays >= 3) noteGapClients.over3Days += 1;
+    if (ageDays >= 7) noteGapClients.over7Days += 1;
   });
 
-  const incompleteNotes = todayAppointments.filter((appointment) => {
-    if (appointment.status !== 'completed' && appointment.status !== 'checked_in') return false;
-    const notesForClient = progressNotes.filter((note) => note.clientId === appointment.clientId);
-    return !notesForClient.some((note) => note.locked);
-  });
-
-  const unsignedDocuments = filterByTenant(documentAssignments, request).filter((item) => item.requiresSignature && item.status !== 'signed');
-  const intakeBacklog = filterByTenant(intakePackets, request).filter((packet) => packet.status === 'assigned' || packet.status === 'in_progress');
-  const waitlistItems = clients.filter((client) => client.status === 'waitlist');
-  const pendingReminders = filterByTenant(reminderRecords, request).filter((record) => record.status === 'pending');
+  const incompleteDocuments = (data.documentAssignments ?? []).filter((item) => item.status !== 'completed' && item.status !== 'signed');
+  const incompleteForms = (data.formAssignments ?? []).filter((item) => item.status !== 'completed');
+  const highTouchpointClients = (data.clients ?? []).filter((client) => client.highTouchpoint).length;
+  const publicRegistrationStatuses = aggregateStatusCounts(data.portalRegistrationRequests);
+  const appointmentRequestStatuses = aggregateStatusCounts(data.portalAppointmentRequests);
+  const counselorsWithEntries = new Set(todayAppointments.map((item) => item.counselorId || item.counselorName).filter(Boolean)).size;
+  const oneHourGapsTotal = counselorWorkload.reduce((sum, item) => sum + item.oneHourGapCount, 0);
 
   const priorityItems = [
     {
-      title: 'Waitlist follow-ups',
-      detail: `${waitlistItems.length} clients currently in intake waitlist stage.`,
-    },
-    {
-      title: 'Incomplete session notes',
-      detail: `${incompleteNotes.length} sessions today need locked progress notes.`,
-    },
-    {
-      title: 'Pending reminders',
-      detail: `${pendingReminders.length} reminder messages still pending delivery.`,
+      title: 'High-touchpoint clients',
+      detail: `${highTouchpointClients} clients are currently marked for high-touchpoint follow-up.`,
     },
   ];
 
   const complianceItems = [
     {
-      title: 'Unsigned document assignments',
-      detail: `${unsignedDocuments.length} client documents still require signature.`,
+      title: 'Missing notes after 1 day',
+      detail: `${noteGapClients.over1Day} clients have unresolved locked notes after their latest completed or checked-in session.`,
     },
     {
-      title: 'Expiring consents (14 days)',
-      detail: `${expiringConsents.length} consent records expire within 14 days.`,
+      title: 'Missing notes after 3 days',
+      detail: `${noteGapClients.over3Days} clients have unresolved notes older than 3 days.`,
     },
     {
-      title: 'Intake bottlenecks',
-      detail: `${intakeBacklog.length} intake packets are still assigned or in progress.`,
+      title: 'Assigned work not completed',
+      detail: `${incompleteDocuments.length + incompleteForms.length} documents or forms remain assigned but incomplete.`,
     },
   ];
 
@@ -11182,15 +11514,45 @@ function buildOperationsSummary(request, timezone) {
     generatedAt: new Date().toISOString(),
     todaySchedule: {
       total: todayAppointments.length,
+      totalAppointments: todayAppointments.length,
+      counselorsWithEntries,
+      oneHourGapsTotal,
+      workload: counselorWorkload,
       items: todayAppointments,
     },
+    priorityQueue: {
+      highTouchpointClients,
+      description: 'Count of clients marked as high touchpoint for closer operational follow-up.',
+      flagAvailable: true,
+    },
+    complianceWatch: {
+      noteGapClients,
+      outstandingAssignments: {
+        total: incompleteDocuments.length + incompleteForms.length,
+        documents: incompleteDocuments.length,
+        forms: incompleteForms.length,
+      },
+    },
+    clientsBox: {
+      totalClients: (data.clients ?? []).length,
+      withoutScheduledAppointment: clientsWithoutScheduledAppointment.length,
+      portalRequests: {
+        total: (data.portalRegistrationRequests?.length ?? 0) + (data.portalAppointmentRequests?.length ?? 0),
+        publicRegistrationStatuses,
+        appointmentRequestStatuses,
+      },
+    },
     counts: {
-      incompleteNotes: incompleteNotes.length,
-      unsignedDocuments: unsignedDocuments.length,
-      expiringConsents: expiringConsents.length,
-      intakeBottlenecks: intakeBacklog.length,
-      waitlist: waitlistItems.length,
-      pendingReminders: pendingReminders.length,
+      highTouchpointClients,
+      noteGapOver1Day: noteGapClients.over1Day,
+      noteGapOver3Days: noteGapClients.over3Days,
+      noteGapOver7Days: noteGapClients.over7Days,
+      outstandingAssignments: incompleteDocuments.length + incompleteForms.length,
+      totalClients: (data.clients ?? []).length,
+      clientsWithoutScheduledAppointment: clientsWithoutScheduledAppointment.length,
+      portalRequests: (data.portalRegistrationRequests?.length ?? 0) + (data.portalAppointmentRequests?.length ?? 0),
+      counselorsWithEntries,
+      oneHourGapsTotal,
     },
     priorityItems,
     complianceItems,

@@ -7,12 +7,14 @@ Christian counseling practice management SaaS for solo counselors, group practic
 - Version: `4.7.0`
 - Status: `Beta Ready`
 - Release summary: [docs/v4.7.0-RELEASE-SUMMARY.md](docs/v4.7.0-RELEASE-SUMMARY.md)
+- Operations Dashboard summary: [docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md](docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md)
 - Change log: [docs/change-log.md](docs/change-log.md)
 - Spanish translation report: [docs/TRANSLATION-GUARDIAN-ES-RUN-2026-03-30.md](docs/TRANSLATION-GUARDIAN-ES-RUN-2026-03-30.md)
 
 ## What This Includes
 
 - practice operations workspace for counselors, managers, and admins
+- upgraded Operations Dashboard with counselor workload, 1-hour gap visibility, compliance note-gap tracking, and portal request rollups
 - scheduling with appointments, waitlist, reminders, recurring workflows, and utilization support
 - client and counselor management with richer portal, profile, and operational views
 - authenticated client portal with onboarding, documents, uploads, data rights, counselor, financial, and resources surfaces
@@ -21,12 +23,15 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## Current Release Focus
 
-`v4.7.0` expands the Documents module into a fuller counseling toolkit. The system now includes intake and consent paperwork, deeper clinical assessments, treatment-planning templates, therapeutic worksheets, and additional Christian counseling reflection forms, all powered by the shared browser-based form engine.
+The current build adds a real Operations Dashboard summary for staff. Today’s Schedule now shows counselor workload and remaining 1-hour gaps, Priority Queue is driven by a real high-touchpoint client flag, Compliance Watch tracks unresolved note gaps and incomplete assigned work, and the Clients card now focuses on totals, unscheduled clients, and portal request statuses.
 
 ## Key Docs
 
 - Release summary: [docs/v4.7.0-RELEASE-SUMMARY.md](docs/v4.7.0-RELEASE-SUMMARY.md)
+- Operations Dashboard summary: [docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md](docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md)
+- Operations Dashboard implementation log: [docs/OPERATIONS-DASHBOARD-IMPLEMENTATION-LOG-2026-03-30.md](docs/OPERATIONS-DASHBOARD-IMPLEMENTATION-LOG-2026-03-30.md)
 - Spanish translation report: [docs/TRANSLATION-GUARDIAN-ES-RUN-2026-03-30.md](docs/TRANSLATION-GUARDIAN-ES-RUN-2026-03-30.md)
+- Operations Dashboard plan: [PLANS/OPERATIONS-DASHBOARD-UPGRADE.md](PLANS/OPERATIONS-DASHBOARD-UPGRADE.md)
 - Form library plan: [PLANS/FORM-LIBRARY-EXPANSION.md](PLANS/FORM-LIBRARY-EXPANSION.md)
 - Portal plan: [PLANS/CLIENT-PORTAL-EXPANSION.md](PLANS/CLIENT-PORTAL-EXPANSION.md)
 - Monitoring baseline: [PLANS/FULL-SURFACE-MONITORING.md](PLANS/FULL-SURFACE-MONITORING.md)

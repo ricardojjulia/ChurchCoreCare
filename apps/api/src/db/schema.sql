@@ -137,6 +137,7 @@ CREATE TABLE IF NOT EXISTS clients (
   faith_background        VARCHAR(255) NULL,        -- non-PHI label, kept plaintext
   is_minor                TINYINT(1)   NOT NULL DEFAULT 0,
   court_ordered           TINYINT(1)   NOT NULL DEFAULT 0,
+  high_touchpoint         TINYINT(1)   NOT NULL DEFAULT 0,
   referral_source_detail  VARCHAR(255) NULL,        -- non-PHI label
   primary_counselor_id    VARCHAR(64)  NULL,        -- FK to staff_members
   created_at              TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
