@@ -38,6 +38,18 @@ function fmtPercent(value) {
   const num = Number(value);
   return Number.isFinite(num) ? `${Math.round(num)}%` : '—';
 }
+function fmtShortAgo(iso) {
+  if (!iso) return '—';
+  const diffMs = Date.now() - Date.parse(iso);
+  if (!Number.isFinite(diffMs) || diffMs < 0) return fmtTime(iso);
+  const mins = Math.round(diffMs / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  return `${days}d ago`;
+}
 function fmtBytes(bytes) {
   if (bytes == null || !Number.isFinite(Number(bytes))) return '—';
   const n = Number(bytes);
@@ -226,9 +238,27 @@ function renderIssueList(containerId, items, emptyMessage, valueLabel) {
         <div class="issue-name">${escapeHtml(item.name)}</div>
         <div class="issue-sub">${escapeHtml(item.sub)}</div>
       </div>
-      <div class="issue-value">${escapeHtml(item.value)} ${escapeHtml(valueLabel)}</div>
+      <div class="issue-value">${escapeHtml(item.value)}${valueLabel ? ` ${escapeHtml(valueLabel)}` : ''}</div>
     </div>
   `).join('');
+}
+
+function describeSurfaceIssue(surface) {
+  if (!surface) return 'No issue data available.';
+  if (surface.issueStatus === 'current') {
+    return `Current issue on ${surface.currentIssueCount ?? 0} request path(s) · last failure ${fmtShortAgo(surface.lastIssueAt)}`;
+  }
+  if (surface.issueStatus === 'recent') {
+    return `Recovered recently · ${surface.recentIssueCount ?? 0} issue event(s) in the recent window · last failure ${fmtShortAgo(surface.lastIssueAt)}`;
+  }
+  if (surface.issueStatus === 'historical') {
+    return `Historical only · no recent issue in the active window · last failure ${fmtShortAgo(surface.lastIssueAt)}`;
+  }
+  return 'Healthy in the current telemetry window.';
+}
+
+function formatSurfaceIssueValue(surface) {
+  return `current ${surface.currentIssueCount ?? 0} · recent ${surface.recentIssueCount ?? 0} · total ${surface.issueCount ?? 0}`;
 }
 
 function summarizeEmptyStates(emptyStates) {
@@ -258,17 +288,17 @@ function updateUiSummary(overall, frontend, surfaces, exportedViaOtel) {
   setText('uiOtelExport', exportedViaOtel ? 'Enabled' : 'Local only');
   setText('uiExportState', exportedViaOtel ? 'External OTEL export enabled' : 'Local monitoring only');
   setText('surfaceSummaryCount', `${surfaces?.length ?? 0} surfaces`);
-  setText('surfaceTableNote', `Top ${Math.min(surfaces?.length ?? 0, 12)} by views`);
+  setText('surfaceTableNote', `Top ${Math.min(surfaces?.length ?? 0, 12)} by views · issue state = current / recent / total`);
 
   renderIssueList(
     'topSurfaceIssues',
     (frontend?.topFailingSurfaces ?? []).map((surface) => ({
       name: surface.surfaceId,
-      sub: 'ui + fetch + validation issues',
-      value: surface.issueCount ?? 0,
+      sub: describeSurfaceIssue(surface),
+      value: formatSurfaceIssueValue(surface),
     })),
-    'No surface failures recorded yet.',
-    'issues',
+    'No current or recent surface failures recorded yet.',
+    '',
   );
 
   renderIssueList(
@@ -330,7 +360,18 @@ function renderSurfaceTable(surfaces) {
     const emptyStateTotal = summarizeEmptyStates(surface.emptyStates);
     const loadP95Class = metricClass(surface.loadDurationMs?.p95, 600, 1000);
     const fetchP95Class = metricClass(surface.fetchDurationMs?.p95, 600, 1000);
-    const issueTotal = (surface.uiErrorCount ?? 0) + (surface.fetchErrorCount ?? 0) + (surface.validationErrorCount ?? 0);
+    const issueStatusClass = surface.issueStatus === 'current'
+      ? 'metric-bad'
+      : surface.issueStatus === 'recent'
+        ? 'metric-warn'
+        : '';
+    const issueStateLabel = surface.issueStatus === 'current'
+      ? 'Current'
+      : surface.issueStatus === 'recent'
+        ? 'Recent'
+        : surface.issueStatus === 'historical'
+          ? 'Historical'
+          : 'Healthy';
 
     return `
       <tr>
@@ -342,7 +383,10 @@ function renderSurfaceTable(surfaces) {
         <td class="${loadP95Class}">${fmtMs(surface.loadDurationMs?.p95)}</td>
         <td class="${fetchP95Class}">${fmtMs(surface.fetchDurationMs?.p95)}</td>
         <td>${surface.actionCounts?.success ?? 0}/${Object.values(surface.actionCounts ?? {}).reduce((sum, count) => sum + count, 0)} (${fmtPercent(surface.actionSuccessRate)})</td>
-        <td class="${issueTotal ? 'metric-bad' : ''}">${surface.uiErrorCount ?? 0} / ${surface.fetchErrorCount ?? 0} / ${surface.validationErrorCount ?? 0}</td>
+        <td class="${issueStatusClass}">
+          <div>${surface.currentIssueCount ?? 0} / ${surface.recentIssueCount ?? 0} / ${surface.totalIssueCount ?? 0}</div>
+          <div style="font-size:11px;color:var(--muted)">${issueStateLabel}${surface.lastIssueAt ? ` · ${fmtShortAgo(surface.lastIssueAt)}` : ''}</div>
+        </td>
         <td>${emptyStateTotal}</td>
         <td>${surface.lastSeenAt ? fmtTime(surface.lastSeenAt) : '—'}</td>
       </tr>

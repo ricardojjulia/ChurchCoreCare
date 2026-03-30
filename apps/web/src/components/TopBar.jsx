@@ -9,16 +9,31 @@ function resolveTopBarCopy(currentView, isClient, t) {
     };
   }
 
-  if (currentView === 'clients') {
+  const viewKeyMap = {
+    dashboard: 'dashboard',
+    users: 'users',
+    counselors: 'counselors',
+    clients: 'clients',
+    scheduling: 'scheduling',
+    documents: 'documents',
+    'workspace-studio': 'workspaceStudio',
+    clinical: 'clinical',
+    billing: 'billing',
+    portal: 'portal',
+    faith: 'faith',
+  };
+
+  const key = viewKeyMap[currentView];
+  if (key) {
     return {
-      title: t('topbar.clients.title'),
-      subtitle: t('topbar.clients.subtitle'),
+      title: t(`topbar.${key}.title`),
+      subtitle: t(`topbar.${key}.subtitle`),
     };
   }
 
   return {
-    title: t('topbar.title'),
-    subtitle: t('topbar.subtitle'),
+    title: t('topbar.dashboard.title'),
+    subtitle: t('topbar.dashboard.subtitle'),
   };
 }
 

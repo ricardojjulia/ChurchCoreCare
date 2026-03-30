@@ -277,6 +277,14 @@ The summary must expose:
 - existing request/process/health sections
 - top-level `exportedViaOtel`
 
+Surface issue summaries must distinguish between:
+
+- current issues that still appear active on a surface
+- recent issues observed inside the rolling frontend telemetry window
+- historical totals accumulated since the current process started
+
+The monitoring page must not present a lifetime issue total as though it were guaranteed to be a current outage.
+
 Keep `GET /telemetry/summary` for web-server process telemetry and merge it into the monitor page as supplemental data, not as the canonical UI summary.
 
 ### Monitoring page requirements
@@ -285,7 +293,7 @@ The monitoring page is the overall monitoring surface and must show:
 
 - overall health summary
 - per-surface metrics
-- top failing surfaces
+- top failing surfaces with current, recent, and historical issue context
 - top failing workflows
 - OTEL export state
 - health probes and dependency health

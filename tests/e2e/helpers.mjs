@@ -114,7 +114,10 @@ export async function openPrimaryNav(page, navKey) {
     }
     await expect(target).toBeVisible();
   }
-  await target.click();
+  await target.evaluate((element) => {
+    element.scrollIntoView({ block: 'center', inline: 'nearest' });
+    element.click();
+  });
 }
 
 export function futureDateTimeLocal({ days = 1, hours = 10, minutes = 0 } = {}) {

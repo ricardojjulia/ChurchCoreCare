@@ -9,7 +9,7 @@
 
 ### Summary
 
-Promotes the Operations Dashboard upgrade and the restored client-maintenance workflow into a major release boundary. The dashboard remains the operations summary surface, while the `Clients` navigation surface is once again a dedicated client-maintenance workspace. Existing-client `Edit` now opens the full detailed client record instead of the lightweight modal.
+Promotes the Operations Dashboard upgrade and the restored client-maintenance workflow into a major release boundary. The dashboard remains the operations summary surface, while the `Clients` navigation surface is once again a dedicated client-maintenance workspace. Existing-client `Edit` now opens the full detailed client record instead of the lightweight modal. The monitoring screen now separates current, recent, and historical surface issues, and the top bar titles now follow the active workspace instead of defaulting back to the dashboard label.
 
 ### Added
 
@@ -33,8 +33,15 @@ Promotes the Operations Dashboard upgrade and the restored client-maintenance wo
   - restores existing-client `Edit` as the entry point into the detailed client record
 - `apps/web/src/components/TopBar.jsx`
   - distinguishes the Clients workspace from the Operations Dashboard in the top bar title and subtitle
+  - adds explicit workspace titles for users, counselors, scheduling, documents, workspace studio, portal, clinical, billing, and faith surfaces
+- `apps/web/public/monitor.js`
+  - changes surface failure summaries from lifetime-only totals to current / recent / total issue state
+- `apps/web/public/monitor.html`
+  - relabels the monitoring cards and surface table so operators see issue state instead of stale cumulative counts
 - `packages/i18n/src/index.js`
-  - adds Clients workspace copy for top bar and actions
+  - adds workspace-specific top bar copy across the main application surfaces
+- `packages/telemetry/src/node.js`
+  - extends frontend surface summaries with `currentIssueCount`, `recentIssueCount`, `issueStatus`, `lastIssueAt`, and `lastSuccessAt`
 - `apps/api/data/i18n/en.json`
   - adds English strings for the restored Clients workspace behavior
 - `apps/api/data/i18n/es.json`
@@ -45,14 +52,20 @@ Promotes the Operations Dashboard upgrade and the restored client-maintenance wo
 - `docs/OPERATIONS-DASHBOARD-IMPLEMENTATION-LOG-2026-03-30.md`
   - records the client-workspace separation regression fix and detailed edit restoration
 - `docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md`
-  - records the restored Clients workspace and detailed edit path
+  - records the restored Clients workspace, detailed edit path, and monitoring surface-issue semantics
+- `PLANS/FULL-SURFACE-MONITORING.md`
+  - clarifies that the monitor must distinguish current, recent, and historical surface issues
 
 ### Validation
 
 - `pnpm lint` — passed
+- `node --check packages/telemetry/src/node.js` — passed
+- `node --check apps/web/public/monitor.js` — passed
+- `pnpm --filter @faith/api exec node --check src/index.js` — passed
 - `pnpm --filter @faith/web build` — passed
-- `npx playwright test tests/e2e/high-value-journeys.spec.mjs --grep "practice admin sees a dedicated client workspace instead of the dashboard grid|practice admin edit from clients workspace opens the detailed client record screen"` — passed
-- `pnpm test:e2e` — passed (`12/12`)
+- `npx playwright test tests/e2e/high-value-journeys.spec.mjs --grep "practice admin top bar titles track the active workspace|practice admin can open workspace studio, monitoring, and operations surfaces used in daily operations"` — passed
+- `npx playwright test tests/e2e/inclusive-smoke.spec.mjs --grep "public monitoring page loads with key landmarks"` — passed
+- `pnpm test:e2e` — passed (`13/13`)
 - `pnpm test:launch-readiness` — passed (`3/3`)
 
 ### Version bump

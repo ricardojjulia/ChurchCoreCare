@@ -14,6 +14,7 @@ const { resourceFromAttributes } = resourcesPkg;
 const { PeriodicExportingMetricReader } = sdkMetricsPkg;
 const { NodeSDK } = sdkNodePkg;
 const { ATTR_DEPLOYMENT_ENVIRONMENT_NAME, ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } = semanticConventions;
+const FRONTEND_RECENT_ISSUE_WINDOW_MS = 15 * 60 * 1000;
 
 export async function startNodeTelemetry({ serviceName, serviceVersion = '1.6.0' }) {
   if (process.env.OTEL_SDK_DISABLED === 'true') {
@@ -507,9 +508,81 @@ function normalizeFrontendEvent(event) {
 }
 
 function summarizeFrontend(frontendSurfaces, frontendEvents) {
+  const recentIssueCutoff = Date.now() - FRONTEND_RECENT_ISSUE_WINDOW_MS;
+  const issueStateBySurface = new Map();
+
+  for (const event of frontendEvents) {
+    const surfaceId = event.surfaceId ?? 'unknown';
+    const eventAtMs = Date.parse(event.at);
+    const eventAt = Number.isFinite(eventAtMs) ? eventAtMs : Date.now();
+    const state = issueStateBySurface.get(surfaceId) ?? {
+      lastIssueAt: null,
+      lastSuccessAt: null,
+      recentIssueCount: 0,
+      currentIssueCount: 0,
+      issueActions: new Map(),
+    };
+
+    const issueKey = `${event.type}:${event.workflow}:${event.action}`;
+    const issueAction = state.issueActions.get(issueKey) ?? {
+      lastIssueAt: null,
+      lastSuccessAt: null,
+      currentCount: 0,
+    };
+
+    const isIssueEvent = event.type === 'ui_error'
+      || event.type === 'validation_error'
+      || (event.type === 'fetch' && event.result !== 'success');
+
+    if (isIssueEvent) {
+      state.lastIssueAt = !state.lastIssueAt || eventAt > state.lastIssueAt ? eventAt : state.lastIssueAt;
+      issueAction.lastIssueAt = !issueAction.lastIssueAt || eventAt > issueAction.lastIssueAt ? eventAt : issueAction.lastIssueAt;
+
+      if (eventAt >= recentIssueCutoff) {
+        state.recentIssueCount += 1;
+      }
+    }
+
+    if (event.type === 'fetch' && event.result === 'success') {
+      state.lastSuccessAt = !state.lastSuccessAt || eventAt > state.lastSuccessAt ? eventAt : state.lastSuccessAt;
+      issueAction.lastSuccessAt = !issueAction.lastSuccessAt || eventAt > issueAction.lastSuccessAt ? eventAt : issueAction.lastSuccessAt;
+    }
+
+    state.issueActions.set(issueKey, issueAction);
+    issueStateBySurface.set(surfaceId, state);
+  }
+
+  for (const state of issueStateBySurface.values()) {
+    let currentIssueCount = 0;
+    for (const [issueKey, issueAction] of state.issueActions.entries()) {
+      if (!issueAction.lastIssueAt || issueAction.lastIssueAt < recentIssueCutoff) {
+        continue;
+      }
+
+      const isFetchIssue = issueKey.startsWith('fetch:');
+      if (!isFetchIssue || !issueAction.lastSuccessAt || issueAction.lastIssueAt > issueAction.lastSuccessAt) {
+        currentIssueCount += 1;
+      }
+    }
+    state.currentIssueCount = currentIssueCount;
+  }
+
   const surfaces = Object.values(frontendSurfaces).map((surface) => {
     const totalActions = Object.values(surface.actionCounts).reduce((sum, count) => sum + count, 0);
     const successfulActions = surface.actionCounts.success ?? 0;
+    const issueState = issueStateBySurface.get(surface.surfaceId);
+    const totalIssueCount = surface.uiErrorCount + surface.fetchErrorCount + surface.validationErrorCount;
+    const currentIssueCount = issueState?.currentIssueCount ?? 0;
+    const recentIssueCount = issueState?.recentIssueCount ?? 0;
+    const lastIssueAt = issueState?.lastIssueAt ? new Date(issueState.lastIssueAt).toISOString() : null;
+    const lastSuccessAt = issueState?.lastSuccessAt ? new Date(issueState.lastSuccessAt).toISOString() : null;
+    const issueStatus = currentIssueCount > 0
+      ? 'current'
+      : recentIssueCount > 0
+        ? 'recent'
+        : totalIssueCount > 0
+          ? 'historical'
+          : 'healthy';
 
     return {
       surfaceId: surface.surfaceId,
@@ -522,6 +595,12 @@ function summarizeFrontend(frontendSurfaces, frontendEvents) {
       fetchErrorCount: surface.fetchErrorCount,
       uiErrorCount: surface.uiErrorCount,
       validationErrorCount: surface.validationErrorCount,
+      totalIssueCount,
+      currentIssueCount,
+      recentIssueCount,
+      issueStatus,
+      lastIssueAt,
+      lastSuccessAt,
       emptyStates: surface.emptyStates,
       actionCounts: surface.actionCounts,
       actionSuccessRate: totalActions ? round((successfulActions / totalActions) * 100) : 0,
@@ -540,13 +619,22 @@ function summarizeFrontend(frontendSurfaces, frontendEvents) {
   const slowSurfaceCount = surfaces.filter((surface) => surface.loadDurationMs.p95 >= 1000 || surface.fetchDurationMs.p95 >= 1000).length;
   const topFailingSurfaces = [...surfaces]
     .sort((left, right) => (
-      (right.uiErrorCount + right.fetchErrorCount + right.validationErrorCount)
-      - (left.uiErrorCount + left.fetchErrorCount + left.validationErrorCount)
+      right.currentIssueCount - left.currentIssueCount
+      || right.recentIssueCount - left.recentIssueCount
+      || right.totalIssueCount - left.totalIssueCount
+      || right.viewCount - left.viewCount
+      || left.surfaceId.localeCompare(right.surfaceId)
     ))
+    .filter((surface) => surface.totalIssueCount > 0 || surface.currentIssueCount > 0 || surface.recentIssueCount > 0)
     .slice(0, 5)
     .map((surface) => ({
       surfaceId: surface.surfaceId,
-      issueCount: surface.uiErrorCount + surface.fetchErrorCount + surface.validationErrorCount,
+      issueCount: surface.totalIssueCount,
+      currentIssueCount: surface.currentIssueCount,
+      recentIssueCount: surface.recentIssueCount,
+      issueStatus: surface.issueStatus,
+      lastIssueAt: surface.lastIssueAt,
+      lastSuccessAt: surface.lastSuccessAt,
     }));
 
   const workflowCounts = {};

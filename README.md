@@ -16,6 +16,7 @@ Christian counseling practice management SaaS for solo counselors, group practic
 - practice operations workspace for counselors, managers, and admins
 - upgraded Operations Dashboard with counselor workload, 1-hour gap visibility, compliance note-gap tracking, portal request rollups, operational alert thresholds, and 7-day trend visibility
 - dashboard drill-down workflows that open the affected client, document, scheduling, and portal-review queues directly from summary metrics
+- monitoring now distinguishes current, recent, and historical surface failures so one transient fetch error does not read like a live outage
 - dedicated Clients workspace for client maintenance, lookup, filtering, quick edit, and direct chart/scheduling handoff
 - scheduling with appointments, waitlist, reminders, recurring workflows, and utilization support
 - client and counselor management with richer portal, profile, and operational views
@@ -25,7 +26,7 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## Current Release Focus
 
-The current build turns the operations and client-maintenance split back into a first-class workflow boundary. The Operations Dashboard now owns the real operational summary, drill-down queues, alert thresholds, and 7-day trends, while the Clients navigation surface is once again a dedicated workspace for client lookup, maintenance, quick edits, and direct handoff into the detailed multi-tab client record. Existing-client `Edit` now returns to the full record with demographics, insurance, contacts, clinical, diagnoses, faith, and legal tabs instead of dropping staff into the lightweight modal.
+The current build turns the operations and client-maintenance split back into a first-class workflow boundary. The Operations Dashboard now owns the real operational summary, drill-down queues, alert thresholds, and 7-day trends, while the Clients navigation surface is once again a dedicated workspace for client lookup, maintenance, quick edits, and direct handoff into the detailed multi-tab client record. Existing-client `Edit` now returns to the full record with demographics, insurance, contacts, clinical, diagnoses, faith, and legal tabs instead of dropping staff into the lightweight modal. The monitor page now separates current, recent, and historical surface issues, and the top bar titles track the active workspace instead of defaulting back to the dashboard title.
 
 ## Key Docs
 
@@ -71,18 +72,24 @@ This release draws a clean boundary between the Operations Dashboard and the Cli
   - quick edit
   - direct scheduling handoff
 - restored the detailed client record as the primary edit path for existing clients
-- updated top bar copy so the Clients screen is visibly distinct from the Operations Dashboard
+- updated top bar copy so the active workspace title changes across users, counselors, clients, scheduling, documents, workspace studio, portal, and other main surfaces instead of reusing the dashboard label
 - kept the dashboard summary, alerts, trends, and drill-down behavior intact
+- updated the monitoring screen so surface failures show current / recent / historical context instead of only lifetime issue totals
 - added browser regression coverage for:
   - dedicated Clients workspace rendering
   - detailed client edit entry from the Clients screen
+  - workspace-specific top bar titles across the main navigation
 
 ### v5.0.0 — Validation
 
+- `node --check packages/telemetry/src/node.js`
+- `node --check apps/web/public/monitor.js`
+- `pnpm --filter @faith/api exec node --check src/index.js`
 - `pnpm lint`
 - `pnpm --filter @faith/web build`
-- `npx playwright test tests/e2e/high-value-journeys.spec.mjs --grep "practice admin sees a dedicated client workspace instead of the dashboard grid|practice admin edit from clients workspace opens the detailed client record screen"`
-- `pnpm test:e2e`
+- `npx playwright test tests/e2e/high-value-journeys.spec.mjs --grep "practice admin top bar titles track the active workspace|practice admin can open workspace studio, monitoring, and operations surfaces used in daily operations"`
+- `npx playwright test tests/e2e/inclusive-smoke.spec.mjs --grep "public monitoring page loads with key landmarks"`
+- `pnpm test:e2e` (`13/13`)
 - `pnpm test:launch-readiness`
 
 ## v4.7.0 — Expanded Counseling Form Library (March 29, 2026)

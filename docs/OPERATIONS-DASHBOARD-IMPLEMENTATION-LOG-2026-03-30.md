@@ -316,3 +316,50 @@ Validation results for this step:
 - `npx playwright test tests/e2e/high-value-journeys.spec.mjs --grep "practice admin sees a dedicated client workspace instead of the dashboard grid|practice admin edit from clients workspace opens the detailed client record screen"` — passed
 - `pnpm test:e2e` — passed (`12/12`) after the detailed edit restoration and scheduling regression hardening
 - `pnpm test:launch-readiness` — passed (`3/3`)
+
+### Step 9 — Monitor issue-state semantics and workspace titles corrected
+
+Issue found:
+
+- the monitoring screen was rendering lifetime surface issue totals as though they were guaranteed to be current failures
+- the shared top bar only had explicit copy for the dashboard, clients, and client portal, so several other workspaces silently inherited the `Operations Dashboard` title
+
+Implemented:
+
+- updated the monitoring baseline so surface summaries must distinguish:
+  - current issues
+  - recent issues
+  - historical totals
+- extended frontend telemetry surface aggregation with:
+  - `currentIssueCount`
+  - `recentIssueCount`
+  - `issueStatus`
+  - `lastIssueAt`
+  - `lastSuccessAt`
+- updated the monitor page to render surface issue state as `current / recent / total` instead of only showing stale cumulative counts
+- relabeled the monitor page surface-failure card and per-surface issue column to reflect issue state
+- expanded top-bar titles and subtitles across the main application workspaces so staff see the active surface instead of the dashboard label
+- added browser regression coverage for workspace-specific top-bar titles
+
+Files touched in this step:
+
+- `PLANS/FULL-SURFACE-MONITORING.md`
+- `packages/telemetry/src/node.js`
+- `apps/web/public/monitor.html`
+- `apps/web/public/monitor.js`
+- `apps/web/src/components/TopBar.jsx`
+- `packages/i18n/src/index.js`
+- `tests/e2e/high-value-journeys.spec.mjs`
+
+Validation results for this step:
+
+- `node --check packages/telemetry/src/node.js` — passed
+- `node --check apps/web/public/monitor.js` — passed
+- `pnpm --filter @faith/api exec node --check src/index.js` — passed
+- `pnpm lint` — passed
+- `pnpm --filter @faith/web build` — passed
+- `npx playwright test tests/e2e/high-value-journeys.spec.mjs --grep "practice admin top bar titles track the active workspace|practice admin can open workspace studio, monitoring, and operations surfaces used in daily operations"` — passed
+- `npx playwright test tests/e2e/inclusive-smoke.spec.mjs --grep "public monitoring page loads with key landmarks"` — passed
+- `pnpm test:e2e` — passed (`13/13`)
+- `pnpm test:launch-readiness` — passed (`3/3`)
+- direct API summary verification after stack restart confirmed `currentIssueCount`, `recentIssueCount`, `totalIssueCount`, `issueStatus`, `lastIssueAt`, and `lastSuccessAt` on monitored surfaces

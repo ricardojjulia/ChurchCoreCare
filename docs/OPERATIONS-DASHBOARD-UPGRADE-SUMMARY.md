@@ -11,6 +11,8 @@ The Operations Dashboard is now backed by a real operations-summary API instead 
 
 It also now supports in-dashboard drill-down workflows so staff can open the underlying queues directly from the summary metrics, operational alerts when key thresholds are crossed, and 7-day trend context so operators can see whether conditions are stabilizing or getting worse.
 
+The related monitor surface now distinguishes current, recent, and historical surface failures so rolling fetch-error totals do not read like live outages, and the shared top bar now follows the active workspace instead of reusing the dashboard title on unrelated screens.
+
 As a follow-on correction, the `Clients` navigation surface has also been separated back out from the dashboard grid. Staff now land on a dedicated client-maintenance workspace for lookup, filtering, create/edit work, and direct handoff into chart and scheduling actions. Existing-client `Edit` again opens the full detailed client record instead of the lightweight modal.
 
 ### Today's Schedule
@@ -117,6 +119,8 @@ Trend behavior in this release:
 - added 7-day trend payloads and compact bar-style dashboard visuals
 - restored a dedicated `Clients` workspace so the client-maintenance surface no longer aliases the dashboard
 - restored the detailed client record as the primary edit path for existing clients
+- upgraded monitor surface failure reporting to show current / recent / total issue state
+- expanded top-bar workspace titles across users, counselors, scheduling, documents, workspace studio, portal, clinical, billing, and faith surfaces
 - rebuilt the served web bundle and refreshed `apps/web/public/index.html`
 
 ## Validation

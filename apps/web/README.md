@@ -29,6 +29,7 @@ Default URL: `http://localhost:3000`
 - sidebar heading now uses an animated counseling icon with a simplified `Options` label
 - sidebar identity block now carries both the signed-in user pill and the live API connection status
 - the hamburger menu now collapses and restores the sidebar on both desktop and mobile
+- the top bar title and subtitle now follow the active workspace instead of reusing the dashboard label across unrelated screens
 - scheduling appointment creation and counselor-calendar filtering now use stable counselor IDs instead of counselor display names
 - key metric cards for today's sessions, future appointments, audit-event visibility, and current session identity/state
 - operations panels for schedule, priority queue, and compliance watch
@@ -54,7 +55,7 @@ Default URL: `http://localhost:3000`
 - `/api/docs` uses a docs-specific CSP/COEP profile so proxied Swagger UI can load its required assets without weakening the rest of the application
 - The monitoring OTEL status banner follows the API `exportedViaOtel` flag, which now treats `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` as a valid OTEL export configuration
 - React app views, detail tabs, scheduling subviews, Workspace Studio tabs, and standalone pages now participate in the shared surface-monitoring baseline
-- The monitoring page now renders overall UI summary cards, top failing surfaces/workflows, health probes, and a per-surface breakdown from the shared telemetry summary in the same light indigo brand palette as the main app
+- The monitoring page now renders overall UI summary cards, health probes, workflow leaders, and a per-surface breakdown that distinguishes current, recent, and historical issue state instead of only lifetime failure counts
 - The standalone Operations Studio page now uses the same light indigo brand system as the main app while keeping its reporting, platform, language, data, and audit workflows intact
 - Production web bundles now use versioned asset filenames so UI refreshes pick up the latest JS/CSS without depending on a stale fixed `/assets/app.js` URL
 - This current release line is tracked in the root README as `UI enhancements` because the work spans the main shell, monitor surface, operations surface, and frontend delivery behavior

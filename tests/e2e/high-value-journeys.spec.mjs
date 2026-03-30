@@ -60,6 +60,37 @@ test.describe('high-value UI journeys', () => {
     await expect(page.getByRole('button', { name: /Clients|Clientes/i })).toBeVisible();
   });
 
+  test('practice admin top bar titles track the active workspace', async ({ page }) => {
+    await signInAs(page, 'practice_admin');
+
+    const title = page.locator('.workspace-topbar-title');
+    const subtitle = page.locator('.workspace-topbar-subtitle');
+
+    await expect(title).toHaveText(/Operations Dashboard/i);
+    await expect(subtitle).toHaveText(/Today at a glance across locations, counselors, and clinical actions\./i);
+
+    await openPrimaryNav(page, 'users');
+    await expect(title).toHaveText(/User Workspace/i);
+
+    await openPrimaryNav(page, 'counselors');
+    await expect(title).toHaveText(/Counselor Workspace/i);
+
+    await openPrimaryNav(page, 'clients');
+    await expect(title).toHaveText(/Client Workspace/i);
+
+    await openPrimaryNav(page, 'scheduling');
+    await expect(title).toHaveText(/Scheduling Workspace/i);
+
+    await openPrimaryNav(page, 'documents');
+    await expect(title).toHaveText(/Documents Workspace/i);
+
+    await openPrimaryNav(page, 'workspace-studio');
+    await expect(title).toHaveText(/Workspace Studio/i);
+
+    await openPrimaryNav(page, 'portal');
+    await expect(title).toHaveText(/Client Portal/i);
+  });
+
   test('practice admin can drill into dashboard queues and open actionable client details', async ({ page }) => {
     const suffix = String(Date.now()).slice(-6);
     const firstName = `Touch${suffix}`;
@@ -162,14 +193,14 @@ test.describe('high-value UI journeys', () => {
   test('practice admin can open workspace studio, monitoring, and operations surfaces used in daily operations', async ({ page }) => {
     await signInAs(page, 'practice_admin');
     await openPrimaryNav(page, 'workspace-studio');
-    await expect(page.getByRole('heading', { name: /Workspace Studio|Estudio del Espacio/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Workspace Studio|Estudio del Espacio/i, level: 2 })).toBeVisible();
     await expect(page.getByText('Client Portal Access')).toBeVisible();
     await page.getByRole('tab', { name: 'Portal' }).click();
     await expect(page.getByText('Public Requests')).toBeVisible();
 
     await page.goto('/monitor.html');
     await expect(page.getByText('Surface Monitoring')).toBeVisible();
-    await expect(page.getByText(/Top Failing Surfaces/i)).toBeVisible();
+    await expect(page.getByText(/Surface Failure State/i)).toBeVisible();
 
     await page.goto('/operations.html');
     await expect(page.getByText('Operations Studio')).toBeVisible();
@@ -197,7 +228,7 @@ test.describe('high-value UI journeys', () => {
 
     await signInAs(page, 'practice_admin');
     await openPrimaryNav(page, 'portal');
-    await expect(page.getByRole('heading', { name: 'Client Portal' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Client Portal', level: 2 })).toBeVisible();
     await expect(page.getByText('Staff preview mode')).toBeVisible();
     await expect(page.getByText(/Pending forms/i)).toBeVisible();
 
