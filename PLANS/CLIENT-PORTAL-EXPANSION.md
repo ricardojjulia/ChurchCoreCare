@@ -641,7 +641,8 @@ This phase is complete in the shipped implementation.
   - high-value browser journeys
   - launch-readiness accessibility/performance checks
   - localization regression suite
-- keep `security-compliance-guardian.agent.md`, `manager-counselor-client-triage.agent.md`, and `web-repair-engineer.agent.md` as operator-driven follow-up sweeps for future releases
+- final agent-driven signoff completed and documented in `docs/AGENT-RUN-2026-03-29.md`
+- keep `security-compliance-guardian.agent.md`, `manager-counselor-client-triage.agent.md`, and `web-repair-engineer.agent.md` as stored operator prompts for future releases
 
 ## Acceptance Criteria
 
@@ -655,7 +656,7 @@ This phase is complete in the shipped implementation.
 8. Portal actions are fully tenant-scoped, auditable, and PHI/PII-safe.
 9. Client-facing `Export My Data` and `Request Deletion` controls exist and are policy-aware.
 10. Export and deletion workflows honor retention, legal hold, accounting, and clinical record constraints with auditable outcomes.
-11. Final release validation has documented outcomes from security, browser, launch-readiness, and localization suites, with stored agent prompts available for operator reruns.
+11. Final release validation has documented outcomes from security, browser, launch-readiness, localization, and agent-driven signoff suites.
 
 ## Recommended Next Implementation Tickets
 

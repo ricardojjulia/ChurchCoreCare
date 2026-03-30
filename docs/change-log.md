@@ -2,6 +2,32 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## v4.5.0 — Final Portal Signoff + Agent Validation
+
+**Date:** March 29, 2026
+**Type:** Stabilization release
+
+### Summary
+
+Records the final security, triage, and repair sweeps for the completed portal release. No new blocking issues were found. The repo-native validation suite, including localization and security checks, passed before publication.
+
+### Added
+
+- `docs/AGENT-RUN-2026-03-29.md` — consolidated report for the final agent-driven signoff sweep
+- security-regression fixture alignment for the current public portal consent contract
+- release note coverage for the completed portal and validation pass
+
+### Validation
+
+- `pnpm lint` — passed
+- `node --env-file=.env apps/api/src/db/migrate.js` — passed
+- `pnpm --filter @faith/web build` — passed
+- `pnpm test:e2e` — passed (`5/5`)
+- `pnpm test:launch-readiness` — passed (`3/3`)
+- `npx playwright test tests/e2e/localization.spec.mjs` — passed (`4 passed, 2 skipped`)
+- `API_BASE_URL=http://127.0.0.1:3104 pnpm test:security` — passed
+- security regression harness aligned with current onboarding consent requirements
+
 ## v4.0.0 — Client Portal Completion + Public Onboarding
 
 **Date:** March 29, 2026

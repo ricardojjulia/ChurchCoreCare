@@ -31,7 +31,7 @@ export async function signInWithCredentials(page, { email, password }) {
   await page.fill('#loginPassword', password);
   await page.click('button[type="submit"]');
   await expect(page.locator('#authGate')).toBeHidden({ timeout: 10000 });
-  await expect(page.locator('#userBadge')).toBeVisible({ timeout: 5000 });
+  await expect(page.locator('.workspace-topbar')).toBeVisible({ timeout: 5000 });
 }
 
 /**
@@ -57,7 +57,7 @@ export async function signInAs(page, role) {
   });
 
   if (authMode === 'session') {
-    await expect(page.locator('#userBadge')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.workspace-topbar')).toBeVisible({ timeout: 5000 });
     return;
   }
 
@@ -75,7 +75,7 @@ export async function signInAs(page, role) {
     await expect(page.locator('#authGate')).toBeHidden();
   }
 
-  await expect(page.locator('#userBadge')).toBeVisible({ timeout: 5000 });
+  await expect(page.locator('.workspace-topbar')).toBeVisible({ timeout: 5000 });
 }
 
 export async function signOut(page) {
