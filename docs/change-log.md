@@ -2,25 +2,56 @@
 
 <!-- markdownlint-disable MD024 -->
 
-## Unreleased
+## v4.0.0 — Client Portal Completion + Public Onboarding
 
-- authenticated portal `Counselor` tab with assigned-counselor detail and optional counselor directory
-- authenticated portal `Financials` tab with invoice/offering summary plus payment history
-- authenticated portal `Resources` tab with full client-facing library visibility
-- authenticated portal `Documents` tab with assigned forms, intake packet status, portal document actions, and secure client uploads
-- authenticated portal `Data Rights` tab with self-service JSON export, policy-aware deletion requests, and request history
-- authenticated portal password change for signed-in clients
-- public portal password reset request and one-time reset completion flow
-- Workspace Studio review queue for deletion requests with fulfill, restrict, and deny actions
-- new monitored portal tab surfaces:
-  - `portal.counselor`
-  - `portal.financials`
-- `portal.resources`
-- `portal.documents`
-- `portal.data_rights`
-- counselor directory and counselor detail views inside the client portal
-- policy-aware portal-scope deletion fulfillment that revokes portal access while retaining protected clinical, billing, and audit records
-- dedicated financial portal page beyond the current invoice/offering summary implementation
+**Date:** March 29, 2026
+**Type:** Major feature release
+
+### Summary
+
+Completes the planned client-portal foundation with structured public onboarding, encrypted onboarding persistence, practice-controlled instant activation, localized portal auth/client UI, and final security/localization regression coverage.
+
+### Added
+
+- encrypted `onboarding_details_enc` on `portal_registration_requests`
+- structured public onboarding intake fields and explicit contact consent
+- default signup-form preview and public counselor directory preview in `/v1/portal/public-config`
+- server-controlled instant activation for eligible `account_signup` flows
+- admin-side create-account approval path that can activate a real portal account directly from the Workspace Studio queue
+- Spanish localization keys for the portal auth reset flow and core authenticated portal shell
+- localization regression coverage for the authenticated client portal
+
+### Changed
+
+- public `/portal` now presents a three-step onboarding structure with:
+  - contact capture
+  - onboarding context
+  - explicit consent plus next-step summary
+- `ClientPortalPage.jsx` now localizes the primary portal tabs, headings, financial labels, resource library, and data-rights actions
+- `AuthGate.jsx` now localizes the portal password-reset request/completion flow
+- `ops/security-regression.mjs` now includes the required onboarding consent in its public portal create-request probe
+
+### Validation
+
+- `pnpm lint` — passed
+- `node --env-file=.env apps/api/src/db/migrate.js` — passed
+- `pnpm --filter @faith/web build` — passed
+- `pnpm test:e2e` — passed (`5/5`)
+- `pnpm test:launch-readiness` — passed (`3/3`)
+- `npx playwright test tests/e2e/localization.spec.mjs` — passed (`4 passed, 2 skipped`)
+- `API_BASE_URL=http://127.0.0.1:3104 pnpm test:security` — passed
+
+### Version bump
+
+Updated package versions from `3.5.0` to `4.0.0`:
+
+- `package.json`
+- `apps/api/package.json`
+- `apps/web/package.json`
+- `apps/worker/package.json`
+- `packages/domain/package.json`
+- `packages/i18n/package.json`
+- `packages/telemetry/package.json`
 
 ## v3.5.0 — Authenticated Client Portal Access + Self-Service Foundation
 

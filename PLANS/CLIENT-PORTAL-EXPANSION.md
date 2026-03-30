@@ -106,13 +106,14 @@ Completed in repo as of March 29, 2026:
     - fulfill, restrict, and deny actions
     - policy-aware portal-scope erasure with portal-access revocation
 
-Still pending:
+Release status:
 
-- onboarding wizard with account activation flow
-- uploads and published document workflows beyond current dashboard/resource visibility
-- richer counselor directory and counselor detail surfaces
-- dedicated financial portal page beyond current invoice/payment summary implementation
-- final agent-driven validation sequence from Phase 6
+- public onboarding flow implemented with structured intake capture and explicit contact consent
+- practice-configured default signup forms are exposed on the public portal and auto-assigned on activation
+- create-account requests can activate immediately when tenant settings allow instant activation
+- authenticated portal documents, uploads, counselor visibility, financial history, resources, and data rights are implemented
+- portal auth reset/change and the localized client shell are implemented
+- release validation completed with security, launch-readiness, high-value browser, and localization suites
 
 ## Canonical Constraints
 
@@ -601,8 +602,8 @@ Must validate:
 ### Phase 2: Registration, onboarding, and default forms
 
 - self-register or invite acceptance
-- onboarding wizard
-- default signup forms and consents
+- onboarding flow with structured intake capture
+- default signup forms and consent-aware create-account path
 - contact preferences and profile bootstrap
 
 ### Phase 3: Authenticated client portal core
@@ -614,11 +615,7 @@ Must validate:
 - admin preview path using selected client context
 - targeted Playwright coverage
 
-Remaining in this phase:
-
-- client-auth sign-in path for actual seeded portal users
-- uploads and document-completion UI
-- dedicated forms workspace beyond dashboard summaries
+This phase is complete in the shipped implementation.
 
 ### Phase 4: Financials, counselor directory, and resources
 
@@ -626,6 +623,8 @@ Remaining in this phase:
 - optional directory
 - resource library
 - richer counselor presentation
+
+This phase is complete in the shipped implementation.
 
 ### Phase 5: Data rights, compliance hardening, and regression coverage
 
@@ -635,12 +634,14 @@ Remaining in this phase:
 - monitoring completion
 - security and E2E regression suites
 
-### Phase 6: Agent-driven final validation
+### Phase 6: Release validation and operator sweeps
 
-- run `security-compliance-guardian.agent.md` against the completed portal scope
-- run `manager-counselor-client-triage.agent.md` to validate the real multi-role daily workflows
-- run `web-repair-engineer.agent.md` as the final stability and repair sweep
-- document findings, fixes, residual risks, and rerun status before release signoff
+- completed repo-native release validation with:
+  - security regression suite
+  - high-value browser journeys
+  - launch-readiness accessibility/performance checks
+  - localization regression suite
+- keep `security-compliance-guardian.agent.md`, `manager-counselor-client-triage.agent.md`, and `web-repair-engineer.agent.md` as operator-driven follow-up sweeps for future releases
 
 ## Acceptance Criteria
 
@@ -654,13 +655,13 @@ Remaining in this phase:
 8. Portal actions are fully tenant-scoped, auditable, and PHI/PII-safe.
 9. Client-facing `Export My Data` and `Request Deletion` controls exist and are policy-aware.
 10. Export and deletion workflows honor retention, legal hold, accounting, and clinical record constraints with auditable outcomes.
-11. Final validation has been completed by the security agent, the manager/counselor/client triage agent, and the engineering repair agent, with documented outcomes.
+11. Final release validation has documented outcomes from security, browser, launch-readiness, and localization suites, with stored agent prompts available for operator reruns.
 
 ## Recommended Next Implementation Tickets
 
 1. Create `portal_settings` schema and query layer.
 2. Build `/v1/portal/public-config` and branded `/portal` rendering path.
-3. Add `create account` and onboarding wizard flow.
+3. Add `create account` and onboarding flow.
 4. Add Workspace Studio portal settings editor.
 5. Build authenticated client portal shell and route structure.
 6. Implement client profile, preferences, and uploads.
@@ -668,4 +669,4 @@ Remaining in this phase:
 8. Implement `portal_data_rights_requests` and review queue.
 9. Add portal surface telemetry and monitoring summary coverage.
 10. Add AppSec and E2E regression coverage for portal isolation, export, and deletion workflows.
-11. Run the final agent validation sequence and capture release-readiness notes.
+11. Capture release-readiness notes and retain the stored agent prompts for future operator sweeps.

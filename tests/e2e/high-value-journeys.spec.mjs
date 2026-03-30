@@ -193,6 +193,7 @@ test.describe('high-value UI journeys', () => {
     await page.locator('#phone').fill('555-0100');
     await page.getByLabel('Individual').check();
     await page.getByLabel('Faith-integrated').check();
+    await page.getByLabel(/I agree that the practice may contact me/i).check();
     await page.locator('#notes').fill('Browser automation portal request');
     await page.getByRole('button', { name: 'Submit Request' }).click();
 

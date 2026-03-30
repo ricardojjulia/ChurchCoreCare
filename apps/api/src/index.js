@@ -45,7 +45,7 @@ import { logError, logInfo, logWarn, serializeError } from './lib/log.js';
 import { translateMessages } from './lib/translate.js';
 import { handleCors, checkRateLimit, enforceRbac, enforceTenantScope, callerIdentity } from './lib/security.js';
 import pool, { verifyConnection } from './db/pool.js';
-import { encrypt, decrypt, encryptJson, decryptJson } from './lib/encrypt.js';
+import { encrypt, decrypt, encryptJson, decryptJson, deriveLookupHash } from './lib/encrypt.js';
 import {
   login,
   logout,
@@ -151,6 +151,7 @@ import { listClientAllergies, getClientAllergy, createClientAllergy, updateClien
 import { getClientClinicalHistory, upsertClientClinicalHistory } from './db/queries/clientClinicalHistory.js';
 import { getClientFaithProfile, upsertClientFaithProfile } from './db/queries/clientFaithProfiles.js';
 import { getClientLegal, upsertClientLegal } from './db/queries/clientLegal.js';
+import { createClient as createClientRecord } from './db/queries/clients.js';
 
 const port = Number(process.env.PORT || 3001);
 const currentFilePath = fileURLToPath(import.meta.url);
@@ -4229,6 +4230,170 @@ async function handleClientFormOverview(request, response, requestUrl, session) 
   writeJson(response, 200, { catalog, assignments, submissions, history });
 }
 
+async function activatePortalSignupRequest({ tenantId, requestRecord, actorId = 'system' }) {
+  if (!requestRecord || requestRecord.requestType !== 'account_signup') return null;
+
+  const normalizedEmail = normalizePortalEmail(requestRecord.email);
+  if (!normalizedEmail) return null;
+
+  const onboardingDetails = normalizePortalOnboardingDetails(requestRecord.onboardingDetails ?? {});
+  const preferredName = onboardingDetails.preferredName || requestRecord.firstName;
+  const temporaryPassword = generateTemporaryPassword();
+
+  if (process.env.DB_NAME) {
+    const emailLookupHash = deriveLookupHash(normalizedEmail, { lowercase: true });
+    const [existingRows] = await pool.query(
+      'SELECT id, client_id, status FROM portal_accounts WHERE tenant_id = ? AND email_lookup_hash = ? LIMIT 1',
+      [tenantId, emailLookupHash],
+    );
+    if (existingRows[0]) {
+      return {
+        status: 'existing_account',
+        email: normalizedEmail,
+        portalAccountId: existingRows[0].id,
+        clientId: existingRows[0].client_id,
+      };
+    }
+
+    const client = await createClientRecord({
+      id: genId('c'),
+      tenantId,
+      firstName: requestRecord.firstName,
+      lastName: requestRecord.lastName,
+      status: 'active',
+      faithBackground: onboardingDetails.faithPreference || 'Undeclared',
+    });
+    const passwordHash = await argon2.hash(temporaryPassword, {
+      type: argon2.argon2id,
+      memoryCost: 65536,
+      timeCost: 3,
+      parallelism: 1,
+    });
+    const account = await createPortalAccount({
+      id: genId('pa'),
+      clientId: client.id,
+      tenantId,
+      email: normalizedEmail,
+      passwordHash,
+      status: 'active',
+      mfaEnabled: false,
+    });
+    await upsertPortalClientProfile({
+      id: genId('pcp'),
+      tenantId,
+      clientId: client.id,
+      preferredName,
+      contactEmail: normalizedEmail,
+      contactPhone: requestRecord.phone ?? '',
+      contactPreferences: {
+        preferredContactMethod: requestRecord.preferredContactMethod || 'email',
+        okToText: requestRecord.preferredContactMethod === 'sms',
+        okToLeaveMessage: true,
+        enabledChannels: [requestRecord.preferredContactMethod || 'email'],
+      },
+      profileDetails: {
+        demographics: {
+          pronouns: onboardingDetails.pronouns || '',
+          maritalStatus: '',
+        },
+        education: {
+          level: onboardingDetails.educationLevel || '',
+          occupation: '',
+        },
+        affiliations: onboardingDetails.affiliations ?? [],
+      },
+    });
+    const assignedForms = await autoAssignStandardSignupForms({
+      tenantId,
+      clientId: client.id,
+      assignedBy: actorId,
+    });
+    return {
+      status: 'activated',
+      email: normalizedEmail,
+      temporaryPassword,
+      portalAccountId: account.id,
+      clientId: client.id,
+      assignedForms,
+    };
+  }
+
+  const existing = portalAccounts.find((item) => item.tenantId === tenantId && normalizePortalEmail(item.email) === normalizedEmail);
+  if (existing) {
+    return {
+      status: 'existing_account',
+      email: normalizedEmail,
+      portalAccountId: existing.id,
+      clientId: existing.clientId,
+    };
+  }
+
+  const client = {
+    id: createId('c', clients),
+    tenantId,
+    firstName: requestRecord.firstName,
+    lastName: requestRecord.lastName,
+    status: 'active',
+    faithBackground: onboardingDetails.faithPreference || 'Undeclared',
+  };
+  clients.push(client);
+
+  const account = {
+    id: createId('pa', portalAccounts),
+    tenantId,
+    clientId: client.id,
+    status: 'active',
+    email: normalizedEmail,
+    mfaEnabled: false,
+    temporaryPassword,
+    lastLoginAt: null,
+    invitedAt: new Date().toISOString(),
+  };
+  portalAccounts.push(account);
+
+  const now = new Date().toISOString();
+  portalClientProfiles.push({
+    id: createId('pcp', portalClientProfiles),
+    tenantId,
+    clientId: client.id,
+    preferredName,
+    contactEmail: normalizedEmail,
+    contactPhone: requestRecord.phone ?? '',
+    contactPreferences: {
+      preferredContactMethod: requestRecord.preferredContactMethod || 'email',
+      okToText: requestRecord.preferredContactMethod === 'sms',
+      okToLeaveMessage: true,
+      enabledChannels: [requestRecord.preferredContactMethod || 'email'],
+    },
+    profileDetails: {
+      demographics: {
+        pronouns: onboardingDetails.pronouns || '',
+        maritalStatus: '',
+      },
+      education: {
+        level: onboardingDetails.educationLevel || '',
+        occupation: '',
+      },
+      affiliations: onboardingDetails.affiliations ?? [],
+    },
+    createdAt: now,
+    updatedAt: now,
+  });
+  const assignedForms = await autoAssignStandardSignupForms({
+    tenantId,
+    clientId: client.id,
+    assignedBy: actorId,
+  });
+  return {
+    status: 'activated',
+    email: normalizedEmail,
+    temporaryPassword,
+    portalAccountId: account.id,
+    clientId: client.id,
+    assignedForms,
+  };
+}
+
 async function handlePortalPublicRequests(request, response, requestUrl, session) {
   if (request.method === 'GET') {
     if (requirePracticeAdmin(request, response, session)) return;
@@ -4273,9 +4438,16 @@ async function handlePortalPublicRequests(request, response, requestUrl, session
       await updatePortalRegistrationRequest(requestId, tenantId, { status });
       const updatedItems = await listPortalRegistrationRequests(tenantId);
       const item = updatedItems.find((entry) => entry.id === requestId) ?? null;
+      const activation = status === 'approved'
+        ? await activatePortalSignupRequest({
+          tenantId,
+          requestRecord: item,
+          actorId: callerIdentity(request, session)?.staffId ?? 'system',
+        })
+        : null;
       telemetry.recordMutation('portal.public_request.update');
       emitAudit(request, 'portal.public_request.update', 'portal_registration_request', requestId, session);
-      writeJson(response, 200, { item });
+      writeJson(response, 200, { item, activation });
       return;
     }
 
@@ -4286,9 +4458,16 @@ async function handlePortalPublicRequests(request, response, requestUrl, session
     }
     item.status = status;
     item.updatedAt = new Date().toISOString();
+    const activation = status === 'approved'
+      ? await activatePortalSignupRequest({
+        tenantId,
+        requestRecord: item,
+        actorId: callerIdentity(request, session)?.staffId ?? 'system',
+      })
+      : null;
     telemetry.recordMutation('portal.public_request.update');
     emitAudit(request, 'portal.public_request.update', 'portal_registration_request', requestId, session);
-    writeJson(response, 200, { item });
+    writeJson(response, 200, { item, activation });
     return;
   }
 
@@ -4306,6 +4485,7 @@ async function handlePortalPublicRequests(request, response, requestUrl, session
   const preferredContactMethod = sanitizeStr(payload.preferredContactMethod, 64);
   const preferredContactWindow = sanitizeStr(payload.preferredContactWindow, 128);
   const notes = sanitizeStr(payload.notes, 500);
+  const onboardingDetails = normalizePortalOnboardingDetails(payload.onboardingDetails ?? {});
   const requestedServices = Array.isArray(payload.requestedServices)
     ? [...new Set(payload.requestedServices.map((entry) => sanitizeStr(String(entry), 120)).filter(Boolean))]
     : [];
@@ -4322,6 +4502,10 @@ async function handlePortalPublicRequests(request, response, requestUrl, session
     writeJson(response, 400, { error: 'firstName, lastName, and email are required' });
     return;
   }
+  if (!onboardingDetails.consentToContact) {
+    writeJson(response, 400, { error: 'consentToContact is required' });
+    return;
+  }
 
   if (!portalSettings.allowCreateAccount && (requestType === 'account_signup' || requestedServices.includes('account_signup'))) {
     writeJson(response, 403, { error: 'Account creation requests are not enabled for this portal' });
@@ -4336,7 +4520,7 @@ async function handlePortalPublicRequests(request, response, requestUrl, session
     return;
   }
 
-  const status = session
+  let status = session
     ? (normalizePortalRegistrationStatus(payload.status ?? 'requested') ?? 'requested')
     : 'requested';
 
@@ -4353,12 +4537,40 @@ async function handlePortalPublicRequests(request, response, requestUrl, session
       preferredContactMethod,
       preferredContactWindow,
       requestedServices,
+      onboardingDetails,
       notes,
       status,
     });
+    let activation = null;
+    if (!session && portalSettings.registrationMode === 'instant_activation' && requestType === 'account_signup') {
+      const requestRecord = {
+        id,
+        tenantId,
+        requestType,
+        firstName,
+        lastName,
+        email,
+        phone,
+        preferredContactMethod,
+        preferredContactWindow,
+        requestedServices,
+        onboardingDetails,
+        notes,
+        status,
+      };
+      activation = await activatePortalSignupRequest({
+        tenantId,
+        requestRecord,
+        actorId: 'system',
+      });
+      if (activation?.status === 'activated') {
+        status = 'approved';
+        await updatePortalRegistrationRequest(id, tenantId, { status });
+      }
+    }
     telemetry.recordMutation('portal.public_request.create');
     emitAudit(request, 'portal.public_request.create', 'portal_registration_request', id, session);
-    writeJson(response, 201, { item: { id, status } });
+    writeJson(response, 201, { item: { id, status }, activation });
     return;
   }
 
@@ -4374,15 +4586,29 @@ async function handlePortalPublicRequests(request, response, requestUrl, session
     preferredContactMethod,
     preferredContactWindow,
     requestedServices,
+    onboardingDetails,
     notes,
     status,
     createdAt: now,
     updatedAt: now,
   };
   portalRegistrationRequests.push(item);
+  let activation = null;
+  if (!session && portalSettings.registrationMode === 'instant_activation' && requestType === 'account_signup') {
+    activation = await activatePortalSignupRequest({
+      tenantId,
+      requestRecord: item,
+      actorId: 'system',
+    });
+    if (activation?.status === 'activated') {
+      item.status = 'approved';
+      item.updatedAt = new Date().toISOString();
+      status = item.status;
+    }
+  }
   telemetry.recordMutation('portal.public_request.create');
   emitAudit(request, 'portal.public_request.create', 'portal_registration_request', item.id);
-  writeJson(response, 201, { item: { id: item.id, status: item.status } });
+  writeJson(response, 201, { item: { id: item.id, status: item.status }, activation });
 }
 
 async function handleAppointmentsCollection(request, response, session) {
@@ -5998,8 +6224,9 @@ async function handlePortalPublicConfig(request, response, requestUrl, session) 
   }
 
   const tenantId = getPublicPortalTenantId(request, session);
-  const item = await ensurePortalSettings(tenantId);
-  writeJson(response, 200, { item: toPortalPublicConfig(item) });
+  const settings = await ensurePortalSettings(tenantId);
+  const item = await buildPublicPortalConfig(tenantId, settings);
+  writeJson(response, 200, { item });
 }
 
 async function handlePortalSettings(request, response, session) {
@@ -10445,6 +10672,90 @@ function toPortalPublicConfig(settings) {
     showPublicCounselorDirectory: settings.showPublicCounselorDirectory,
     financialMode: settings.financialMode,
     contactPreferenceOptions: settings.contactPreferenceOptions,
+  };
+}
+
+function summarizePortalRegistrationMode(mode) {
+  if (mode === 'instant_activation') {
+    return 'Eligible create-account requests can be activated immediately with a temporary portal password.';
+  }
+  if (mode === 'invite_only') {
+    return 'Portal account creation is invite-only. The practice will review your request before access is granted.';
+  }
+  return 'Create-account requests are reviewed by the practice before portal access is activated.';
+}
+
+function normalizePortalOnboardingDetails(payload = {}) {
+  return {
+    preferredName: sanitizeStr(payload.preferredName, 120) ?? '',
+    pronouns: sanitizeStr(payload.pronouns, 80) ?? '',
+    educationLevel: sanitizeStr(payload.educationLevel, 64) ?? '',
+    affiliations: Array.isArray(payload.affiliations)
+      ? payload.affiliations.map((item) => sanitizeStr(String(item), 120)).filter(Boolean).slice(0, 10)
+      : [],
+    referralSource: sanitizeStr(payload.referralSource, 120) ?? '',
+    faithPreference: sanitizeStr(payload.faithPreference, 120) ?? '',
+    schedulingFocus: sanitizeStr(payload.schedulingFocus, 160) ?? '',
+    consentToContact: payload.consentToContact === true,
+  };
+}
+
+function normalizePortalEmail(value) {
+  if (typeof value !== 'string') return '';
+  return value.trim().toLowerCase();
+}
+
+async function buildPublicCounselorDirectoryPreview(tenantId, settings) {
+  if (!settings?.showPublicCounselorDirectory) return [];
+  if (process.env.DB_NAME) {
+    const staff = await listStaff(tenantId);
+    return staff
+      .filter((item) => ['counselor', 'intern'].includes(item.role))
+      .slice(0, 6)
+      .map((item) => ({
+        staffId: item.id,
+        firstName: item.firstName,
+        lastName: item.lastName,
+        role: item.role,
+        bio: item.bio ?? '',
+        licenseType: item.licenseType ?? '',
+        supervisionStatus: item.supervisionStatus ?? '',
+      }));
+  }
+
+  return staffMembers
+    .filter((item) => item.tenantId === tenantId)
+    .filter((item) => ['counselor', 'intern'].includes(item.role))
+    .slice(0, 6)
+    .map((item) => ({
+      staffId: item.id,
+      firstName: item.firstName,
+      lastName: item.lastName,
+      role: item.role,
+      bio: item.bio ?? '',
+      licenseType: item.licenseType ?? '',
+      supervisionStatus: item.supervisionStatus ?? '',
+    }));
+}
+
+async function buildPublicPortalConfig(tenantId, settings) {
+  const catalog = await ensureFormCatalogSeeded(tenantId);
+  const configuredKeys = Array.isArray(settings?.defaultSignupFormKeys) ? settings.defaultSignupFormKeys : [];
+  const configuredSet = new Set(configuredKeys);
+  const defaultSignupForms = (catalog || [])
+    .filter((item) => item.isActive !== false)
+    .filter((item) => (configuredSet.size ? configuredSet.has(item.formKey) : item.isStandardOnSignup))
+    .map((item) => ({
+      formKey: item.formKey,
+      title: item.title,
+      category: item.category,
+    }));
+  const directoryPreview = await buildPublicCounselorDirectoryPreview(tenantId, settings);
+  return {
+    ...toPortalPublicConfig(settings),
+    registrationSummary: summarizePortalRegistrationMode(settings?.registrationMode),
+    defaultSignupForms,
+    directoryPreview,
   };
 }
 

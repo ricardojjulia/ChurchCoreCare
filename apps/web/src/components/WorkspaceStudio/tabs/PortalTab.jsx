@@ -588,12 +588,22 @@ function PublicRequestsSection({ items, loading, onRefresh }) {
   const setStatus = async (requestId, status) => {
     setUpdatingId(requestId);
     try {
-      await apiFetch('/api/v1/portal/public-requests', {
+      const response = await apiFetch('/api/v1/portal/public-requests', {
         method: 'PATCH',
         headers: csrfHeaders(),
         body: JSON.stringify({ requestId, status }),
       });
-      notifications.show({ title: 'Updated', message: `Request marked ${status}.`, color: 'green' });
+      const activation = response?.activation ?? null;
+      const activationMessage = activation?.status === 'activated'
+        ? ` Portal access activated. Temporary password: ${activation.temporaryPassword}`
+        : activation?.status === 'existing_account'
+          ? ' A portal account already existed for this request.'
+          : '';
+      notifications.show({
+        title: 'Updated',
+        message: `Request marked ${status}.${activationMessage}`,
+        color: status === 'declined' ? 'red' : 'green',
+      });
       onRefresh();
     } catch (err) {
       notifications.show({ title: 'Error', message: err.message, color: 'red' });
@@ -671,6 +681,17 @@ function PublicRequestsSection({ items, loading, onRefresh }) {
                     ))}
                   </Group>
                 )}
+                {item.onboardingDetails && Object.keys(item.onboardingDetails).length > 0 ? (
+                  <Text fz="xs" c="dimmed" mt={6}>
+                    Onboarding: {[
+                      item.onboardingDetails.preferredName ? `preferred name ${item.onboardingDetails.preferredName}` : null,
+                      item.onboardingDetails.pronouns ? `pronouns ${item.onboardingDetails.pronouns}` : null,
+                      item.onboardingDetails.educationLevel ? `education ${String(item.onboardingDetails.educationLevel).replaceAll('_', ' ')}` : null,
+                      item.onboardingDetails.faithPreference ? `faith ${item.onboardingDetails.faithPreference}` : null,
+                      item.onboardingDetails.referralSource ? `referral ${item.onboardingDetails.referralSource}` : null,
+                    ].filter(Boolean).join(' • ')}
+                  </Text>
+                ) : null}
                 {item.notes && (
                   <Text fz="xs" c="dimmed" mt={6}>
                     {item.notes}

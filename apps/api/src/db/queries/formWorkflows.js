@@ -82,6 +82,7 @@ function rowToPortalRegistrationRequest(row) {
     requestedServices: row.requested_services
       ? (typeof row.requested_services === 'string' ? JSON.parse(row.requested_services) : row.requested_services)
       : [],
+    onboardingDetails: row.onboarding_details_enc ? (decryptJson(row.onboarding_details_enc) ?? {}) : {},
     notes: row.notes_enc ? decrypt(row.notes_enc) : null,
     status: row.status,
     createdAt: row.created_at,
@@ -300,13 +301,14 @@ export async function createPortalRegistrationRequest({
   preferredContactMethod,
   preferredContactWindow,
   requestedServices,
+  onboardingDetails,
   notes,
   status,
 }) {
   await pool.query(
     `INSERT INTO portal_registration_requests
-      (id, tenant_id, request_type, first_name_enc, last_name_enc, email_enc, phone_enc, preferred_contact_method, preferred_contact_window, requested_services, notes_enc, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (id, tenant_id, request_type, first_name_enc, last_name_enc, email_enc, phone_enc, preferred_contact_method, preferred_contact_window, requested_services, onboarding_details_enc, notes_enc, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       tenantId,
@@ -318,6 +320,7 @@ export async function createPortalRegistrationRequest({
       preferredContactMethod ?? null,
       preferredContactWindow ?? null,
       JSON.stringify(requestedServices ?? []),
+      encryptJson(onboardingDetails ?? {}),
       notes ? encrypt(notes) : null,
       status,
     ],

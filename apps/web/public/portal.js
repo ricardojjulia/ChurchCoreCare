@@ -27,6 +27,9 @@ const DEFAULT_CONFIG = {
   allowCreateAccount: true,
   allowCareRequests: true,
   allowSchedulingRequests: true,
+  registrationSummary: 'Create-account requests are reviewed by the practice before portal access is activated.',
+  defaultSignupForms: [],
+  directoryPreview: [],
 };
 
 let portalConfig = { ...DEFAULT_CONFIG };
@@ -74,6 +77,15 @@ function sanitizeTelemetryValue(value, fallback = 'unknown') {
   if (typeof value !== 'string') return fallback;
   const candidate = value.trim().toLowerCase().slice(0, 80);
   return candidate || fallback;
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 }
 
 function trackEvent(type, action, result = 'success', extra = {}) {
@@ -127,6 +139,45 @@ function updateContactPreferenceOptions(options = []) {
   if (select.value && !allowed.has(select.value)) {
     select.value = '';
   }
+}
+
+function renderDefaultSignupForms(forms = []) {
+  const list = document.getElementById('portalDefaultForms');
+  if (!list) return;
+  const items = Array.isArray(forms) ? forms : [];
+  if (!items.length) {
+    list.innerHTML = '<li>No default forms configured yet.</li>';
+    return;
+  }
+  list.innerHTML = items
+    .map((item) => `<li>${escapeHtml(item.title || item.formKey || 'Onboarding form')}</li>`)
+    .join('');
+}
+
+function renderCounselorDirectoryPreview(items = []) {
+  const container = document.getElementById('portalDirectoryPreview');
+  const intro = document.getElementById('portalDirectoryIntro');
+  if (!container) return;
+  const counselors = Array.isArray(items) ? items : [];
+  if (!counselors.length) {
+    if (intro) intro.textContent = 'This practice has not published counselor directory details on the public portal.';
+    container.innerHTML = `
+      <div class="portal-directory-item">
+        <strong>Directory preview unavailable</strong>
+        <span>The practice has not published counselor directory details on the public portal.</span>
+      </div>
+    `;
+    return;
+  }
+
+  if (intro) intro.textContent = 'Published counselor highlights available to prospective and active clients.';
+  container.innerHTML = counselors.map((item) => `
+    <div class="portal-directory-item">
+      <strong>${escapeHtml(`${item.firstName || ''} ${item.lastName || ''}`.trim())}</strong>
+      <span>${escapeHtml(String(item.role || 'counselor').replaceAll('_', ' '))}${item.licenseType ? ` • ${escapeHtml(String(item.licenseType).toUpperCase())}` : ''}</span>
+      ${item.bio ? `<p style="margin:6px 0 0;color:#52606d;font-size:0.85rem;">${escapeHtml(item.bio)}</p>` : ''}
+    </div>
+  `).join('');
 }
 
 function selectIntent(intent) {
@@ -185,6 +236,12 @@ function applyPortalConfig(config) {
   if (existingCopy) {
     existingCopy.textContent = `Use your ${portalConfig.practiceName || DEFAULT_CONFIG.practiceName} portal credentials to access appointments, forms, and secure messages.`;
   }
+  const registrationSummary = document.getElementById('portalRegistrationSummary');
+  if (registrationSummary) {
+    registrationSummary.textContent = portalConfig.registrationSummary || DEFAULT_CONFIG.registrationSummary;
+  }
+  renderDefaultSignupForms(portalConfig.defaultSignupForms || []);
+  renderCounselorDirectoryPreview(portalConfig.directoryPreview || []);
 
   const allowedIntents = getAllowedIntents(portalConfig);
   document.querySelectorAll('.portal-intent-btn').forEach((button) => {
@@ -241,9 +298,17 @@ function installFormHandler() {
     const lastName = String(document.getElementById('lastName')?.value || '').trim();
     const email = String(document.getElementById('email')?.value || '').trim();
     const phone = String(document.getElementById('phone')?.value || '').trim();
+    const preferredName = String(document.getElementById('preferredName')?.value || '').trim();
     const preferredContactMethod = String(document.getElementById('preferredContactMethod')?.value || '').trim();
     const preferredContactWindow = String(document.getElementById('preferredContactWindow')?.value || '').trim();
+    const pronouns = String(document.getElementById('pronouns')?.value || '').trim();
+    const educationLevel = String(document.getElementById('educationLevel')?.value || '').trim();
+    const affiliations = String(document.getElementById('affiliations')?.value || '').trim();
+    const referralSource = String(document.getElementById('referralSource')?.value || '').trim();
+    const faithPreference = String(document.getElementById('faithPreference')?.value || '').trim();
+    const schedulingFocus = String(document.getElementById('schedulingFocus')?.value || '').trim();
     const notes = String(document.getElementById('notes')?.value || '').trim();
+    const consentToContact = Boolean(document.getElementById('consentToContact')?.checked);
     const requestIntent = String(document.getElementById('requestIntent')?.value || currentIntent).trim() || currentIntent;
     const requestedServices = [...new Set([requestIntent, ...collectServices(form)])];
 
@@ -252,11 +317,16 @@ function installFormHandler() {
       trackEvent('validation_error', 'portal_request.required', 'failure', { validationState: 'required' });
       return;
     }
+    if (!consentToContact) {
+      setStatus('Please confirm that the practice may contact you about this request.', 'error');
+      trackEvent('validation_error', 'portal_request.consent', 'failure', { validationState: 'required' });
+      return;
+    }
 
     setStatus('Submitting request...');
 
     try {
-      await submitRequest({
+      const response = await submitRequest({
         firstName,
         lastName,
         email,
@@ -265,11 +335,34 @@ function installFormHandler() {
         preferredContactMethod,
         preferredContactWindow,
         requestedServices,
+        onboardingDetails: {
+          preferredName,
+          pronouns,
+          educationLevel,
+          affiliations: affiliations
+            .split(',')
+            .map((value) => value.trim())
+            .filter(Boolean),
+          referralSource,
+          faithPreference,
+          schedulingFocus,
+          consentToContact,
+        },
         notes,
       });
       form.reset();
       selectIntent(requestIntent);
-      setStatus('Request submitted successfully. Our team will contact you soon.', 'success');
+      const activation = response?.activation ?? null;
+      if (activation?.status === 'activated') {
+        const assignedForms = Array.isArray(activation.assignedForms) && activation.assignedForms.length
+          ? ` Assigned forms: ${activation.assignedForms.join(', ')}.`
+          : '';
+        setStatus(`Account request approved immediately. Sign in with ${activation.email} and temporary password ${activation.temporaryPassword}.${assignedForms}`, 'success');
+      } else if (activation?.status === 'existing_account') {
+        setStatus(`A portal account already exists for ${activation.email}. Use the sign-in link or reset your portal password.`, 'success');
+      } else {
+        setStatus('Request submitted successfully. Our team will contact you soon.', 'success');
+      }
       trackEvent('interaction', 'portal_request.submit', 'success', {
         durationMs: Math.round((performance.now() - startedAt) * 100) / 100,
       });

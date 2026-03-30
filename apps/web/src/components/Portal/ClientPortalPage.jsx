@@ -38,6 +38,7 @@ import {
 } from '../../lib/clientApi.js';
 import { frontendTelemetry } from '../../lib/frontendTelemetry.js';
 import { useSurfaceTelemetry } from '../../lib/useSurfaceTelemetry.js';
+import { useI18n } from '../../lib/i18nContext.jsx';
 
 const PORTAL_TAB_SURFACES = {
   dashboard: 'portal.dashboard',
@@ -227,6 +228,7 @@ function fileToBase64(file) {
 }
 
 export default function ClientPortalPage({ currentUser, clients = [], onSignOut = async () => {} }) {
+  const { t } = useI18n();
   const userRole = currentUser?.role ?? null;
   const isClientRole = userRole === 'client';
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -741,8 +743,8 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
       </Group>
 
       {!isClientRole ? (
-        <Alert color="blue" variant="light" title="Staff preview mode">
-          This view shows the authenticated client portal using the selected client context.
+        <Alert color="blue" variant="light" title={t('portal.staffPreviewTitle')}>
+          {t('portal.staffPreviewBody')}
         </Alert>
       ) : null}
 
@@ -750,51 +752,51 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
         <Paper withBorder radius="md" p="xl">
           <Group justify="center" gap="sm">
             <Loader size="sm" />
-            <Text>Loading portal data...</Text>
+            <Text>{t('portal.loading')}</Text>
           </Group>
         </Paper>
       ) : error ? (
-        <Alert color="red" title="Failed to load portal">{error}</Alert>
+        <Alert color="red" title={t('portal.loadErrorTitle')}>{error}</Alert>
       ) : !isClientRole && !effectiveClientId ? (
-        <Alert color="yellow" title="Client required">
-          Select a client to preview the authenticated portal experience.
+        <Alert color="yellow" title={t('portal.clientRequiredTitle')}>
+          {t('portal.clientRequiredBody')}
         </Alert>
       ) : (
         <Tabs value={activeTab} onChange={(value) => setActiveTab(value || 'dashboard')}>
           <Tabs.List>
-            <Tabs.Tab value="dashboard">Dashboard</Tabs.Tab>
-            <Tabs.Tab value="profile">Profile</Tabs.Tab>
-            <Tabs.Tab value="appointments">Appointments</Tabs.Tab>
-            <Tabs.Tab value="documents">Documents</Tabs.Tab>
-            <Tabs.Tab value="counselor">Counselor</Tabs.Tab>
-            <Tabs.Tab value="financials">Financials</Tabs.Tab>
-            <Tabs.Tab value="resources">Resources</Tabs.Tab>
-            <Tabs.Tab value="dataRights">Data Rights</Tabs.Tab>
+            <Tabs.Tab value="dashboard">{t('portal.tab.dashboard')}</Tabs.Tab>
+            <Tabs.Tab value="profile">{t('portal.tab.profile')}</Tabs.Tab>
+            <Tabs.Tab value="appointments">{t('portal.tab.appointments')}</Tabs.Tab>
+            <Tabs.Tab value="documents">{t('portal.tab.documents')}</Tabs.Tab>
+            <Tabs.Tab value="counselor">{t('portal.tab.counselor')}</Tabs.Tab>
+            <Tabs.Tab value="financials">{t('portal.tab.financials')}</Tabs.Tab>
+            <Tabs.Tab value="resources">{t('portal.tab.resources')}</Tabs.Tab>
+            <Tabs.Tab value="dataRights">{t('portal.tab.dataRights')}</Tabs.Tab>
           </Tabs.List>
 
           <Tabs.Panel value="dashboard" pt="md">
             <Stack gap="md">
               <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }}>
                 <Card withBorder radius="md" p="md">
-                  <Text c="dimmed" size="xs" tt="uppercase" fw={700}>Next appointment</Text>
-                  <Text fw={700} mt={8}>{nextAppointment ? formatDateTime(nextAppointment.startsAt) : 'None scheduled'}</Text>
+                  <Text c="dimmed" size="xs" tt="uppercase" fw={700}>{t('portal.dashboard.nextAppointment')}</Text>
+                  <Text fw={700} mt={8}>{nextAppointment ? formatDateTime(nextAppointment.startsAt) : t('portal.dashboard.noAppointment')}</Text>
                   <Text size="sm" c="dimmed" mt={4}>
-                    {nextAppointment ? `${nextAppointment.counselorName || 'Counselor'} • ${nextAppointment.locationName || 'TBD'}` : 'Request one below if needed.'}
+                    {nextAppointment ? `${nextAppointment.counselorName || t('portal.tab.counselor')} • ${nextAppointment.locationName || 'TBD'}` : t('portal.dashboard.requestBelow')}
                   </Text>
                 </Card>
                 <Card withBorder radius="md" p="md">
-                  <Text c="dimmed" size="xs" tt="uppercase" fw={700}>Pending forms</Text>
+                  <Text c="dimmed" size="xs" tt="uppercase" fw={700}>{t('portal.dashboard.pendingForms')}</Text>
                   <Text fw={700} mt={8}>{pendingForms}</Text>
                   <Text size="sm" c="dimmed" mt={4}>Assigned forms waiting for completion.</Text>
                 </Card>
                 <Card withBorder radius="md" p="md">
-                  <Text c="dimmed" size="xs" tt="uppercase" fw={700}>Pending documents</Text>
+                  <Text c="dimmed" size="xs" tt="uppercase" fw={700}>{t('portal.dashboard.pendingDocuments')}</Text>
                   <Text fw={700} mt={8}>{pendingDocuments}</Text>
                   <Text size="sm" c="dimmed" mt={4}>Documents that still need review or signature.</Text>
                 </Card>
                 <Card withBorder radius="md" p="md">
                   <Text c="dimmed" size="xs" tt="uppercase" fw={700}>
-                    {financialMode === 'offerings' ? 'Suggested offering' : 'Outstanding balance'}
+                    {financialMode === 'offerings' ? t('portal.dashboard.suggestedOffering') : t('portal.dashboard.outstandingBalance')}
                   </Text>
                   <Text fw={700} mt={8}>{formatCurrency(overview?.balances?.outstanding ?? 0)}</Text>
                   <Text size="sm" c="dimmed" mt={4}>{openRequests} open appointment request(s).</Text>
@@ -805,7 +807,7 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
                 <Paper withBorder radius="md" p="md">
                   <Group justify="space-between" align="flex-start">
                     <Box>
-                      <Text c="dimmed" size="xs" tt="uppercase" fw={700}>Assigned counselor</Text>
+                      <Text c="dimmed" size="xs" tt="uppercase" fw={700}>{t('portal.dashboard.assignedCounselor')}</Text>
                       <Title order={4} mt={6}>
                         {overview.assignedCounselor.firstName} {overview.assignedCounselor.lastName}
                       </Title>
@@ -827,7 +829,7 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
 
               <SimpleGrid cols={{ base: 1, lg: 2 }}>
                 <Paper withBorder radius="md" p="md">
-                  <Title order={4}>Upcoming appointments</Title>
+                  <Title order={4}>{t('portal.dashboard.upcomingAppointments')}</Title>
                   <Stack gap="sm" mt="md">
                     {overview?.upcomingAppointments?.length ? overview.upcomingAppointments.slice(0, 4).map((appointment) => (
                       <Paper key={appointment.id} withBorder radius="sm" p="sm">
@@ -848,7 +850,7 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
                 </Paper>
 
                 <Paper withBorder radius="md" p="md">
-                  <Title order={4}>Helpful resources</Title>
+                  <Title order={4}>{t('portal.dashboard.helpfulResources')}</Title>
                   <Stack gap="sm" mt="md">
                     {overview?.resources?.length ? overview.resources.slice(0, 4).map((resource) => (
                       <Paper key={resource.id} withBorder radius="sm" p="sm">
@@ -875,12 +877,12 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
                 <Stack gap="md">
                   <SimpleGrid cols={{ base: 1, md: 2 }}>
                     <TextInput
-                      label="Preferred name"
+                      label={t('portal.profile.preferredName')}
                       value={profileDraft.preferredName}
                       onChange={(event) => setProfileDraft((current) => ({ ...current, preferredName: event.currentTarget.value }))}
                     />
                     <Select
-                      label="Preferred contact method"
+                      label={t('portal.profile.preferredContactMethod')}
                       value={profileDraft.contactPreferences.preferredContactMethod}
                       onChange={(value) => setProfileDraft((current) => ({
                         ...current,
@@ -892,18 +894,18 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
                       data={contactPreferenceOptions}
                     />
                     <TextInput
-                      label="Contact email"
+                      label={t('portal.profile.contactEmail')}
                       type="email"
                       value={profileDraft.contactEmail}
                       onChange={(event) => setProfileDraft((current) => ({ ...current, contactEmail: event.currentTarget.value }))}
                     />
                     <TextInput
-                      label="Contact phone"
+                      label={t('portal.profile.contactPhone')}
                       value={profileDraft.contactPhone}
                       onChange={(event) => setProfileDraft((current) => ({ ...current, contactPhone: event.currentTarget.value }))}
                     />
                     <MultiSelect
-                      label="Enabled contact channels"
+                      label={t('portal.profile.enabledChannels')}
                       data={contactPreferenceOptions}
                       value={profileDraft.contactPreferences.enabledChannels}
                       onChange={(value) => setProfileDraft((current) => ({
@@ -915,7 +917,7 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
                       }))}
                     />
                     <TextInput
-                      label="Pronouns"
+                      label={t('portal.profile.pronouns')}
                       value={profileDraft.profileDetails.demographics.pronouns}
                       onChange={(event) => setProfileDraft((current) => ({
                         ...current,
@@ -929,7 +931,7 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
                       }))}
                     />
                     <TextInput
-                      label="Marital status"
+                      label={t('portal.profile.maritalStatus')}
                       value={profileDraft.profileDetails.demographics.maritalStatus}
                       onChange={(event) => setProfileDraft((current) => ({
                         ...current,
@@ -943,7 +945,7 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
                       }))}
                     />
                     <Select
-                      label="Education level"
+                      label={t('portal.profile.educationLevel')}
                       value={profileDraft.profileDetails.education.level}
                       onChange={(value) => setProfileDraft((current) => ({
                         ...current,
@@ -958,7 +960,7 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
                       data={EDUCATION_LEVELS}
                     />
                     <TextInput
-                      label="Occupation"
+                      label={t('portal.profile.occupation')}
                       value={profileDraft.profileDetails.education.occupation}
                       onChange={(event) => setProfileDraft((current) => ({
                         ...current,
@@ -974,8 +976,8 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
                   </SimpleGrid>
 
                   <Textarea
-                    label="Affiliations"
-                    description="Separate multiple affiliations with commas."
+                    label={t('portal.profile.affiliations')}
+                    description={t('portal.profile.affiliationsHelp')}
                     minRows={3}
                     value={profileDraft.profileDetails.affiliationsText}
                     onChange={(event) => setProfileDraft((current) => ({
@@ -989,7 +991,7 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
 
                   <Group justify="flex-end">
                     <Button loading={savingProfile} onClick={handleProfileSave}>
-                      Save profile
+                      {t('portal.profile.save')}
                     </Button>
                   </Group>
                 </Stack>
@@ -999,26 +1001,26 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
                 <Paper withBorder radius="md" p="md">
                   <Stack gap="md">
                     <Box>
-                      <Title order={4}>Portal access</Title>
+                      <Title order={4}>{t('portal.profile.accessTitle')}</Title>
                       <Text c="dimmed" size="sm" mt={6}>
-                        Change your portal password. After the update, you will be signed out and asked to log in again.
+                        {t('portal.profile.accessBody')}
                       </Text>
                     </Box>
                     <PasswordInput
-                      label="Current password"
+                      label={t('portal.profile.currentPassword')}
                       autoComplete="current-password"
                       value={passwordDraft.currentPassword}
                       onChange={(event) => setPasswordDraft((current) => ({ ...current, currentPassword: event.currentTarget.value }))}
                     />
                     <SimpleGrid cols={{ base: 1, md: 2 }}>
                       <PasswordInput
-                        label="New password"
+                        label={t('portal.profile.newPassword')}
                         autoComplete="new-password"
                         value={passwordDraft.newPassword}
                         onChange={(event) => setPasswordDraft((current) => ({ ...current, newPassword: event.currentTarget.value }))}
                       />
                       <PasswordInput
-                        label="Confirm new password"
+                        label={t('portal.profile.confirmPassword')}
                         autoComplete="new-password"
                         value={passwordDraft.confirmPassword}
                         onChange={(event) => setPasswordDraft((current) => ({ ...current, confirmPassword: event.currentTarget.value }))}
@@ -1026,7 +1028,7 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
                     </SimpleGrid>
                     <Group justify="flex-end">
                       <Button loading={changingPassword} onClick={handlePortalPasswordChange}>
-                        Change password
+                        {t('portal.profile.changePassword')}
                       </Button>
                     </Group>
                   </Stack>
@@ -1038,30 +1040,30 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
           <Tabs.Panel value="appointments" pt="md">
             <SimpleGrid cols={{ base: 1, lg: 2 }}>
               <Paper withBorder radius="md" p="md">
-                <Title order={4}>Request a scheduling change</Title>
+                <Title order={4}>{t('portal.appointments.requestTitle')}</Title>
                 <Stack gap="md" mt="md">
                   <Select
-                    label="Request type"
+                    label={t('portal.appointments.requestType')}
                     value={requestDraft.requestedType}
                     onChange={(value) => setRequestDraft((current) => ({ ...current, requestedType: value || 'session' }))}
                     data={APPOINTMENT_REQUEST_TYPES}
                   />
                   <SimpleGrid cols={{ base: 1, md: 2 }}>
                     <TextInput
-                      label="Preferred start"
+                      label={t('portal.appointments.preferredStart')}
                       type="datetime-local"
                       value={requestDraft.preferredStartAt}
                       onChange={(event) => setRequestDraft((current) => ({ ...current, preferredStartAt: event.currentTarget.value }))}
                     />
                     <TextInput
-                      label="Preferred end"
+                      label={t('portal.appointments.preferredEnd')}
                       type="datetime-local"
                       value={requestDraft.preferredEndAt}
                       onChange={(event) => setRequestDraft((current) => ({ ...current, preferredEndAt: event.currentTarget.value }))}
                     />
                   </SimpleGrid>
                   <Select
-                    label="Visit mode"
+                    label={t('portal.appointments.visitMode')}
                     value={requestDraft.mode}
                     onChange={(value) => setRequestDraft((current) => ({ ...current, mode: value || 'remote' }))}
                     data={[
@@ -1070,21 +1072,21 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
                     ]}
                   />
                   <Textarea
-                    label="Notes"
+                    label={t('portal.appointments.notes')}
                     minRows={3}
                     value={requestDraft.notes}
                     onChange={(event) => setRequestDraft((current) => ({ ...current, notes: event.currentTarget.value }))}
                   />
                   <Group justify="flex-end">
                     <Button loading={submittingRequest} onClick={handleAppointmentRequestSubmit}>
-                      Submit request
+                      {t('portal.appointments.submit')}
                     </Button>
                   </Group>
                 </Stack>
               </Paper>
 
               <Paper withBorder radius="md" p="md">
-                <Title order={4}>Recent requests</Title>
+                <Title order={4}>{t('portal.appointments.recentTitle')}</Title>
                 <Stack gap="sm" mt="md">
                   {overview?.appointmentRequests?.length ? overview.appointmentRequests.map((item) => (
                     <Paper key={item.id} withBorder radius="sm" p="sm">
@@ -1131,7 +1133,7 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
 
               <SimpleGrid cols={{ base: 1, lg: 2 }}>
                 <Paper withBorder radius="md" p="md">
-                  <Title order={4}>Assigned forms and intake packets</Title>
+                  <Title order={4}>{t('portal.documents.assignedFormsTitle')}</Title>
                   <Stack gap="sm" mt="md">
                     {overview?.assignedForms?.length ? overview.assignedForms.map((item) => (
                       <Paper key={item.id} withBorder radius="sm" p="sm">
@@ -1182,7 +1184,7 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
                 </Paper>
 
                 <Paper withBorder radius="md" p="md">
-                  <Title order={4}>Portal documents</Title>
+                  <Title order={4}>{t('portal.documents.portalDocumentsTitle')}</Title>
                   <Stack gap="sm" mt="md">
                     {portalData.documents.length ? portalData.documents.map((document) => (
                       <Paper key={document.id} withBorder radius="sm" p="sm">
@@ -1200,7 +1202,7 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
                               loading={actingDocumentId === document.id}
                               onClick={() => handleDocumentAction(document)}
                             >
-                              {document.requiresSignature ? 'Sign document' : 'Mark complete'}
+                              {document.requiresSignature ? t('portal.documents.signDocument') : t('portal.documents.markComplete')}
                             </Button>
                           ) : (
                             <Badge color={documentStatusColor(document.status)} variant="light">
@@ -1218,7 +1220,7 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
 
               <SimpleGrid cols={{ base: 1, lg: 2 }}>
                 <Paper withBorder radius="md" p="md">
-                  <Title order={4}>Upload supporting information</Title>
+                  <Title order={4}>{t('portal.documents.uploadTitle')}</Title>
                   <Stack gap="md" mt="md">
                     <FileInput
                       label="Choose file"
@@ -1241,14 +1243,14 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
                     />
                     <Group justify="flex-end">
                       <Button loading={uploading} onClick={handleUploadSubmit}>
-                        Upload file
+                        {t('portal.documents.uploadFile')}
                       </Button>
                     </Group>
                   </Stack>
                 </Paper>
 
                 <Paper withBorder radius="md" p="md">
-                  <Title order={4}>Upload history</Title>
+                  <Title order={4}>{t('portal.documents.uploadHistoryTitle')}</Title>
                   <Stack gap="sm" mt="md">
                     {portalData.uploads.length ? portalData.uploads.map((upload) => (
                       <Paper key={upload.id} withBorder radius="sm" p="sm">
@@ -1299,13 +1301,13 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
                   )}
                 </Paper>
               ) : (
-                <Alert color="yellow" title="No counselor assigned">
-                  A counselor has not been assigned on your upcoming appointments yet.
+                <Alert color="yellow" title={t('portal.counselor.noAssignedTitle')}>
+                  {t('portal.counselor.noAssignedBody')}
                 </Alert>
               )}
 
               <Paper withBorder radius="md" p="md">
-                <Title order={4}>Counselor directory</Title>
+                <Title order={4}>{t('portal.counselor.directoryTitle')}</Title>
                 <Text c="dimmed" size="sm" mt={6}>
                   {overview?.settings?.showPublicCounselorDirectory
                     ? 'Available counselors published by this practice.'
@@ -1341,19 +1343,19 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
               <SimpleGrid cols={{ base: 1, md: 3 }}>
                 <Card withBorder radius="md" p="md">
                   <Text c="dimmed" size="xs" tt="uppercase" fw={700}>
-                    {financialMode === 'offerings' ? 'Suggested offering' : 'Outstanding balance'}
+                    {financialMode === 'offerings' ? t('portal.financials.suggestedOffering') : t('portal.financials.outstandingBalance')}
                   </Text>
                   <Text fw={700} mt={8}>{formatCurrency(overview?.balances?.outstanding ?? 0)}</Text>
                 </Card>
                 <Card withBorder radius="md" p="md">
                   <Text c="dimmed" size="xs" tt="uppercase" fw={700}>
-                    {financialMode === 'offerings' ? 'Received offerings' : 'Payments received'}
+                    {financialMode === 'offerings' ? t('portal.financials.receivedOfferings') : t('portal.financials.paymentsReceived')}
                   </Text>
                   <Text fw={700} mt={8}>{formatCurrency(overview?.balances?.paid ?? 0)}</Text>
                 </Card>
                 <Card withBorder radius="md" p="md">
                   <Text c="dimmed" size="xs" tt="uppercase" fw={700}>
-                    {financialMode === 'offerings' ? 'Total suggested' : 'Total invoiced'}
+                    {financialMode === 'offerings' ? t('portal.financials.totalSuggested') : t('portal.financials.totalInvoiced')}
                   </Text>
                   <Text fw={700} mt={8}>{formatCurrency(overview?.balances?.total ?? 0)}</Text>
                 </Card>
@@ -1361,7 +1363,7 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
 
               <SimpleGrid cols={{ base: 1, lg: 2 }}>
                 <Paper withBorder radius="md" p="md">
-                  <Title order={4}>{financialMode === 'offerings' ? 'Offering history' : 'Invoices and balances'}</Title>
+                  <Title order={4}>{financialMode === 'offerings' ? t('portal.financials.offeringsTitle') : t('portal.financials.invoicesTitle')}</Title>
                   <Stack gap="sm" mt="md">
                     {overview?.balances?.items?.length ? overview.balances.items.map((invoice) => (
                       <Paper key={invoice.id} withBorder radius="sm" p="sm">
@@ -1388,7 +1390,7 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
                 </Paper>
 
                 <Paper withBorder radius="md" p="md">
-                  <Title order={4}>{financialMode === 'offerings' ? 'Recent offerings' : 'Recent payments'}</Title>
+                  <Title order={4}>{financialMode === 'offerings' ? t('portal.financials.recentOfferingsTitle') : t('portal.financials.paymentsTitle')}</Title>
                   <Stack gap="sm" mt="md">
                     {overview?.paymentHistory?.length ? overview.paymentHistory.map((payment) => (
                       <Paper key={payment.id} withBorder radius="sm" p="sm">
@@ -1420,9 +1422,9 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
 
           <Tabs.Panel value="resources" pt="md">
             <Paper withBorder radius="md" p="md">
-              <Title order={4}>Resource library</Title>
+              <Title order={4}>{t('portal.resources.title')}</Title>
               <Text c="dimmed" size="sm" mt={6}>
-                Documents, education, devotionals, and practice-published support materials.
+                {t('portal.resources.body')}
               </Text>
               <Stack gap="sm" mt="md">
                 {overview?.resources?.length ? overview.resources.map((resource) => (
@@ -1449,24 +1451,24 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
             <Stack gap="md">
               <SimpleGrid cols={{ base: 1, md: 3 }}>
                 <Card withBorder radius="md" p="md">
-                  <Text c="dimmed" size="xs" tt="uppercase" fw={700}>Clinical retention</Text>
+                  <Text c="dimmed" size="xs" tt="uppercase" fw={700}>{t('portal.dataRights.retention')}</Text>
                   <Text fw={700} mt={8}>{dataRightsSummary?.retentionPolicy?.clinicalRecordsSchedule?.replaceAll('_', ' ') || '10 years'}</Text>
                   <Text size="sm" c="dimmed" mt={4}>Clinical records may require retention before deletion.</Text>
                 </Card>
                 <Card withBorder radius="md" p="md">
-                  <Text c="dimmed" size="xs" tt="uppercase" fw={700}>Legal hold</Text>
+                  <Text c="dimmed" size="xs" tt="uppercase" fw={700}>{t('portal.dataRights.legalHold')}</Text>
                   <Text fw={700} mt={8}>{dataRightsSummary?.retentionPolicy?.legalHoldEnabled ? 'Enabled' : 'Not enabled'}</Text>
                   <Text size="sm" c="dimmed" mt={4}>Deletion is restricted while legal hold is active.</Text>
                 </Card>
                 <Card withBorder radius="md" p="md">
-                  <Text c="dimmed" size="xs" tt="uppercase" fw={700}>Current requests</Text>
+                  <Text c="dimmed" size="xs" tt="uppercase" fw={700}>{t('portal.dataRights.currentRequests')}</Text>
                   <Text fw={700} mt={8}>{portalData.dataRights.items.length}</Text>
                   <Text size="sm" c="dimmed" mt={4}>Export and deletion requests on file.</Text>
                 </Card>
               </SimpleGrid>
 
               <Paper withBorder radius="md" p="md">
-                <Title order={4}>Export My Data</Title>
+                <Title order={4}>{t('portal.dataRights.exportTitle')}</Title>
                 <Text c="dimmed" size="sm" mt={6}>
                   Download a JSON export of your client and portal records, including appointments, profile data, forms, portal messages, uploads, and balances.
                 </Text>
@@ -1480,13 +1482,13 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
                 </SimpleGrid>
                 <Group justify="flex-end" mt="md">
                   <Button loading={exportingData} onClick={handleExportData}>
-                    Export My Data
+                    {t('portal.dataRights.exportButton')}
                   </Button>
                 </Group>
               </Paper>
 
               <Paper withBorder radius="md" p="md">
-                <Title order={4}>Request Deletion</Title>
+                <Title order={4}>{t('portal.dataRights.deletionTitle')}</Title>
                 <Text c="dimmed" size="sm" mt={6}>
                   Deletion requests are policy-aware. Clinical, billing, audit, and legal retention rules may delay or restrict full erasure.
                 </Text>
@@ -1499,7 +1501,7 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
                 />
                 <Group justify="flex-end" mt="md">
                   <Button color="red" loading={requestingDeletion} onClick={handleDeletionRequest}>
-                    Request Deletion
+                    {t('portal.dataRights.deleteButton')}
                   </Button>
                 </Group>
               </Paper>

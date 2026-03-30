@@ -75,6 +75,7 @@ test.describe('inclusive smoke coverage', () => {
     await page.locator('#lastName').fill('Coverage');
     await page.locator('#email').fill(`inclusive-${suffix}@example.test`);
     await page.getByLabel('Individual').check();
+    await page.getByLabel(/I agree that the practice may contact me/i).check();
     await page.locator('#notes').fill('Inclusive E2E coverage request');
     await page.getByRole('button', { name: 'Submit Request' }).click();
 

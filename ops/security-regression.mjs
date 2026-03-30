@@ -199,6 +199,9 @@ async function main() {
       email: 'public-probe@example.test',
       tenantId: 'tenant-other',
       status: 'approved',
+      onboardingDetails: {
+        consentToContact: true,
+      },
     },
   });
   assert(result.status === 201, 'Public portal request should still be accepted');

@@ -118,23 +118,27 @@ export default function AuthGate({ onContinue }) {
             <Group justify="space-between" align="flex-start" mb="lg">
               <Box>
                 <Text fw={600} fz="lg">
-                  {mode === 'sign_in' ? t('auth.signIn') : mode === 'request_reset' ? 'Reset portal password' : 'Finish portal password reset'}
+                  {mode === 'sign_in'
+                    ? t('auth.signIn')
+                    : mode === 'request_reset'
+                      ? t('auth.portalResetTitle')
+                      : t('auth.portalResetCompleteTitle')}
                 </Text>
                 <Text fz="sm" c="dimmed" mt={4}>
                   {mode === 'sign_in'
                     ? 'Sign in with your practice or portal account.'
                     : mode === 'request_reset'
-                      ? 'Request a one-time reset code for a portal client account.'
-                      : 'Enter the reset code and choose a new portal password.'}
+                      ? t('auth.portalResetIntro')
+                      : t('auth.portalResetCompleteIntro')}
                 </Text>
               </Box>
               {mode === 'sign_in' ? (
                 <Button variant="subtle" size="xs" onClick={() => { setMode('request_reset'); setError(null); setNotice(null); }}>
-                  Forgot portal password?
+                  {t('auth.portalForgotPassword')}
                 </Button>
               ) : (
                 <Button variant="subtle" size="xs" onClick={() => { setMode('sign_in'); setError(null); setNotice(null); }}>
-                  Back to sign in
+                  {t('auth.portalBackToSignIn')}
                 </Button>
               )}
             </Group>
@@ -172,26 +176,26 @@ export default function AuthGate({ onContinue }) {
                 {mode === 'complete_reset' ? (
                   <>
                     <TextInput
-                      label="Reset code"
-                      placeholder="Paste the one-time reset code"
+                      label={t('auth.portalResetCode')}
+                      placeholder={t('auth.portalResetCodePlaceholder')}
                       required
                       value={resetToken}
                       onChange={(e) => setResetToken(e.target.value)}
                       disabled={loading}
                     />
                     <PasswordInput
-                      label="New password"
+                      label={t('auth.portalNewPassword')}
                       autoComplete="new-password"
-                      placeholder="Choose a new portal password"
+                      placeholder={t('auth.portalNewPasswordPlaceholder')}
                       required
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       disabled={loading}
                     />
                     <PasswordInput
-                      label="Confirm new password"
+                      label={t('auth.portalConfirmPassword')}
                       autoComplete="new-password"
-                      placeholder="Re-enter the new password"
+                      placeholder={t('auth.portalConfirmPasswordPlaceholder')}
                       required
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
@@ -228,8 +232,8 @@ export default function AuthGate({ onContinue }) {
                   {mode === 'sign_in'
                     ? t('auth.signIn')
                     : mode === 'request_reset'
-                      ? 'Request reset code'
-                      : 'Reset password'}
+                      ? t('auth.portalRequestReset')
+                      : t('auth.portalCompleteReset')}
                 </Button>
               </Stack>
             </form>

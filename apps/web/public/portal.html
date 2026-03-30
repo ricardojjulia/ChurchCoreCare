@@ -161,6 +161,64 @@
         color: #486581;
         font-size: 0.85rem;
       }
+      .portal-section-title {
+        margin: 16px 0 8px;
+        font-size: 0.82rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--portal-brand-deep);
+      }
+      .portal-section-copy {
+        margin: 0 0 10px;
+        color: #52606d;
+        font-size: 0.86rem;
+      }
+      .portal-grid-two {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 10px;
+      }
+      .portal-check {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        font-size: 0.9rem;
+        color: #243b53;
+        margin-top: 6px;
+      }
+      .portal-summary-card {
+        margin-top: 14px;
+        background: #f8fbfc;
+        border: 1px solid #dbe8ee;
+        border-radius: 14px;
+        padding: 14px;
+      }
+      .portal-summary-card h3 {
+        margin: 0 0 8px;
+        font-size: 0.95rem;
+      }
+      .portal-summary-card ul {
+        margin: 8px 0 0 18px;
+        padding: 0;
+        color: #334e68;
+        font-size: 0.88rem;
+      }
+      .portal-directory-list {
+        display: grid;
+        gap: 8px;
+        margin-top: 10px;
+      }
+      .portal-directory-item {
+        border: 1px solid #d7e2e8;
+        border-radius: 12px;
+        padding: 10px 12px;
+        background: #fff;
+      }
+      .portal-directory-item strong {
+        display: block;
+        margin-bottom: 4px;
+      }
       .portal-status {
         margin-top: 8px;
         font-size: 0.88rem;
@@ -211,10 +269,13 @@
             </div>
             <form id="portalRequestForm" novalidate>
               <input type="hidden" id="requestIntent" name="requestIntent" value="care_request" />
+              <div class="portal-section-title">Step 1</div>
+              <p class="portal-section-copy">Share the basic details the practice needs to contact you securely.</p>
               <input class="portal-input" id="firstName" name="firstName" placeholder="First name" required />
               <input class="portal-input" id="lastName" name="lastName" placeholder="Last name" required />
               <input class="portal-input" id="email" name="email" type="email" placeholder="Email" required />
               <input class="portal-input" id="phone" name="phone" placeholder="Phone (optional)" />
+              <input class="portal-input" id="preferredName" name="preferredName" placeholder="Preferred name (optional)" />
               <select class="portal-input" id="preferredContactMethod" name="preferredContactMethod">
                 <option value="">Preferred contact method</option>
                 <option value="email">Email</option>
@@ -223,16 +284,66 @@
                 <option value="portal_message">Portal message</option>
               </select>
               <input class="portal-input" id="preferredContactWindow" name="preferredContactWindow" placeholder="Best time to contact you (optional)" />
+              <div class="portal-section-title">Step 2</div>
+              <p class="portal-section-copy">Tell us what kind of support, scheduling, or account setup help you want.</p>
               <div class="portal-services">
                 <label><input type="checkbox" value="individual" /> Individual</label>
                 <label><input type="checkbox" value="couples" /> Couples</label>
                 <label><input type="checkbox" value="family" /> Family</label>
                 <label><input type="checkbox" value="faith_integrated" /> Faith-integrated</label>
               </div>
+              <div class="portal-grid-two">
+                <input class="portal-input" id="pronouns" name="pronouns" placeholder="Pronouns (optional)" />
+                <select class="portal-input" id="educationLevel" name="educationLevel">
+                  <option value="">Education level (optional)</option>
+                  <option value="high_school">High school</option>
+                  <option value="associate">Associate degree</option>
+                  <option value="bachelors">Bachelor degree</option>
+                  <option value="masters">Master degree</option>
+                  <option value="doctorate">Doctorate</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <input class="portal-input" id="affiliations" name="affiliations" placeholder="Affiliations or community ties (optional)" />
+              <div class="portal-grid-two">
+                <input class="portal-input" id="referralSource" name="referralSource" placeholder="How did you hear about us? (optional)" />
+                <input class="portal-input" id="faithPreference" name="faithPreference" placeholder="Faith background or preference (optional)" />
+              </div>
+              <input class="portal-input" id="schedulingFocus" name="schedulingFocus" placeholder="Scheduling needs or preferred cadence (optional)" />
               <textarea class="portal-input" id="notes" name="notes" rows="3" placeholder="Briefly share what kind of support you are looking for (optional)"></textarea>
+              <div class="portal-section-title">Step 3</div>
+              <p class="portal-section-copy">Review the intake path and confirm we can contact you about care, scheduling, and portal access.</p>
+              <label class="portal-check">
+                <input type="checkbox" id="consentToContact" name="consentToContact" />
+                <span>I agree that the practice may contact me about this request using the preferences above.</span>
+              </label>
+              <div class="portal-summary-card">
+                <h3>What happens next</h3>
+                <p id="portalRegistrationSummary" class="portal-section-copy" style="margin-bottom:6px;">
+                  Create-account requests are reviewed by the practice before portal access is activated.
+                </p>
+                <div id="portalDefaultFormsWrapper">
+                  <strong>Default onboarding forms</strong>
+                  <ul id="portalDefaultForms">
+                    <li>No default forms configured yet.</li>
+                  </ul>
+                </div>
+              </div>
               <button id="portalSubmitButton" type="submit" class="portal-btn portal-btn-primary">Submit Request</button>
             </form>
             <div id="portalRequestStatus" class="portal-status" aria-live="polite"></div>
+          </article>
+        </div>
+        <div class="portal-grid" style="margin-top:16px;">
+          <article class="portal-card">
+            <h2>Available counselors</h2>
+            <p id="portalDirectoryIntro">This practice can choose to publish a limited counselor directory for prospective and active clients.</p>
+            <div id="portalDirectoryPreview" class="portal-directory-list">
+              <div class="portal-directory-item">
+                <strong>Directory preview unavailable</strong>
+                <span>The practice has not published counselor directory details on the public portal.</span>
+              </div>
+            </div>
           </article>
         </div>
       </section>

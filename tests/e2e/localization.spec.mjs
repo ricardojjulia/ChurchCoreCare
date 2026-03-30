@@ -238,6 +238,39 @@ test.describe('localization — workspace studio', () => {
   });
 });
 
+// ── locale switch: authenticated client portal ───────────────────────────────
+
+test.describe('localization — client portal', () => {
+  test('client portal tabs and key headings resolve in Spanish', async ({ page }) => {
+    await signInAs(page, 'client');
+
+    await expect(page.getByRole('tab', { name: /Dashboard/i })).toBeVisible();
+    await page.getByRole('tab', { name: /Resources/i }).click();
+    await expect(page.getByText(/Resource library/i)).toBeVisible();
+
+    await switchToSpanish(page);
+
+    await assertNoRawKeys(page, [
+      'portal.tab.dashboard',
+      'portal.tab.profile',
+      'portal.tab.appointments',
+      'portal.tab.documents',
+      'portal.tab.counselor',
+      'portal.tab.financials',
+      'portal.tab.resources',
+      'portal.tab.dataRights',
+      'portal.resources.title',
+    ]);
+
+    await expect(
+      page.getByRole('tab', { name: /Panel|Perfil|Citas/i }).first()
+    ).toBeVisible({ timeout: 5000 });
+    await expect(
+      page.getByText(/Biblioteca de recursos|Resource library/i)
+    ).toBeVisible({ timeout: 5000 });
+  });
+});
+
 // ── key-coverage guard: no raw key strings visible on main dashboard ─────────
 
 test.describe('localization — no raw keys visible on dashboard', () => {

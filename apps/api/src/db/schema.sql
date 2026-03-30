@@ -1111,6 +1111,7 @@ CREATE TABLE IF NOT EXISTS portal_registration_requests (
   preferred_contact_method VARCHAR(64) NULL,
   preferred_contact_window VARCHAR(128) NULL,
   requested_services     JSON,
+  onboarding_details_enc MEDIUMTEXT   NULL,      -- encrypted JSON with onboarding intake answers / PHI
   notes_enc              TEXT         NULL,
   status                 VARCHAR(64)  NOT NULL DEFAULT 'requested',
   created_at             TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
