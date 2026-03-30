@@ -24,6 +24,12 @@ function formatCurrency(cents) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
 }
 
+function centsToDollars(cents) {
+  const amount = Number(cents ?? 0);
+  if (!Number.isFinite(amount)) return 0;
+  return amount / 100;
+}
+
 export default function OfferingsTab() {
   const { t } = useI18n();
   useSurfaceTelemetry('studio.offerings', { surfaceKind: 'tab', workflow: 'workspace_studio' });
@@ -50,7 +56,7 @@ export default function OfferingsTab() {
         if (!cancelled) {
           const cents = settingsData?.item?.suggestedOfferingCents ?? 0;
           setSuggestedCents(cents);
-          setSuggestedDraft(cents);
+          setSuggestedDraft(centsToDollars(cents));
           const note = settingsData?.item?.offeringMinistryNote ?? '';
           setMinistryNote(note);
           setSavedMinistryNote(note);
@@ -83,6 +89,7 @@ export default function OfferingsTab() {
         }),
       });
       setSuggestedCents(amountCents);
+      setSuggestedDraft(centsToDollars(amountCents));
       setSavedMinistryNote(ministryNote);
       notifications.show({ title: 'Saved', message: 'Suggested offering amount updated.', color: 'green' });
       frontendTelemetry.trackAction('studio.offerings', 'save_suggested', 'success', { workflow: 'workspace_studio' });

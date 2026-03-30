@@ -2,6 +2,55 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## v5.2.2 — Offerings Settings and Removal Fixes
+
+**Date:** March 30, 2026
+**Type:** Patch release
+
+### Summary
+
+Completes the first stabilization pass for the new Offerings model. This patch fixes the missing backward-compatible database migration for older `portal_settings` tables, aligns suggested-offering values between Workspace Studio and the client portal, corrects cent-based display formatting in the portal giving surface, and adds a supported remove path for incorrect offering entries.
+
+### Changed
+
+- `apps/api/src/db/migrate.js`
+  - adds backward-compatible `portal_settings` migrations for:
+    - `financial_mode`
+    - `suggested_offering_cents`
+    - `offering_ministry_note`
+- `apps/api/src/index.js`
+  - fixes offerings runtime handling for authenticated requests
+  - adds `DELETE /v1/offerings/:id` for removing incorrect entries
+- `apps/web/src/components/WorkspaceStudio/tabs/OfferingsTab.jsx`
+  - converts saved cent values back into dollars for the Studio amount input
+  - keeps the draft aligned after save to avoid repeated-value multiplication
+- `apps/web/src/components/Portal/ClientPortalPage.jsx`
+  - formats `suggestedOfferingCents` and offering-history amounts as cents-based currency values
+- `apps/web/src/components/Offerings/OfferingsPage.jsx`
+  - adds a `Remove` action for incorrect offering entries
+- `packages/i18n/src/index.js`
+  - adds remove/confirm/success/failure labels for the Offerings workspace
+- workspace package manifests
+  - bumped version from `5.2.1` to `5.2.2`
+
+### Validation
+
+```bash
+node --env-file=.env apps/api/src/db/migrate.js
+pnpm --filter @faith/api exec node --check src/index.js
+pnpm lint
+pnpm --filter @faith/web build
+```
+
+Additional live-stack verification:
+
+- authenticated `PATCH /api/v1/portal/settings`
+- authenticated `GET /api/v1/portal/settings`
+- authenticated `POST /api/v1/offerings`
+- authenticated `DELETE /api/v1/offerings/:id`
+
+---
+
 ## v5.2.1 — Offerings UI Hotfix
 
 **Date:** March 30, 2026
@@ -17,8 +66,17 @@ Fixes the first-release regressions on the new Offerings screens. The frontend a
   - added the missing frontend labels for `nav.offerings`, `topbar.offerings.*`, `studio.tab.offerings`, `offerings.*`, `portal.tab.giving`, and `portal.giving.*`
 - `apps/web/src/components/Offerings/OfferingsPage.jsx`
   - switched offerings list and summary requests to `/api/v1/offerings` and `/api/v1/offerings/summary`
+  - added removal support for incorrect offering entries from the Offerings history surface
 - `apps/web/src/components/WorkspaceStudio/tabs/OfferingsTab.jsx`
   - switched portal-settings and offerings-summary requests to `/api/v1/...`
+  - fixed suggested-offering settings so saved cent values load back into the dollar input correctly
+- `apps/web/src/components/Portal/ClientPortalPage.jsx`
+  - fixed the giving view so suggested offering and recorded offering amounts render cent-based values correctly
+- `apps/api/src/index.js`
+  - fixed offerings runtime handling for authenticated requests
+  - added `DELETE /v1/offerings/:id` for removing incorrect entries
+- `apps/api/src/db/migrate.js`
+  - added backward-compatible `portal_settings` migrations for `financial_mode`, `suggested_offering_cents`, and `offering_ministry_note`
 - `apps/web/public/index.html`
   - updated the built asset entry to the rebuilt hotfix bundle
 - workspace package manifests
@@ -27,8 +85,11 @@ Fixes the first-release regressions on the new Offerings screens. The frontend a
 ### Validation
 
 ```bash
+node --env-file=.env apps/api/src/db/migrate.js
+pnpm --filter @faith/api exec node --check src/index.js
 pnpm lint
 pnpm --filter @faith/web build
+npx playwright test tests/e2e/high-value-journeys.spec.mjs --grep "practice admin can remove an incorrectly recorded offering"
 ```
 
 ---

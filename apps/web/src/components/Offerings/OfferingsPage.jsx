@@ -39,6 +39,7 @@ export default function OfferingsPage({ clients = [] }) {
   const [summary, setSummary] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [recording, setRecording] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
   const [draft, setDraft] = useState({
     clientId: '',
     amountDollars: 0,
@@ -97,6 +98,40 @@ export default function OfferingsPage({ clients = [] }) {
     }
   }
 
+  async function handleDelete(offering) {
+    const confirmed = window.confirm(
+      t('offerings.deleteConfirm', {
+        amount: formatCurrency(offering.amountCents),
+        receivedOn: formatDate(offering.receivedOn),
+      }),
+    );
+    if (!confirmed) return;
+
+    setDeletingId(offering.id);
+    try {
+      await apiFetch(`/api/v1/offerings/${encodeURIComponent(offering.id)}`, {
+        method: 'DELETE',
+        headers: { ...csrfHeaders() },
+      });
+      await load();
+      notifications.show({
+        title: t('offerings.deleteSuccessTitle'),
+        message: t('offerings.deleteSuccessMessage'),
+        color: 'green',
+      });
+      frontendTelemetry.trackAction('offerings', 'delete_offering', 'success', { workflow: 'offerings' });
+    } catch (err) {
+      notifications.show({
+        title: t('offerings.deleteFailureTitle'),
+        message: err.message || t('offerings.deleteFailureMessage'),
+        color: 'red',
+      });
+      frontendTelemetry.trackAction('offerings', 'delete_offering', 'failure', { workflow: 'offerings' });
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   const clientOptions = clients.map((c) => ({
     value: c.id,
     label: `${c.firstName || ''} ${c.lastName || ''}`.trim() || c.id,
@@ -152,14 +187,34 @@ export default function OfferingsPage({ clients = [] }) {
                 ? `${client.firstName || ''} ${client.lastName || ''}`.trim() || offering.clientId
                 : offering.clientId;
               return (
-                <Paper key={offering.id} withBorder radius="sm" p="sm">
+                <Paper
+                  key={offering.id}
+                  withBorder
+                  radius="sm"
+                  p="sm"
+                  data-offering-id={offering.id}
+                  data-testid={`offering-row-${offering.id}`}
+                >
                   <Group justify="space-between" align="flex-start">
                     <div>
                       <Text fw={600}>{formatCurrency(offering.amountCents)}</Text>
                       <Text size="sm" c="dimmed">{clientLabel} · {formatDate(offering.receivedOn)}</Text>
                       {offering.note ? <Text size="sm" mt={4}>{offering.note}</Text> : null}
                     </div>
-                    <Badge variant="light" color="teal">received</Badge>
+                    <Group gap="xs" align="center">
+                      <Badge variant="light" color="teal">received</Badge>
+                      <Button
+                        size="xs"
+                        color="red"
+                        variant="light"
+                        loading={deletingId === offering.id}
+                        onClick={() => handleDelete(offering)}
+                        data-testid={`delete-offering-${offering.id}`}
+                        data-offering-delete-id={offering.id}
+                      >
+                        {t('offerings.deleteOffering')}
+                      </Button>
+                    </Group>
                   </Group>
                 </Paper>
               );

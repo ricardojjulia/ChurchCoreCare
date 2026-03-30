@@ -104,6 +104,15 @@ function formatCurrency(value) {
   }).format(Number.isFinite(amount) ? amount : 0);
 }
 
+function formatCurrencyFromCents(value) {
+  const amount = Number(value ?? 0);
+  return new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 2,
+  }).format(Number.isFinite(amount) ? amount / 100 : 0);
+}
+
 function formatBytes(value) {
   const size = Number(value ?? 0);
   if (!Number.isFinite(size) || size <= 0) return '0 B';
@@ -787,7 +796,7 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
                   <Text c="dimmed" size="xs" tt="uppercase" fw={700}>
                     {t('portal.dashboard.suggestedOffering')}
                   </Text>
-                  <Text fw={700} mt={8}>{formatCurrency(overview?.settings?.suggestedOfferingCents ?? 0)}</Text>
+                  <Text fw={700} mt={8}>{formatCurrencyFromCents(overview?.settings?.suggestedOfferingCents ?? 0)}</Text>
                   <Text size="sm" c="dimmed" mt={4}>{openRequests} open appointment request(s).</Text>
                 </Card>
               </SimpleGrid>
@@ -1331,12 +1340,12 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
             <Stack gap="md">
               <Paper withBorder radius="md" p="md">
                 <Text c="dimmed" size="sm">{overview?.settings?.offeringMinistryNote || t('portal.giving.ministryNote')}</Text>
-                <Text fw={600} mt={4}>{t('portal.giving.suggestedPerSession', { amount: formatCurrency(overview?.settings?.suggestedOfferingCents ?? 0) })}</Text>
+                <Text fw={600} mt={4}>{t('portal.giving.suggestedPerSession', { amount: formatCurrencyFromCents(overview?.settings?.suggestedOfferingCents ?? 0) })}</Text>
               </Paper>
               <SimpleGrid cols={{ base: 1, md: 3 }}>
                 <Card withBorder radius="md" p="md">
                   <Text c="dimmed" size="xs" tt="uppercase" fw={700}>{t('portal.giving.suggestedOffering')}</Text>
-                  <Text fw={700} mt={8}>{formatCurrency(overview?.settings?.suggestedOfferingCents ?? 0)}</Text>
+                  <Text fw={700} mt={8}>{formatCurrencyFromCents(overview?.settings?.suggestedOfferingCents ?? 0)}</Text>
                 </Card>
                 <Card withBorder radius="md" p="md">
                   <Text c="dimmed" size="xs" tt="uppercase" fw={700}>{t('portal.giving.receivedOfferings')}</Text>
@@ -1355,7 +1364,7 @@ export default function ClientPortalPage({ currentUser, clients = [], onSignOut 
                     <Paper key={payment.id} withBorder radius="sm" p="sm">
                       <Group justify="space-between" align="flex-start">
                         <Box>
-                          <Text fw={600}>{formatCurrency(payment.amount)}</Text>
+                          <Text fw={600}>{formatCurrencyFromCents(payment.amount ?? payment.amountCents ?? 0)}</Text>
                           <Text size="sm" c="dimmed">
                             {formatDateTime(payment.receivedAt || payment.paidAt)} • {(payment.paymentMethod || payment.method || 'offering').replaceAll('_', ' ')}
                           </Text>

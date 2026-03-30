@@ -1467,6 +1467,11 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (requestUrl.pathname.startsWith('/v1/offerings/')) {
+      await handleOfferings(request, response, requestUrl, session);
+      return;
+    }
+
     if (requestUrl.pathname === '/v1/offerings') {
       await handleOfferings(request, response, requestUrl, session);
       return;
@@ -8153,12 +8158,37 @@ async function createOfferingRecord(item) {
   return item;
 }
 
+async function deleteOfferingRecord(tenantId, offeringId) {
+  if (process.env.DB_NAME) {
+    const [result] = await pool.query(
+      'DELETE FROM offerings WHERE tenant_id = ? AND id = ? LIMIT 1',
+      [tenantId, offeringId],
+    );
+    return Number(result?.affectedRows ?? 0) > 0;
+  }
+
+  const index = offeringsRecords.findIndex((item) => item.tenantId === tenantId && item.id === offeringId);
+  if (index === -1) return false;
+  offeringsRecords.splice(index, 1);
+  return true;
+}
+
 async function handleOfferings(request, response, requestUrl, session) {
-  if (requireRole(request, response, session)) return;
+  if (!session) {
+    writeJson(response, 401, { error: 'Authentication required' });
+    return;
+  }
   const tenantId = callerTenant(request, session);
   const role = callerRole(request, session);
+  const offeringId = requestUrl.pathname.startsWith('/v1/offerings/')
+    ? sanitizeStr(requestUrl.pathname.slice('/v1/offerings/'.length), 80)
+    : '';
 
   if (request.method === 'GET') {
+    if (offeringId) {
+      writeJson(response, 405, { error: 'Method not allowed' });
+      return;
+    }
     let clientId = sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50);
     if (role === 'client') {
       const portalClient = await resolvePortalClient(request, response, clientId, session);
@@ -8203,6 +8233,26 @@ async function handleOfferings(request, response, requestUrl, session) {
     return;
   }
 
+  if (request.method === 'DELETE') {
+    if (role === 'client') {
+      writeJson(response, 403, { error: 'Insufficient permissions' });
+      return;
+    }
+    if (!offeringId) {
+      writeJson(response, 400, { error: 'offeringId is required' });
+      return;
+    }
+    const deleted = await deleteOfferingRecord(tenantId, offeringId);
+    if (!deleted) {
+      writeJson(response, 404, { error: 'Offering not found' });
+      return;
+    }
+    telemetry.recordMutation('offerings.delete');
+    emitAudit(request, 'offerings.delete', 'offering', offeringId, session);
+    writeJson(response, 200, { ok: true, deletedId: offeringId });
+    return;
+  }
+
   writeJson(response, 405, { error: 'Method not allowed' });
 }
 
@@ -8211,7 +8261,10 @@ async function handleOfferingsSummary(request, response, session) {
     writeJson(response, 405, { error: 'Method not allowed' });
     return;
   }
-  if (requireRole(request, response, session)) return;
+  if (!session) {
+    writeJson(response, 401, { error: 'Authentication required' });
+    return;
+  }
   const tenantId = callerTenant(request, session);
 
   const summary = await summarizeOfferingsForTenant(tenantId);
@@ -12496,6 +12549,7 @@ function resolveRoute(pathname) {
   if (pathname === '/v1/portal/resources') return '/v1/portal/resources';
   if (pathname === '/v1/portal/data-rights') return '/v1/portal/data-rights';
   if (pathname === '/v1/portal/data-rights/review') return '/v1/portal/data-rights/review';
+  if (pathname.startsWith('/v1/offerings/')) return '/v1/offerings/:id';
   if (pathname === '/v1/faith/overview') return '/v1/faith/overview';
   if (pathname === '/v1/faith/note-templates') return '/v1/faith/note-templates';
   if (pathname === '/v1/faith/treatment-goals') return '/v1/faith/treatment-goals';

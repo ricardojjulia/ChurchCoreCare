@@ -4,9 +4,9 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## At a Glance
 
-- Version: `5.2.1`
+- Version: `5.2.2`
 - Status: `Beta Ready`
-- Release summary: [docs/v5.2.1-RELEASE-SUMMARY.md](docs/v5.2.1-RELEASE-SUMMARY.md)
+- Release summary: [docs/v5.2.2-RELEASE-SUMMARY.md](docs/v5.2.2-RELEASE-SUMMARY.md)
 - UI Baseline agent run report: [docs/UI-BASELINE-AGENT-RUN-2026-03-30.md](docs/UI-BASELINE-AGENT-RUN-2026-03-30.md)
 - Operations Dashboard summary: [docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md](docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md)
 - Change log: [docs/change-log.md](docs/change-log.md)
@@ -28,11 +28,11 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## Current Release Focus
 
-The current build ships the offerings model with a patch fix for the first release regression on the new surfaces. The Offerings workspace and Workspace Studio Offerings tab now resolve their labels from the frontend i18n catalog correctly, and their data requests now flow through the `/api/v1/...` proxy instead of falling through to the web server HTML shell. That removes the raw `nav.offerings` / `topbar.offerings.*` key output and the `Unexpected token '<'` JSON parse failure seen on first launch.
+The current build ships the offerings model with the full first stabilization pass applied. Offerings labels resolve correctly, the screens use the proxied `/api/v1/...` API routes, the suggested-offering setting stays aligned between Workspace Studio and the client portal, older databases receive the required portal-settings columns automatically, and incorrect offering entries can now be removed from the Offerings history.
 
 ## Key Docs
 
-- Release summary: [docs/v5.2.1-RELEASE-SUMMARY.md](docs/v5.2.1-RELEASE-SUMMARY.md)
+- Release summary: [docs/v5.2.2-RELEASE-SUMMARY.md](docs/v5.2.2-RELEASE-SUMMARY.md)
 - Operations Dashboard summary: [docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md](docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md)
 - Operations Dashboard implementation log: [docs/OPERATIONS-DASHBOARD-IMPLEMENTATION-LOG-2026-03-30.md](docs/OPERATIONS-DASHBOARD-IMPLEMENTATION-LOG-2026-03-30.md)
 - Spanish translation report: [docs/TRANSLATION-GUARDIAN-ES-RUN-2026-03-30.md](docs/TRANSLATION-GUARDIAN-ES-RUN-2026-03-30.md)
@@ -82,6 +82,33 @@ pnpm agent:translation:run
 
 The service listens on `http://127.0.0.1:8098` by default.
 
+## v5.2.2 — Offerings Settings and Removal Fixes (March 30, 2026)
+
+### v5.2.2 Overview
+
+This patch completes the first stabilization pass for the Offerings model. It fixes the remaining settings and display bugs on the new Offerings and Giving surfaces, adds the missing database migration path for older `portal_settings` tables, and lets staff remove incorrect offering entries from the Offerings history.
+
+### v5.2.2 — What Changed
+
+- added backward-compatible `portal_settings` migrations for:
+  - `financial_mode`
+  - `suggested_offering_cents`
+  - `offering_ministry_note`
+- fixed authenticated offerings runtime handling in the API
+- added `DELETE /v1/offerings/:id` so incorrect entries can be removed
+- fixed the Workspace Studio Offerings amount field so saved cents reload as dollars correctly
+- fixed the client portal Giving view so cent-based suggested and recorded offerings display as dollars correctly
+- added a `Remove` action to the Offerings history screen
+
+### v5.2.2 — Validation
+
+```bash
+node --env-file=.env apps/api/src/db/migrate.js
+pnpm --filter @faith/api exec node --check src/index.js
+pnpm lint
+pnpm --filter @faith/web build
+```
+
 ## v5.2.1 — Offerings UI Hotfix (March 30, 2026)
 
 ### v5.2.1 Overview
@@ -98,6 +125,10 @@ This patch fixes the first-release regressions on the new Offerings surfaces. Th
   - `portal.tab.giving`
   - `portal.giving.*`
 - switched the Offerings workspace and Workspace Studio Offerings tab to `/api/v1/...` requests so they use the same-origin proxy correctly
+- added backward-compatible portal-settings migrations for `financial_mode`, `suggested_offering_cents`, and `offering_ministry_note`
+- fixed the Workspace Studio Offerings tab so saved cent values load back into the dollar input correctly
+- fixed the client portal giving surface so suggested offering and offering-history amounts render cents as dollars correctly
+- added removal support for incorrect offering entries from the Offerings history surface
 - rebuilt the served web bundle so the fix is live from the production asset entrypoint
 
 ### v5.2.1 — Validation

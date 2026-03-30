@@ -34,6 +34,7 @@ Default URL: `http://localhost:3000`
 - key metric cards for today's sessions, future appointments, audit-event visibility, and current session identity/state
 - operations panels for schedule, priority queue, and compliance watch
 - care flow progress indicators
+- Offerings workspace and Workspace Studio suggested-giving settings, including correction of incorrect offering entries
 - same-origin `/api/*` proxy for live dashboard hydration from the API service
 - monitoring surfaces for API liveness, readiness, and telemetry summary data
 - branded monitoring page at `/monitor.html` aligned to the same indigo/light workspace palette as the main app
