@@ -8,6 +8,7 @@ Christian counseling practice management SaaS for solo counselors, group practic
 - Status: `Beta Ready`
 - Release summary: [docs/v4.7.0-RELEASE-SUMMARY.md](docs/v4.7.0-RELEASE-SUMMARY.md)
 - Change log: [docs/change-log.md](docs/change-log.md)
+- Spanish translation report: [docs/TRANSLATION-GUARDIAN-ES-RUN-2026-03-30.md](docs/TRANSLATION-GUARDIAN-ES-RUN-2026-03-30.md)
 
 ## What This Includes
 
@@ -25,6 +26,7 @@ Christian counseling practice management SaaS for solo counselors, group practic
 ## Key Docs
 
 - Release summary: [docs/v4.7.0-RELEASE-SUMMARY.md](docs/v4.7.0-RELEASE-SUMMARY.md)
+- Spanish translation report: [docs/TRANSLATION-GUARDIAN-ES-RUN-2026-03-30.md](docs/TRANSLATION-GUARDIAN-ES-RUN-2026-03-30.md)
 - Form library plan: [PLANS/FORM-LIBRARY-EXPANSION.md](PLANS/FORM-LIBRARY-EXPANSION.md)
 - Portal plan: [PLANS/CLIENT-PORTAL-EXPANSION.md](PLANS/CLIENT-PORTAL-EXPANSION.md)
 - Monitoring baseline: [PLANS/FULL-SURFACE-MONITORING.md](PLANS/FULL-SURFACE-MONITORING.md)
@@ -33,6 +35,10 @@ Christian counseling practice management SaaS for solo counselors, group practic
 ## Translation Guardian Agent
 
 The translation quality/safety agent is available at `agents/translation_guardian`.
+
+Latest Spanish findings and remediation report:
+
+- [docs/TRANSLATION-GUARDIAN-ES-RUN-2026-03-30.md](docs/TRANSLATION-GUARDIAN-ES-RUN-2026-03-30.md)
 
 Quick run from repo root:
 

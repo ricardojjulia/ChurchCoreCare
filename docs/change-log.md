@@ -35,6 +35,19 @@ Expands the Documents module into a fuller counseling library. The shared `FormR
   - updated user-facing copy to reflect intake, consent, assessment, planning, worksheet, and faith-tool coverage
 - `apps/api/src/index.js`
   - expanded `DEFAULT_FORM_CATALOG` so the new forms are available to assignment and signup-default workflows
+- `apps/api/data/i18n/en.json`
+  - synced the English source catalog used by the locale integrity checks
+- `apps/api/data/i18n/es.json`
+  - completed and corrected the Spanish locale keyset
+- `agents/translation_guardian/tools.py`
+  - hardened locale preparation and browser challenge evaluation for existing translated locales and non-picker fallback flows
+
+### Documentation
+
+- `docs/TRANSLATION-GUARDIAN-ES-RUN-2026-03-30.md`
+  - full Spanish Translation Guardian findings, fixes, and final pass report
+- `README.md`
+  - linked the current Spanish translation report from the main overview and Translation Guardian section
 
 ### Validation
 

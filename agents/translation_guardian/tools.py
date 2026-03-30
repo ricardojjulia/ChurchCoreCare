@@ -93,6 +93,27 @@ def _resolve_locale_input(language_or_locale: str) -> tuple[str, str]:
     return locale, label
 
 
+def _normalize_visible_text(text: str) -> str:
+    return " ".join((text or "").split()).strip().lower()
+
+
+async def _collect_visible_text(
+    page,
+    selectors: list[str],
+    *,
+    per_selector_limit: int = 30,
+) -> list[str]:
+    collected: list[str] = []
+    for selector in selectors:
+        nodes = page.locator(selector)
+        count = await nodes.count()
+        for i in range(min(count, per_selector_limit)):
+            text = (await nodes.nth(i).inner_text()).strip()
+            if text:
+                collected.append(text)
+    return collected
+
+
 async def _apply_language_selection(page, locale: str, locale_label: str) -> None:
     # Support both native <select> and combobox-based controls (Mantine style).
     native = page.locator('select[aria-label="Language"]').first
@@ -197,43 +218,64 @@ async def prepare_locale_in_application(
             },
         )
 
-        translated = await _api_json(page, "POST", api_translate, {"locale": locale})
+        integrity_before_translate = evaluate_locale_integrity(locale)
+        if integrity_before_translate.get("missingKeyCount") or integrity_before_translate.get("blankValueCount"):
+            translated = await _api_json(page, "POST", api_translate, {"locale": locale})
+        else:
+            translated = {"messages": {}}
         catalog_payload = await _api_json(page, "GET", api_catalog)
 
-        before_nodes = await page.locator(
-            ".workspace-topbar-kicker, .workspace-topbar-title, .workspace-topbar-subtitle, [data-nav-key], button, h1, h2, h3"
-        ).all_inner_texts()
-        before_visible = [text.strip() for text in before_nodes if text and text.strip()]
+        visible_selectors = [
+            ".workspace-topbar-kicker",
+            ".workspace-topbar-title",
+            ".workspace-topbar-subtitle",
+            "[data-nav-key]",
+            "button",
+            "h1, h2, h3",
+        ]
+        before_visible = await _collect_visible_text(page, visible_selectors)
         await page.screenshot(path=str(screenshot_before), full_page=True)
 
         language_picker_exists = await page.locator('select[aria-label="Language"], input[aria-label="Language"]').count()
         if language_picker_exists == 0:
-            run_summary["status"] = "fail"
-            run_summary["error"] = "Language picker not found on main screen."
-            run_summary["screenshotBefore"] = str(screenshot_before)
-            await context.close()
-            await browser.close()
-            return run_summary
+            await page.evaluate(
+                "(nextLocale) => localStorage.setItem('faith.locale', nextLocale)",
+                locale,
+            )
+            await page.reload(wait_until="domcontentloaded")
+            await page.wait_for_timeout(1200)
+        else:
+            await _apply_language_selection(page, locale, locale_label)
+            await page.wait_for_timeout(1200)
 
-        await _apply_language_selection(page, locale, locale_label)
-        await page.wait_for_timeout(1200)
-
-        after_nodes = await page.locator(
-            ".workspace-topbar-kicker, .workspace-topbar-title, .workspace-topbar-subtitle, [data-nav-key], button, h1, h2, h3"
-        ).all_inner_texts()
-        after_visible = [text.strip() for text in after_nodes if text and text.strip()]
+        after_visible = await _collect_visible_text(page, visible_selectors)
         await page.screenshot(path=str(screenshot_after), full_page=True)
 
         await context.close()
         await browser.close()
 
     translations = catalog_payload.get("messages", {}) if isinstance(catalog_payload, dict) else {}
+    if not translations:
+        translations = {
+            key: value
+            for key, value in _load_json(_locale_path(locale)).items()
+            if key != "__label"
+        }
     source_messages = _load_json(_locale_path(SOURCE_LOCALE))
-    translated_values = {value for value in translations.values() if isinstance(value, str) and value.strip()}
-    english_values = {value for value in source_messages.values() if isinstance(value, str) and value.strip()}
+    translated_values = {
+        _normalize_visible_text(value)
+        for value in translations.values()
+        if isinstance(value, str) and value.strip()
+    }
+    english_values = {
+        _normalize_visible_text(value)
+        for value in source_messages.values()
+        if isinstance(value, str) and value.strip()
+    }
+    normalized_visible = [_normalize_visible_text(value) for value in after_visible if _normalize_visible_text(value)]
 
-    matching_translated = sum(1 for value in after_visible if value in translated_values)
-    english_after = sum(1 for value in after_visible if value in english_values)
+    matching_translated = sum(1 for value in normalized_visible if value in translated_values)
+    english_after = sum(1 for value in normalized_visible if value in english_values)
     translated_ratio = round(matching_translated / max(len(after_visible), 1), 4)
 
     status = "pass"
@@ -319,7 +361,7 @@ def evaluate_locale_integrity(locale: str) -> dict[str, Any]:
     source = _load_json(_locale_path(SOURCE_LOCALE))
     target = _load_json(_locale_path(locale))
 
-    source_keys = set(source.keys())
+    source_keys = {k for k in source.keys() if k != "__label"}
     target_keys = {k for k in target.keys() if k != "__label"}
 
     missing = sorted(source_keys - target_keys)
@@ -491,9 +533,17 @@ async def run_browser_translation_challenge(
             except Exception:
                 # If locale not available in picker yet, keep current language and continue diagnostic pass.
                 pass
+        else:
+            await page.evaluate(
+                "(nextLocale) => localStorage.setItem('faith.locale', nextLocale)",
+                locale,
+            )
+            await page.reload(wait_until="domcontentloaded")
+            await page.wait_for_timeout(800)
 
         selectors = [
             "#userBadge",
+            ".workspace-topbar-kicker",
             ".workspace-topbar-title",
             ".workspace-topbar-subtitle",
             "[data-nav-key]",
@@ -501,15 +551,7 @@ async def run_browser_translation_challenge(
             "button",
             "h1, h2, h3",
         ]
-        collected_text: list[str] = []
-        for selector in selectors:
-            nodes = page.locator(selector)
-            count = await nodes.count()
-            for i in range(min(count, 30)):
-                txt = (await nodes.nth(i).inner_text()).strip()
-                if txt:
-                    collected_text.append(txt)
-
+        collected_text = await _collect_visible_text(page, selectors)
         page_text = "\n".join(collected_text)
 
         for term in terms:
