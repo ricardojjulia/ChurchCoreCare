@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { TextInput, PasswordInput, Button, Alert, Text, Paper, Stack, Group, Box, List } from '@mantine/core';
+import { TextInput, PasswordInput, Button, Alert, Text, Paper, Stack, Group, Box, List, Divider } from '@mantine/core';
 import { useI18n } from '../lib/i18nContext.jsx';
 import { completePortalPasswordReset, requestPortalPasswordReset } from '../lib/clientApi.js';
 
@@ -15,6 +15,12 @@ export default function AuthGate({ onContinue }) {
   const [lockedOut, setLockedOut] = useState(false);
   const [notice, setNotice] = useState(null);
   const [loading,  setLoading]  = useState(false);
+
+  const portalActions = [
+    { href: '/portal?intent=account_signup', label: t('auth.portalCreateAccount') },
+    { href: '/portal?intent=care_request', label: t('auth.portalRequestCare') },
+    { href: '/portal?intent=scheduling_request', label: t('auth.portalRequestScheduling') },
+  ];
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -235,6 +241,31 @@ export default function AuthGate({ onContinue }) {
                       ? t('auth.portalRequestReset')
                       : t('auth.portalCompleteReset')}
                 </Button>
+
+                {mode === 'sign_in' ? (
+                  <>
+                    <Divider
+                      my="sm"
+                      label={t('auth.portalAccessDivider')}
+                      labelPosition="center"
+                    />
+                    <Text fz="sm" c="dimmed">
+                      {t('auth.portalAccessHelp')}
+                    </Text>
+                    <Group grow>
+                      {portalActions.map((action) => (
+                        <Button
+                          key={action.href}
+                          component="a"
+                          href={action.href}
+                          variant="default"
+                        >
+                          {action.label}
+                        </Button>
+                      ))}
+                    </Group>
+                  </>
+                ) : null}
               </Stack>
             </form>
           </Box>

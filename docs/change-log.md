@@ -16,6 +16,7 @@ Records the final security, triage, and repair sweeps for the completed portal r
 - `docs/AGENT-RUN-2026-03-29.md` — consolidated report for the final agent-driven signoff sweep
 - security-regression fixture alignment for the current public portal consent contract
 - release note coverage for the completed portal and validation pass
+- direct `Create account`, `Request care`, and `Get scheduled` portal-entry actions on the shared sign-in surface, with `/portal` intent preselection
 
 ### Validation
 

@@ -26,6 +26,8 @@ The service listens on `http://127.0.0.1:8098` by default.
 
 This is a stabilization release for the completed client portal work. It records the final security, triage, and repair sweeps, plus the repo-native validation pass that confirmed the portal build is stable, localized, and ready for release.
 
+The shared sign-in surface now also exposes direct portal entry actions for `Create account`, `Request care`, and `Get scheduled`, and routes those links into the matching `/portal` onboarding intent.
+
 ### v4.5.0 — Validation
 
 - `pnpm lint`

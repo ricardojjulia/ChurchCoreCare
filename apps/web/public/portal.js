@@ -35,6 +35,18 @@ const DEFAULT_CONFIG = {
 let portalConfig = { ...DEFAULT_CONFIG };
 let currentIntent = 'care_request';
 const loadStartedAt = performance.now();
+const requestedIntentFromQuery = (() => {
+  try {
+    const raw = new URLSearchParams(window.location.search).get('intent') || '';
+    const normalized = raw.trim().toLowerCase();
+    if (Object.prototype.hasOwnProperty.call(REQUEST_INTENTS, normalized)) {
+      return normalized;
+    }
+  } catch {
+    return '';
+  }
+  return '';
+})();
 
 function getCookie(name) {
   const pairs = document.cookie.split(';').map((part) => part.trim());
@@ -250,9 +262,11 @@ function applyPortalConfig(config) {
   });
   updateContactPreferenceOptions(portalConfig.contactPreferenceOptions || []);
 
-  const nextIntent = allowedIntents.includes(currentIntent)
-    ? currentIntent
-    : (allowedIntents[0] || 'care_request');
+  const nextIntent = allowedIntents.includes(requestedIntentFromQuery)
+    ? requestedIntentFromQuery
+    : allowedIntents.includes(currentIntent)
+      ? currentIntent
+      : (allowedIntents[0] || 'care_request');
   selectIntent(nextIntent);
 }
 

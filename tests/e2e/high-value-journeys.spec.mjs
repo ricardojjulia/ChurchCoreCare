@@ -2,6 +2,16 @@ import { test, expect } from '@playwright/test';
 import { ensureCounselor, futureDateTimeLocal, getTestAccount, openPrimaryNav, signInAs, signInWithCredentials } from './helpers.mjs';
 
 test.describe('high-value UI journeys', () => {
+  test('shared sign-in gate links new clients into the portal create-account flow', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('#loginEmail')).toBeVisible();
+
+    await page.locator('a[href="/portal?intent=account_signup"]').click();
+
+    await expect(page).toHaveURL(/\/portal\?intent=account_signup$/);
+    await expect(page.locator('#portalRequestHeading')).toContainText('create a portal account');
+  });
+
   test('practice admin can create a client and schedule an appointment from the current workspace flow', async ({ page }) => {
     const suffix = String(Date.now()).slice(-6);
     const firstName = `Step${suffix}`;
