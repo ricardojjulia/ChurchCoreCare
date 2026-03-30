@@ -17,9 +17,41 @@ import { BurnoutAssessment } from './forms/BurnoutAssessment.js';
 import { SpiritualWellnessInventory } from './forms/SpiritualWellnessInventory.js';
 import { FamilySystemsAssessment } from './forms/FamilySystemsAssessment.js';
 import { InsomniaSeverityIndex } from './forms/InsomniaSeverityIndex.js';
+import {
+  InformedConsentForm,
+  TelehealthConsentForm,
+  ReleaseOfInformationAuthorization,
+} from './forms/AdministrativeForms.js';
+import {
+  BiopsychosocialAssessment,
+  MentalStatusExam,
+  SafetyPlanTemplate,
+  MoodDisorderQuestionnaire,
+  EatingDisorderScreening,
+  AngerAssessmentScale,
+} from './forms/ClinicalFoundationForms.js';
+import {
+  IndividualTreatmentPlan,
+  SMARTGoalsWorksheet,
+  RelapsePreventionPlan,
+} from './forms/TreatmentPlanningForms.js';
+import {
+  CBTThoughtRecord,
+  CognitiveDistortionsWorksheet,
+  BehavioralActivationSchedule,
+  CopingSkillsPlan,
+  GroundingTechniquesWorksheet,
+  MindfulnessPracticeLog,
+} from './forms/TherapeuticWorksheets.js';
+import {
+  FaithHistoryQuestionnaire,
+  ValuesAndBiblicalIdentityWorksheet,
+} from './forms/FaithCounselingForms.js';
 
 export const CATEGORIES = [
   { id: 'intake', label: 'Intake Forms', icon: '📋' },
+  { id: 'administrative', label: 'Consent & Administrative', icon: '🧾' },
+  { id: 'assessment', label: 'Clinical Assessments', icon: '🧠' },
   { id: 'depression', label: 'Depression', icon: '🌧️' },
   { id: 'anxiety', label: 'Anxiety & OCD', icon: '💨' },
   { id: 'trauma', label: 'Trauma & PTSD', icon: '🛡️' },
@@ -31,6 +63,8 @@ export const CATEGORIES = [
   { id: 'relationship', label: 'Relationships', icon: '💑' },
   { id: 'grief', label: 'Grief & Loss', icon: '🕊️' },
   { id: 'burnout', label: 'Burnout & Wellness', icon: '🕯️' },
+  { id: 'treatment', label: 'Treatment Planning', icon: '📝' },
+  { id: 'worksheets', label: 'Therapeutic Worksheets', icon: '🧩' },
   { id: 'faith', label: 'Faith & Spirituality', icon: '✝️' },
   { id: 'family', label: 'Family Systems', icon: '🏠' },
 ];
@@ -38,6 +72,14 @@ export const CATEGORIES = [
 export const FORM_CATALOG = [
   { formDef: ShortIntakeForm, category: 'intake', badgeLabel: 'Intake', badgeColor: 'indigo' },
   { formDef: LongIntakeForm, category: 'intake', badgeLabel: 'Intake', badgeColor: 'indigo' },
+  { formDef: InformedConsentForm, category: 'administrative', badgeLabel: 'Consent', badgeColor: 'blue' },
+  { formDef: TelehealthConsentForm, category: 'administrative', badgeLabel: 'Consent', badgeColor: 'cyan' },
+  { formDef: ReleaseOfInformationAuthorization, category: 'administrative', badgeLabel: 'Release', badgeColor: 'indigo' },
+  { formDef: BiopsychosocialAssessment, category: 'assessment', badgeLabel: 'Assessment', badgeColor: 'grape' },
+  { formDef: MentalStatusExam, category: 'assessment', badgeLabel: 'Assessment', badgeColor: 'teal' },
+  { formDef: MoodDisorderQuestionnaire, category: 'assessment', badgeLabel: 'Screening', badgeColor: 'yellow' },
+  { formDef: EatingDisorderScreening, category: 'assessment', badgeLabel: 'Screening', badgeColor: 'pink' },
+  { formDef: AngerAssessmentScale, category: 'assessment', badgeLabel: 'Assessment', badgeColor: 'orange' },
   { formDef: PHQ9, category: 'depression', badgeLabel: 'Screener', badgeColor: 'teal' },
   { formDef: DASS21, category: 'depression', badgeLabel: 'Assessment', badgeColor: 'teal' },
   { formDef: AnxietyAssessment, category: 'anxiety', badgeLabel: 'Screener', badgeColor: 'teal' },
@@ -50,10 +92,22 @@ export const FORM_CATALOG = [
   { formDef: AUDIT, category: 'substance', badgeLabel: 'Screening', badgeColor: 'orange' },
   { formDef: InsomniaSeverityIndex, category: 'sleep', badgeLabel: 'Assessment', badgeColor: 'blue' },
   { formDef: SelfHarmAssessment, category: 'clinical', badgeLabel: 'Clinical', badgeColor: 'red', crisisAlert: true },
+  { formDef: SafetyPlanTemplate, category: 'clinical', badgeLabel: 'Safety', badgeColor: 'red' },
   { formDef: CouplesAssessment, category: 'relationship', badgeLabel: 'Counseling', badgeColor: 'pink' },
   { formDef: GriefAssessment, category: 'grief', badgeLabel: 'Counseling', badgeColor: 'gray' },
   { formDef: BurnoutAssessment, category: 'burnout', badgeLabel: 'Counseling', badgeColor: 'orange' },
+  { formDef: IndividualTreatmentPlan, category: 'treatment', badgeLabel: 'Planning', badgeColor: 'green' },
+  { formDef: SMARTGoalsWorksheet, category: 'treatment', badgeLabel: 'Planning', badgeColor: 'lime' },
+  { formDef: RelapsePreventionPlan, category: 'treatment', badgeLabel: 'Planning', badgeColor: 'blue' },
+  { formDef: CBTThoughtRecord, category: 'worksheets', badgeLabel: 'Worksheet', badgeColor: 'violet' },
+  { formDef: CognitiveDistortionsWorksheet, category: 'worksheets', badgeLabel: 'Worksheet', badgeColor: 'grape' },
+  { formDef: BehavioralActivationSchedule, category: 'worksheets', badgeLabel: 'Worksheet', badgeColor: 'indigo' },
+  { formDef: CopingSkillsPlan, category: 'worksheets', badgeLabel: 'Worksheet', badgeColor: 'teal' },
+  { formDef: GroundingTechniquesWorksheet, category: 'worksheets', badgeLabel: 'Worksheet', badgeColor: 'green' },
+  { formDef: MindfulnessPracticeLog, category: 'worksheets', badgeLabel: 'Worksheet', badgeColor: 'blue' },
   { formDef: SpiritualWellnessInventory, category: 'faith', badgeLabel: 'Faith', badgeColor: 'violet' },
+  { formDef: FaithHistoryQuestionnaire, category: 'faith', badgeLabel: 'Faith', badgeColor: 'violet' },
+  { formDef: ValuesAndBiblicalIdentityWorksheet, category: 'faith', badgeLabel: 'Faith', badgeColor: 'lime' },
   { formDef: FamilySystemsAssessment, category: 'family', badgeLabel: 'Counseling', badgeColor: 'green' },
 ];
 

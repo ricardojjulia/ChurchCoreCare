@@ -13,6 +13,7 @@ function FormCard({ entry, onSelect }) {
 
   return (
     <Paper
+      data-form-id={formDef.id}
       withBorder
       radius="lg"
       p="xl"
@@ -82,8 +83,9 @@ function LibraryHeader() {
         <Title order={3} style={{ color: 'var(--text)' }}>Client Documents</Title>
       </Group>
       <Text fz="sm" c="dimmed" maw={560}>
-        Electronic forms for counseling assessments and intake. All forms include a Faith &amp; Spiritual
-        Profile section rooted in Christian principles. Complete in-session or assign for self-completion.
+        Electronic forms for counseling intake, consent, assessment, treatment planning, worksheets, and
+        faith-integrated reflection. Complete in-session or assign for self-completion through the shared
+        Documents surface.
       </Text>
       <Divider mt="lg" />
     </Box>
@@ -140,10 +142,10 @@ export default function DocumentsPage() {
             <Stack gap={4}>
               <Text fw={600} fz="sm">Christian Counseling Integration</Text>
               <Text fz="sm" c="dimmed">
-                Every form in this library includes a <strong>Faith &amp; Spiritual Profile</strong> or{' '}
-                <strong>Faith Dimension</strong> section. These sections invite clients to share their
-                spiritual life, how faith shapes their healing, and their openness to prayer and Scripture
-                within the counseling relationship.
+                This library now spans clinical, administrative, and therapeutic workflows. Faith-specific
+                forms remain available for practices that want dedicated spiritual-history, values, and
+                biblical-identity tools, and many core forms still provide room for faith-integration
+                preferences where clinically appropriate.
               </Text>
               <Text fz="xs" c="dimmed" mt={4} fs="italic">
                 "He heals the brokenhearted and binds up their wounds." — Psalm 147:3

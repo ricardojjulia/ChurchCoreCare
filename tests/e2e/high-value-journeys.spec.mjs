@@ -82,6 +82,18 @@ test.describe('high-value UI journeys', () => {
     await expect(page.locator('[data-tab="audit"]')).toBeVisible();
   });
 
+  test('practice admin can access the expanded documents library and open a new consent form', async ({ page }) => {
+    await signInAs(page, 'practice_admin');
+    await openPrimaryNav(page, 'documents');
+    await expect(page.getByRole('heading', { name: 'Client Documents' })).toBeVisible();
+    await expect(page.getByText('Consent & Administrative')).toBeVisible();
+    await expect(page.getByText('Therapeutic Worksheets')).toBeVisible();
+
+    await page.locator('[data-form-id="informed_consent_form"]').getByRole('button', { name: 'Open Form' }).click();
+    await expect(page.getByText('Counseling Relationship and Expectations')).toBeVisible();
+    await expect(page.getByText('Acknowledgement')).toBeVisible();
+  });
+
   test('practice admin can preview the authenticated client portal, save profile preferences, and submit an appointment request', async ({ page }) => {
     const suffix = String(Date.now()).slice(-6);
     const preferredStartAt = futureDateTimeLocal({ days: 2, hours: 14, minutes: 0 });

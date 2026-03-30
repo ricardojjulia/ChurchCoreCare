@@ -2,6 +2,58 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## v4.7.0 — Expanded Counseling Form Library
+
+**Date:** March 29, 2026
+**Type:** Feature revision
+
+### Summary
+
+Expands the Documents module into a fuller counseling library. The shared `FormRunner` now powers consent paperwork, deeper assessments, treatment-planning forms, therapeutic worksheets, and additional Christian counseling reflection tools without requiring a second document engine.
+
+### Added
+
+- `PLANS/FORM-LIBRARY-EXPANSION.md` — implementation plan and category model for the expanded form library
+- 20 new form definitions across five grouped modules:
+  - `AdministrativeForms.js`
+  - `ClinicalFoundationForms.js`
+  - `TreatmentPlanningForms.js`
+  - `TherapeuticWorksheets.js`
+  - `FaithCounselingForms.js`
+- four new catalog categories in the shared form registry:
+  - `administrative`
+  - `assessment`
+  - `treatment`
+  - `worksheets`
+- Documents-surface browser regression for opening a newly added consent form through the real UI
+
+### Changed
+
+- `apps/web/src/components/Documents/formRegistry.js`
+  - expanded from the prior 19-form library to a 39-form library
+- `apps/web/src/components/Documents/DocumentsPage.jsx`
+  - updated user-facing copy to reflect intake, consent, assessment, planning, worksheet, and faith-tool coverage
+- `apps/api/src/index.js`
+  - expanded `DEFAULT_FORM_CATALOG` so the new forms are available to assignment and signup-default workflows
+
+### Validation
+
+- `pnpm lint` — passed
+- `pnpm --filter @faith/web build` — passed
+- `npx playwright test tests/e2e/high-value-journeys.spec.mjs --grep "practice admin can access the expanded documents library and open a new consent form"` — passed
+
+### Version bump
+
+Updated package versions from `4.6.0` to `4.7.0`:
+
+- `package.json`
+- `apps/api/package.json`
+- `apps/web/package.json`
+- `apps/worker/package.json`
+- `packages/domain/package.json`
+- `packages/i18n/package.json`
+- `packages/telemetry/package.json`
+
 ## v4.6.0 — CRITICAL FIX: Complete Logout Session Invalidation
 
 **Date:** March 29, 2026

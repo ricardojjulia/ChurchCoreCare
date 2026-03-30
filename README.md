@@ -4,8 +4,8 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## Version
 
-- Current release: `4.6.0`
-- Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI + revamped ops/monitoring + explicit health probes + OTEL health export + full Scheduling module with Waitlist, Reminders & Calendar DB support + waitlist-to-appointment promotion + audit UUID hardening + deep DB engine monitoring dashboard + full Audit Intelligence UI redesign + structured PHI-safe API logging + live dashboard appointment and audit metrics + full Reporting tab UI redesign + repaired Swagger UI proxy/docs delivery + redesigned About experience + static file server query-string fix + operations header/session card refresh + versioned web asset delivery + UI enhancements across main shell, monitoring, and operations surfaces + desktop sidebar toggle fix + sidebar options icon refresh + schema fixes for availability_overrides and appointment_series + utilization GROUP BY fix + appointment identity integrity for renamed counselors and clients + repaired Workspace Studio document assignment workflow + synced tracked web build artifacts + lint-clean documentation and generated monitoring outputs + full Electronic Documents module with four clinical forms, GAD-7 auto-scoring, C-SSRS risk stratification, Christian counseling faith dimensions, and a generic form renderer + deeper public portal onboarding with structured intake and instant activation support + authenticated client portal completion across profile, appointments, documents, uploads, data rights, counselor, financials, and resources + localized portal auth and client shell + policy-aware portal deletion review and fulfillment + validated security, localization, and launch-readiness coverage)
+- Current release: `4.7.0`
+- Status: production-ready (client module + MySQL persistence layer + Docker local DB + counselor profiling + Mantine UI + revamped ops/monitoring + explicit health probes + OTEL health export + full Scheduling module with Waitlist, Reminders & Calendar DB support + waitlist-to-appointment promotion + audit UUID hardening + deep DB engine monitoring dashboard + full Audit Intelligence UI redesign + structured PHI-safe API logging + live dashboard appointment and audit metrics + full Reporting tab UI redesign + repaired Swagger UI proxy/docs delivery + redesigned About experience + static file server query-string fix + operations header/session card refresh + versioned web asset delivery + UI enhancements across main shell, monitoring, and operations surfaces + desktop sidebar toggle fix + sidebar options icon refresh + schema fixes for availability_overrides and appointment_series + utilization GROUP BY fix + appointment identity integrity for renamed counselors and clients + repaired Workspace Studio document assignment workflow + synced tracked web build artifacts + lint-clean documentation and generated monitoring outputs + a 39-form Electronic Documents library spanning intake, consent, assessments, treatment planning, therapeutic worksheets, and faith-integrated tools + deeper public portal onboarding with structured intake and instant activation support + authenticated client portal completion across profile, appointments, documents, uploads, data rights, counselor, financials, and resources + localized portal auth and client shell + policy-aware portal deletion review and fulfillment + validated security, localization, launch-readiness, and expanded Documents coverage)
 
 ## Translation Guardian Agent
 
@@ -19,6 +19,38 @@ pnpm agent:translation:run
 ```
 
 The service listens on `http://127.0.0.1:8098` by default.
+
+## v4.7.0 — Expanded Counseling Form Library (March 29, 2026)
+
+### v4.7.0 Overview
+
+This release expands the electronic Documents library from a screening-heavy catalog into a fuller counseling toolkit. The shared browser-based form engine now serves intake and consent paperwork, deeper assessments, treatment-planning templates, therapeutic worksheets, and additional Christian counseling reflection forms without introducing a second document system.
+
+The library now ships with 39 total forms. New additions include informed consent, telehealth consent, ROI authorization, biopsychosocial assessment, MSE, safety planning, treatment planning, SMART goals, relapse prevention, CBT and grounding worksheets, mindfulness logs, and expanded faith-history and biblical-identity tools.
+
+### v4.7.0 — What Changed
+
+- Added 20 new form definitions in grouped modules:
+  - `apps/web/src/components/Documents/forms/AdministrativeForms.js`
+  - `apps/web/src/components/Documents/forms/ClinicalFoundationForms.js`
+  - `apps/web/src/components/Documents/forms/TreatmentPlanningForms.js`
+  - `apps/web/src/components/Documents/forms/TherapeuticWorksheets.js`
+  - `apps/web/src/components/Documents/forms/FaithCounselingForms.js`
+- Added a documented rollout spec at `PLANS/FORM-LIBRARY-EXPANSION.md`
+- Expanded the shared Documents registry with new categories:
+  - `administrative`
+  - `assessment`
+  - `treatment`
+  - `worksheets`
+- Updated the Documents page copy so it reflects the broader library scope instead of only intake and assessments
+- Expanded the API default form catalog so the new forms are available to staff workflows and signup-default selection logic where appropriate
+- Added browser regression coverage for opening one of the new consent forms from the real Documents UI
+
+### v4.7.0 — Validation
+
+- `pnpm lint`
+- `pnpm --filter @faith/web build`
+- `npx playwright test tests/e2e/high-value-journeys.spec.mjs --grep "practice admin can access the expanded documents library and open a new consent form"`
 
 ## v4.6.0 — CRITICAL FIX: Complete Logout Session Invalidation (March 29, 2026)
 
