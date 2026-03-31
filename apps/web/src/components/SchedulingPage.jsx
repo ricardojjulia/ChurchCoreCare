@@ -1286,6 +1286,168 @@ function RemindersPanel({ appointments }) {
   );
 }
 
+function apptStatusColor(status) {
+  switch (status) {
+    case 'scheduled':  return 'blue';
+    case 'checked_in': return 'teal';
+    case 'completed':  return 'green';
+    case 'cancelled':  return 'gray';
+    case 'no_show':    return 'red';
+    default:           return 'gray';
+  }
+}
+
+function formatApptDateTime(value) {
+  if (!value) return '—';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function ClientSessionsPanel({ clients = [], onViewChart }) {
+  const [selectedClientId, setSelectedClientId] = useState(null);
+  const [appointments, setAppointments] = useState([]);
+  const [notes, setNotes] = useState([]);
+  const [loadingAppts, setLoadingAppts] = useState(false);
+  const [loadingNotes, setLoadingNotes] = useState(false);
+  const [apptError, setApptError] = useState(null);
+
+  const clientOptions = clients.map((c) => ({
+    value: c.id,
+    label: [`${c.firstName || ''} ${c.lastName || ''}`.trim(), c.status].filter(Boolean).join(' — ') || c.id,
+  }));
+
+  useEffect(() => {
+    if (!selectedClientId) { setAppointments([]); setNotes([]); return; }
+    let cancelled = false;
+
+    setLoadingAppts(true);
+    setApptError(null);
+    fetch(`/api/v1/appointments?clientId=${encodeURIComponent(selectedClientId)}`, { credentials: 'include' })
+      .then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); })
+      .then((p) => {
+        if (cancelled) return;
+        const items = Array.isArray(p?.items) ? p.items : [];
+        items.sort((a, b) => new Date(b.startsAt ?? b.scheduledAt ?? 0) - new Date(a.startsAt ?? a.scheduledAt ?? 0));
+        setAppointments(items);
+      })
+      .catch((e) => { if (!cancelled) setApptError(e.message); })
+      .finally(() => { if (!cancelled) setLoadingAppts(false); });
+
+    setLoadingNotes(true);
+    fetch(`/api/v1/clients/${encodeURIComponent(selectedClientId)}/progress-notes`, { credentials: 'include' })
+      .then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); })
+      .then((p) => { if (!cancelled) setNotes(Array.isArray(p?.items) ? p.items : (Array.isArray(p) ? p : [])); })
+      .catch(() => { if (!cancelled) setNotes([]); })
+      .finally(() => { if (!cancelled) setLoadingNotes(false); });
+
+    return () => { cancelled = true; };
+  }, [selectedClientId]);
+
+  // Group notes by appointmentId
+  const notesByApptId = {};
+  for (const note of notes) {
+    if (!note.appointmentId) continue;
+    if (!notesByApptId[note.appointmentId]) notesByApptId[note.appointmentId] = [];
+    notesByApptId[note.appointmentId].push(note);
+  }
+
+  function noteStatusBadge(appt) {
+    const now = new Date();
+    const startsAt = new Date(appt.startsAt ?? appt.scheduledAt ?? 0);
+    if (startsAt >= now) {
+      return <Badge color="blue" variant="light" size="sm">Upcoming</Badge>;
+    }
+    const apptNotes = notesByApptId[appt.id] ?? [];
+    if (apptNotes.some((n) => n.locked)) {
+      return <Badge color="teal" variant="light" size="sm">Notes Filed</Badge>;
+    }
+    if (apptNotes.length > 0) {
+      return <Badge color="yellow" variant="light" size="sm">Draft — Pending Sign-off</Badge>;
+    }
+    return <Badge color="red" variant="light" size="sm">No Notes</Badge>;
+  }
+
+  function hasNotes(appt) {
+    const now = new Date();
+    const startsAt = new Date(appt.startsAt ?? appt.scheduledAt ?? 0);
+    if (startsAt >= now) return false;
+    return (notesByApptId[appt.id] ?? []).length > 0;
+  }
+
+  return (
+    <Stack gap="md">
+      <Select
+        label="Client"
+        placeholder="Search and select a client…"
+        data={clientOptions}
+        value={selectedClientId}
+        onChange={(val) => setSelectedClientId(val ?? null)}
+        searchable
+        clearable
+        style={{ maxWidth: 420 }}
+      />
+
+      {!selectedClientId ? (
+        <Text c="dimmed">Select a client to view their session history.</Text>
+      ) : loadingAppts ? (
+        <Group justify="center" py="xl"><Loader size="sm" /></Group>
+      ) : apptError ? (
+        <Alert color="red" variant="light">{apptError}</Alert>
+      ) : appointments.length === 0 ? (
+        <Text c="dimmed">No appointments found for this client.</Text>
+      ) : (
+        <Table striped highlightOnHover withTableBorder withColumnBorders>
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th>Date &amp; Time</Table.Th>
+              <Table.Th>Type</Table.Th>
+              <Table.Th>Status</Table.Th>
+              <Table.Th>Counselor</Table.Th>
+              <Table.Th>Duration</Table.Th>
+              <Table.Th>Notes</Table.Th>
+              <Table.Th></Table.Th>
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {appointments.map((appt) => {
+              const startsAt = appt.startsAt ?? appt.scheduledAt;
+              const counselorName = appt.counselorName ?? appt.staffName ?? appt.counselorId ?? '—';
+              const apptType = appt.appointmentType ?? appt.type ?? '—';
+              const duration = appt.durationMinutes ?? appt.duration;
+              return (
+                <Table.Tr key={appt.id}>
+                  <Table.Td style={{ whiteSpace: 'nowrap' }}>{formatApptDateTime(startsAt)}</Table.Td>
+                  <Table.Td>{apptType}</Table.Td>
+                  <Table.Td>
+                    <Badge color={apptStatusColor(appt.status)} variant="light" size="sm">
+                      {appt.status ?? '—'}
+                    </Badge>
+                  </Table.Td>
+                  <Table.Td>{counselorName}</Table.Td>
+                  <Table.Td>{duration ? `${duration} min` : '—'}</Table.Td>
+                  <Table.Td>{loadingNotes ? <Loader size={12} /> : noteStatusBadge(appt)}</Table.Td>
+                  <Table.Td>
+                    {hasNotes(appt) ? (
+                      <Button
+                        size="compact-xs"
+                        variant="light"
+                        onClick={() => onViewChart?.(selectedClientId)}
+                      >
+                        View Chart
+                      </Button>
+                    ) : null}
+                  </Table.Td>
+                </Table.Tr>
+              );
+            })}
+          </Table.Tbody>
+        </Table>
+      )}
+    </Stack>
+  );
+}
+
 export default function SchedulingPage({
   currentUser,
   clients,
@@ -1297,6 +1459,7 @@ export default function SchedulingPage({
   onPortalRequestScheduled,
   onAppointmentsUpdated,
   onOpenClient,
+  onViewChart,
 }) {
   const timezone = detectTimezone();
   const canManageAll = GLOBAL_SCHEDULING_ROLES.has(currentUser?.role || '');
@@ -1611,6 +1774,7 @@ export default function SchedulingPage({
           {['practice_owner', 'practice_admin', 'scheduler_biller'].includes(currentUser?.role) && (
             <Tabs.Tab value="utilization">Utilization</Tabs.Tab>
           )}
+          <Tabs.Tab value="clientSessions">Client Sessions</Tabs.Tab>
         </Tabs.List>
 
         <Tabs.Panel value="appointments" pt="md">
@@ -1847,6 +2011,10 @@ export default function SchedulingPage({
             <UtilizationPanel />
           </Tabs.Panel>
         )}
+
+        <Tabs.Panel value="clientSessions" pt="md">
+          <ClientSessionsPanel clients={clients} onViewChart={onViewChart} />
+        </Tabs.Panel>
       </Tabs>
     </Stack>
   );

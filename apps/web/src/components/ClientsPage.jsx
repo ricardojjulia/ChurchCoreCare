@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Alert,
   Badge,
@@ -15,7 +15,9 @@ import {
   Title,
 } from '@mantine/core';
 import ClientModal from './ClientModal.jsx';
+import ClientSessionsModal from './ClientSessionsModal.jsx';
 import { useI18n } from '../lib/i18nContext.jsx';
+import { csrfHeaders } from '../lib/csrf.js';
 
 function resolveClientFullName(client) {
   return [client?.firstName, client?.lastName]
@@ -65,13 +67,21 @@ export default function ClientsPage({
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [modalState, setModalState] = useState({ open: false, client: null });
+  const [sessionsModal, setSessionsModal] = useState({ open: false, clientId: null, clientName: '' });
+  const [localItems, setLocalItems] = useState([]);
+  const [htpLoading, setHtpLoading] = useState(new Set());
+  const [htpError, setHtpError] = useState(null);
 
-  const items = Array.isArray(clientsData?.items) ? clientsData.items : [];
   const loading = Boolean(clientsData?.loading);
   const error = clientsData?.error ?? null;
+
+  useEffect(() => {
+    setLocalItems(Array.isArray(clientsData?.items) ? clientsData.items : []);
+  }, [clientsData?.items]);
+
   const normalizedQuery = query.trim().toLowerCase();
 
-  const filteredItems = items.filter((client) => {
+  const filteredItems = localItems.filter((client) => {
     const fullName = resolveClientFullName(client).toLowerCase();
     const faithBackground = String(client?.faithBackground ?? '').toLowerCase();
     const clientStatus = String(client?.status ?? '').toLowerCase();
@@ -83,12 +93,35 @@ export default function ClientsPage({
     return matchesQuery && matchesStatus;
   });
 
-  const activeCount = items.filter((client) => client?.status === 'active').length;
-  const waitlistCount = items.filter((client) => client?.status === 'waitlist').length;
-  const highTouchpointCount = items.filter((client) => Boolean(client?.highTouchpoint)).length;
+  const activeCount = localItems.filter((client) => client?.status === 'active').length;
+  const waitlistCount = localItems.filter((client) => client?.status === 'waitlist').length;
+  const highTouchpointCount = localItems.filter((client) => Boolean(client?.highTouchpoint)).length;
 
   const openCreateModal = () => setModalState({ open: true, client: null });
   const closeModal = () => setModalState({ open: false, client: null });
+
+  const handleToggleHighTouchpoint = useCallback(async (clientId, currentValue) => {
+    const newValue = !currentValue;
+    setHtpError(null);
+    setHtpLoading((prev) => new Set([...prev, clientId]));
+    // Optimistic update
+    setLocalItems((prev) => prev.map((c) => c.id === clientId ? { ...c, highTouchpoint: newValue } : c));
+    try {
+      const res = await fetch(`/api/v1/clients/${encodeURIComponent(clientId)}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { ...csrfHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ highTouchpoint: newValue }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+    } catch {
+      // Rollback
+      setLocalItems((prev) => prev.map((c) => c.id === clientId ? { ...c, highTouchpoint: currentValue } : c));
+      setHtpError(t('clientsPage.highTouchpointUpdateFailed'));
+    } finally {
+      setHtpLoading((prev) => { const next = new Set(prev); next.delete(clientId); return next; });
+    }
+  }, [t]);
 
   return (
     <>
@@ -104,7 +137,7 @@ export default function ClientsPage({
         </Group>
 
         <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="md">
-          <SummaryCard label={t('clientsPage.totalClients')} value={items.length} />
+          <SummaryCard label={t('clientsPage.totalClients')} value={localItems.length} />
           <SummaryCard label={t('clientsPage.activeClients')} value={activeCount} />
           <SummaryCard label={t('clientsPage.waitlistClients')} value={waitlistCount} />
           <SummaryCard
@@ -141,8 +174,14 @@ export default function ClientsPage({
         </Group>
 
         <Text c="dimmed" fz="sm">
-          {t('clientsPage.resultsCount', { count: filteredItems.length, total: items.length })}
+          {t('clientsPage.resultsCount', { count: filteredItems.length, total: localItems.length })}
         </Text>
+
+        {htpError ? (
+          <Alert color="red" variant="light" withCloseButton onClose={() => setHtpError(null)}>
+            {htpError}
+          </Alert>
+        ) : null}
 
         {loading ? (
           <Group justify="center" py="xl">
@@ -161,6 +200,7 @@ export default function ClientsPage({
               {filteredItems.map((client) => {
                 const fullName = resolveClientFullName(client) || t('clientsPage.unnamedClient');
                 const faithBackground = client?.faithBackground || t('clients.faithUndeclared');
+                const isHtp = Boolean(client?.highTouchpoint);
 
                 return (
                   <Paper key={client.id} withBorder radius="md" p="md">
@@ -171,11 +211,16 @@ export default function ClientsPage({
                           <Badge color={statusTone(client?.status)} variant="light">
                             {formatStatusLabel(client?.status, t)}
                           </Badge>
-                          {client?.highTouchpoint ? (
-                            <Badge color="grape" variant="light">
-                              {t('clientsPage.highTouchpointBadge')}
-                            </Badge>
-                          ) : null}
+                          <Button
+                            size="compact-xs"
+                            variant={isHtp ? 'filled' : 'outline'}
+                            color="grape"
+                            loading={htpLoading.has(client.id)}
+                            onClick={() => handleToggleHighTouchpoint(client.id, isHtp)}
+                            title={t('clientsPage.highTouchpointToggleHint')}
+                          >
+                            {t('clientsPage.highTouchpointBadge')}
+                          </Button>
                         </Group>
                         <Text c="dimmed" fz="sm">
                           {t('clients.faithPrefix')}: {faithBackground}
@@ -187,6 +232,13 @@ export default function ClientsPage({
                       <Group gap="xs">
                         <Button variant="default" size="xs" onClick={() => onViewClient?.(client.id)}>
                           {t('actions.edit')}
+                        </Button>
+                        <Button
+                          variant="default"
+                          size="xs"
+                          onClick={() => setSessionsModal({ open: true, clientId: client.id, clientName: fullName })}
+                        >
+                          {t('clientsPage.sessionsButton')}
                         </Button>
                         <Button variant="default" size="xs" onClick={() => onScheduleClient?.(client.id)}>
                           {t('clients.schedule')}
@@ -211,6 +263,13 @@ export default function ClientsPage({
         onSubmit={() => {
           onClientsUpdated?.();
         }}
+      />
+
+      <ClientSessionsModal
+        opened={sessionsModal.open}
+        clientId={sessionsModal.clientId}
+        clientName={sessionsModal.clientName}
+        onClose={() => setSessionsModal({ open: false, clientId: null, clientName: '' })}
       />
     </>
   );

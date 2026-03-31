@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Stack, Title, Text, Select, Paper, Group, Tabs, Alert,
 } from '@mantine/core';
@@ -18,10 +18,14 @@ const CHART_TABS = [
   { id: 'homework',       labelKey: 'chart.tab.homework' },
 ];
 
-export default function ClinicalChartPage({ clients = [], currentUser }) {
+export default function ClinicalChartPage({ clients = [], currentUser, initialClientId = '' }) {
   const { t } = useI18n();
-  const [selectedClientId, setSelectedClientId] = useState('');
+  const [selectedClientId, setSelectedClientId] = useState(initialClientId);
   const [activeTab, setActiveTab] = useState('sessionNotes');
+
+  useEffect(() => {
+    if (initialClientId) setSelectedClientId(initialClientId);
+  }, [initialClientId]);
 
   useSurfaceTelemetry('clinical_chart', { surfaceKind: 'view', workflow: 'clinical_chart' });
 

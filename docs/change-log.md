@@ -2,6 +2,48 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## v5.4.0 — Client + Scheduling + Chart Integration ⚠️ UNTESTED — Under Review
+
+### Summary
+
+Four connected improvements across Client, Scheduling, and Clinical Chart workspaces:
+
+1. **High-touchpoint inline toggle** — the high-touchpoint flag on each client row is now a clickable button. One click optimistically flips the flag and PATCHes the server; rolls back on failure.
+2. **Sessions button per client** — each client row in the Client workspace has a new "Sessions" button that opens a modal listing all appointments for that client (newest first) with date, type, status, counselor, and duration.
+3. **Client Sessions tab in Scheduling** — new "Client Sessions" tab lets counselors search for a client and see their full appointment history. Past appointments show note status badges (Notes Filed / Draft — Pending Sign-off / No Notes). Appointments with notes include a "View Chart" button that navigates directly to the Clinical Chart with the client pre-selected.
+4. **ClinicalChartPage deep-link prop** — `ClinicalChartPage` now accepts an `initialClientId` prop. `App.jsx` manages `clinicalChartInitialClientId` state cleared on navigation away; `handleOpenClinicalChart(clientId)` is passed as `onViewChart` to `SchedulingPage`.
+
+### Changed
+
+- `apps/web/src/components/ClinicalChart/ClinicalChartPage.jsx`
+  - Accepts `initialClientId` prop; initializes and syncs `selectedClientId` state from it
+- `apps/web/src/App.jsx`
+  - Adds `clinicalChartInitialClientId` state; clears on navigate away from `'clinical'`
+  - Adds `handleOpenClinicalChart(clientId)` handler
+  - Passes `onViewChart={handleOpenClinicalChart}` to `SchedulingPage`
+  - Passes `initialClientId={clinicalChartInitialClientId}` to `ClinicalChartPage`
+- `apps/web/src/components/ClientsPage.jsx`
+  - High-touchpoint badge replaced with inline toggle button (optimistic update + rollback)
+  - "Sessions" button added per client row; opens `ClientSessionsModal`
+- `apps/web/src/components/ClientSessionsModal.jsx` *(new)*
+  - Modal showing full appointment history for a selected client
+- `apps/web/src/components/SchedulingPage.jsx`
+  - New `ClientSessionsPanel` sub-component with client selector, appointment table, note status badges, and "View Chart" navigation
+  - "Client Sessions" tab added to tab list
+  - Accepts `onViewChart` callback prop
+- `packages/i18n/src/index.js`
+  - New keys: `clientsPage.sessionsButton`, `clientsPage.sessionsModalTitle`, `clientsPage.sessionsEmpty`, `clientsPage.highTouchpointToggleHint`, `clientsPage.highTouchpointUpdateFailed`, `scheduling.col.*`
+
+### No API changes
+
+All data is available from existing endpoints:
+
+- `PATCH /v1/clients/:id` — high-touchpoint toggle
+- `GET /v1/appointments?clientId=:id` — client appointment history
+- `GET /v1/clients/:id/progress-notes` — note status per appointment
+
+---
+
 ## Unreleased — Demo Dataset Finalizer
 
 ### Summary

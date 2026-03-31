@@ -125,6 +125,7 @@ export default function App() {
   const [selectedCounselorId, setSelectedCounselorId] = useState(null);
   const [currentView, setCurrentView] = useState('dashboard');
   const [workspaceStudioInitialTab, setWorkspaceStudioInitialTab] = useState('portal');
+  const [clinicalChartInitialClientId, setClinicalChartInitialClientId] = useState('');
   const [clientPickerOpen, setClientPickerOpen] = useState(false);
   const [schedulingState, setSchedulingState] = useState({
     composerOpen: false,
@@ -304,6 +305,13 @@ export default function App() {
     if (view !== 'scheduling') {
       setSchedulingState({ composerOpen: false, initialClientId: null, initialView: null, initialPortalRequest: null });
     }
+    if (view !== 'clinical') setClinicalChartInitialClientId('');
+    closeNav();
+  };
+
+  const handleOpenClinicalChart = (clientId) => {
+    setClinicalChartInitialClientId(clientId ?? '');
+    setCurrentView('clinical');
     closeNav();
   };
 
@@ -473,6 +481,7 @@ export default function App() {
             onPortalRequestScheduled={handlePortalRequestScheduled}
             onAppointmentsUpdated={() => setRefreshOperationsKey((value) => value + 1)}
             onOpenClient={handleOpenClient}
+            onViewChart={handleOpenClinicalChart}
           />
         ) : showWorkspaceStudio ? (
           <WorkspaceStudioPage
@@ -505,7 +514,7 @@ export default function App() {
         ) : showOfferings ? (
           <OfferingsPage clients={clientsData.items} />
         ) : showClinical ? (
-          <ClinicalChartPage clients={clientsData.items} currentUser={currentUser} />
+          <ClinicalChartPage clients={clientsData.items} currentUser={currentUser} initialClientId={clinicalChartInitialClientId} />
         ) : (
           <>
             {showDashboard ? <Metrics data={metricsData} currentUser={currentUser} /> : null}
