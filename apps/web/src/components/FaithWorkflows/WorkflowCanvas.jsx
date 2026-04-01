@@ -114,6 +114,7 @@ export default function WorkflowCanvas({
   onSelectRec,
   onAction,
   onStatusChange,
+  onToggleCategory,
 }) {
   const { t } = useI18n();
   const canvasRef = useRef(null);
@@ -128,8 +129,6 @@ export default function WorkflowCanvas({
       setCollapsedCategories(new Set());
       return;
     }
-    // Performance default: for dense workflows, keep first two categories open
-    // and collapse later sections by default to reduce initial render cost.
     if (visible.length >= 10) {
       setCollapsedCategories(new Set(groups.slice(2).map((g) => g.category)));
       return;
@@ -140,8 +139,10 @@ export default function WorkflowCanvas({
   const toggleCategory = (category) => {
     setCollapsedCategories((prev) => {
       const next = new Set(prev);
-      if (next.has(category)) next.delete(category);
+      const isCollapsed = next.has(category);
+      if (isCollapsed) next.delete(category);
       else next.add(category);
+      onToggleCategory?.(category, !isCollapsed);
       return next;
     });
   };
