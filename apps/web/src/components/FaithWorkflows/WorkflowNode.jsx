@@ -49,6 +49,8 @@ export default function WorkflowNode({ rec, selected, onSelect, onAction, onStat
 
   return (
     <Paper
+      data-testid="workflow-node"
+      data-rule-id={rec.ruleId}
       withBorder
       radius="md"
       p="sm"

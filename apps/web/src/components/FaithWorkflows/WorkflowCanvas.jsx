@@ -1,5 +1,5 @@
-import { useRef } from 'react';
-import { Alert, Badge, Box, Group, Paper, ScrollArea, Stack, Text, Title } from '@mantine/core';
+import { useRef, useState, useEffect } from 'react';
+import { Alert, Badge, Box, Button, Group, Paper, ScrollArea, Stack, Text, Title } from '@mantine/core';
 import WorkflowNode from './WorkflowNode.jsx';
 import { CATEGORY_COLORS, CATEGORY_ICONS, CATEGORY_ORDER } from './engine/types.js';
 import { useI18n } from '../../lib/i18nContext.jsx';
@@ -64,24 +64,38 @@ function ClientSnapshot({ client, urgencyLevel, diagnosisSummary, trend, recomme
 /**
  * Category section header with connecting line.
  */
-function CategoryHeader({ category }) {
+function CategoryHeader({ category, count, collapsed, onToggle }) {
   const color = CATEGORY_COLORS[category] ?? 'gray';
   const icon = CATEGORY_ICONS[category] ?? '•';
+  const label = category.replace(/_/g, ' ');
 
   return (
-    <Group gap="xs" align="center">
-      <Box
-        style={{
-          width: 2,
-          height: 16,
-          background: `var(--mantine-color-${color}-4)`,
-          borderRadius: 1,
-          flexShrink: 0,
-        }}
-      />
-      <Text size="xs" fw={700} c={`${color}.6`} tt="uppercase">
-        {icon} {category.replace(/_/g, ' ')}
-      </Text>
+    <Group gap="xs" align="center" justify="space-between" wrap="nowrap">
+      <Group gap="xs" align="center" wrap="nowrap" style={{ minWidth: 0 }}>
+        <Box
+          style={{
+            width: 2,
+            height: 16,
+            background: `var(--mantine-color-${color}-4)`,
+            borderRadius: 1,
+            flexShrink: 0,
+          }}
+        />
+        <Text size="xs" fw={700} c={`${color}.6`} tt="uppercase" lineClamp={1}>
+          {icon} {label}
+        </Text>
+        <Badge size="xs" color={color} variant="light">{count}</Badge>
+      </Group>
+      <Button
+        size="compact-xs"
+        variant="subtle"
+        color="gray"
+        onClick={onToggle}
+        data-testid={`workflow-category-toggle-${category}`}
+        aria-label={`${collapsed ? 'Expand' : 'Collapse'} ${label}`}
+      >
+        {collapsed ? 'Expand' : 'Collapse'}
+      </Button>
     </Group>
   );
 }
@@ -107,9 +121,33 @@ export default function WorkflowCanvas({
   const visible = (recommendations ?? []).filter((r) => r.status !== 'hidden');
   const pendingCount = visible.filter((r) => r.status === 'pending').length;
   const groups = groupByCategory(visible);
+  const [collapsedCategories, setCollapsedCategories] = useState(new Set());
+
+  useEffect(() => {
+    if (!client?.id) {
+      setCollapsedCategories(new Set());
+      return;
+    }
+    // Performance default: for dense workflows, keep first two categories open
+    // and collapse later sections by default to reduce initial render cost.
+    if (visible.length >= 10) {
+      setCollapsedCategories(new Set(groups.slice(2).map((g) => g.category)));
+      return;
+    }
+    setCollapsedCategories(new Set());
+  }, [client?.id, visible.length, groups.map((g) => g.category).join('|')]);
+
+  const toggleCategory = (category) => {
+    setCollapsedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(category)) next.delete(category);
+      else next.add(category);
+      return next;
+    });
+  };
 
   return (
-    <ScrollArea style={{ flex: 1, minHeight: 0 }} ref={canvasRef}>
+    <ScrollArea style={{ flex: 1, minHeight: 0 }} ref={canvasRef} data-testid="workflow-canvas">
       <Stack gap="lg" p="md" style={{ maxWidth: 680, margin: '0 auto' }}>
         {/* Client snapshot node */}
         <ClientSnapshot
@@ -140,21 +178,28 @@ export default function WorkflowCanvas({
           </Alert>
         ) : (
           groups.map((group, groupIndex) => (
-            <Stack key={group.category} gap="sm">
-              <CategoryHeader category={group.category} />
+            <Stack key={group.category} gap="sm" data-testid={`workflow-category-${group.category}`}>
+              <CategoryHeader
+                category={group.category}
+                count={group.recs.length}
+                collapsed={collapsedCategories.has(group.category)}
+                onToggle={() => toggleCategory(group.category)}
+              />
 
-              <Stack gap="xs">
-                {group.recs.map((rec) => (
-                  <WorkflowNode
-                    key={rec.id}
-                    rec={rec}
-                    selected={selectedRecId === rec.id}
-                    onSelect={() => onSelectRec?.(rec)}
-                    onAction={(action) => onAction?.(rec, action)}
-                    onStatusChange={(status) => onStatusChange?.(rec.id, status)}
-                  />
-                ))}
-              </Stack>
+              {!collapsedCategories.has(group.category) && (
+                <Stack gap="xs" data-testid={`workflow-category-items-${group.category}`}>
+                  {group.recs.map((rec) => (
+                    <WorkflowNode
+                      key={rec.id}
+                      rec={rec}
+                      selected={selectedRecId === rec.id}
+                      onSelect={() => onSelectRec?.(rec)}
+                      onAction={(action) => onAction?.(rec, action)}
+                      onStatusChange={(status) => onStatusChange?.(rec.id, status)}
+                    />
+                  ))}
+                </Stack>
+              )}
 
               {/* Connector to next group */}
               {groupIndex < groups.length - 1 && (
