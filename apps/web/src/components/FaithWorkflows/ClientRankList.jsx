@@ -29,7 +29,7 @@ const TREND_ICONS = {
  *   onSelect     — (clientId) => void
  *   loading      — bool
  */
-export default function ClientRankList({ entries = [], selectedId, onSelect, loading = false }) {
+export default function ClientRankList({ entries = [], selectedId, onSelect, loading = false, onShowMore }) {
   const { t } = useI18n();
   const [query, setQuery] = useState('');
   const [renderLimit, setRenderLimit] = useState(INITIAL_RENDER_LIMIT);
@@ -52,6 +52,15 @@ export default function ClientRankList({ entries = [], selectedId, onSelect, loa
   const visibleEntries = filtered.slice(0, renderLimit);
   const hasMore = filtered.length > visibleEntries.length;
 
+  const handleShowMore = () => {
+    const nextLimit = renderLimit + RENDER_CHUNK;
+    setRenderLimit(nextLimit);
+    onShowMore?.({
+      shown: Math.min(nextLimit, filtered.length),
+      remaining: Math.max(0, filtered.length - nextLimit),
+      total: filtered.length,
+    });
+  };
   return (
     <Stack gap={0} style={{ height: '100%', borderRight: '1px solid var(--mantine-color-default-border)' }}>
       {/* Header */}
@@ -143,10 +152,11 @@ export default function ClientRankList({ entries = [], selectedId, onSelect, loa
             {hasMore && (
               <Box p="sm" style={{ borderTop: '1px solid var(--mantine-color-default-border)' }}>
                 <Button
+                  data-testid="workflow-show-more-clients"
                   size="xs"
                   variant="subtle"
                   fullWidth
-                  onClick={() => setRenderLimit((n) => n + RENDER_CHUNK)}
+                  onClick={handleShowMore}
                 >
                   Show more clients ({filtered.length - visibleEntries.length} remaining)
                 </Button>

@@ -294,6 +294,24 @@ export default function FaithWorkflowsPage({ clients = [], currentUser }) {
     }
   }, [handleStatusChange, openDrawer]);
 
+  const handleShowMoreClients = useCallback(({ remaining = 0, total = 0 } = {}) => {
+    frontendTelemetry.trackAction('faith_workflows', 'show_more_clients', 'success', {
+      workflow: 'faith_workflows',
+      statusClass: classifyCountBand(total),
+    });
+    frontendTelemetry.trackInteraction('faith_workflows', 'client_list_growth', 0, {
+      workflow: 'faith_workflows',
+      statusClass: remaining > 0 ? 'partial' : 'complete',
+    });
+  }, []);
+
+  const handleToggleCategory = useCallback((category, expanded) => {
+    frontendTelemetry.trackAction('faith_workflows', expanded ? 'category_expanded' : 'category_collapsed', 'success', {
+      workflow: 'faith_workflows',
+      statusClass: String(category || 'unknown').slice(0, 40).toLowerCase(),
+    });
+  }, []);
+
   const isLoadingSelected = selectedClientId && loadingSet.has(selectedClientId);
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -324,6 +342,7 @@ export default function FaithWorkflowsPage({ clients = [], currentUser }) {
             selectedId={selectedClientId}
             onSelect={handleSelectClient}
             loading={false}
+            onShowMore={handleShowMoreClients}
           />
         </Box>
 
@@ -355,6 +374,7 @@ export default function FaithWorkflowsPage({ clients = [], currentUser }) {
               onSelectRec={handleSelectRec}
               onAction={handleAction}
               onStatusChange={handleStatusChange}
+              onToggleCategory={handleToggleCategory}
             />
           )}
         </Box>
@@ -416,4 +436,12 @@ function applyPersistedStates(recs, states, applyStates) {
     }
     return { ...rec, status };
   });
+}
+
+function classifyCountBand(total) {
+  if (total >= 150) return '150_plus';
+  if (total >= 100) return '100_149';
+  if (total >= 50) return '50_99';
+  if (total >= 20) return '20_49';
+  return 'under_20';
 }
