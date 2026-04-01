@@ -230,6 +230,12 @@ Operations Studio stabilization update: removed non-representative AR display an
 
 - Full summary: `docs/v5.4.2-RELEASE-SUMMARY.md`
 
+## Change Log
+
+For the full release and maintenance history, see `docs/change-log.md`.
+
+The change log summarizes completed work across releases and documents the details behind updates, including new features, fixes, hardening work, and documentation-level changes where relevant.
+
 ## Documentation Index
 
 - Product and planning overview: `docs/PRODUCT-PLANS-OVERVIEW.md`
