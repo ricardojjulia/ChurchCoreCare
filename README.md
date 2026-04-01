@@ -4,10 +4,10 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## At a Glance
 
-- Version: `5.4.2`
-- Status: `✅ Validated`
-- Release summary: [docs/v5.4.2-RELEASE-SUMMARY.md](docs/v5.4.2-RELEASE-SUMMARY.md)
-- Previous release: [docs/v5.4.1-RELEASE-SUMMARY.md](docs/v5.4.1-RELEASE-SUMMARY.md)
+- Version: `5.5.0`
+- Status: `In Development`
+- Release summary: [docs/v5.5.0-RELEASE-SUMMARY.md](docs/v5.5.0-RELEASE-SUMMARY.md)
+- Previous release: [docs/v5.4.2-RELEASE-SUMMARY.md](docs/v5.4.2-RELEASE-SUMMARY.md)
 - UI Baseline agent run report: [docs/UI-BASELINE-AGENT-RUN-2026-03-30.md](docs/UI-BASELINE-AGENT-RUN-2026-03-30.md)
 - Operations Dashboard summary: [docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md](docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md)
 - Change log: [docs/change-log.md](docs/change-log.md)
@@ -17,6 +17,7 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## What This Includes
 
+- **Faithful Workflows** — counselor-facing three-panel workspace that ranks clients by urgency (critical → routine), runs 27 deterministic clinical rules, and surfaces prioritized care recommendations with evidence, rationale, action outputs, and safety invariants
 - **Clinical Chart** — session notes linked to calendar appointments with Sign & Lock compliance workflow, private internal notes, treatment plan editor (goals/interventions/status), assessment score history with severity bands, and homework assignment tracking
 - practice operations workspace for counselors, managers, and admins
 - upgraded Operations Dashboard with counselor workload, 1-hour gap visibility, compliance note-gap tracking, portal request rollups, operational alert thresholds, and 7-day trend visibility
@@ -31,14 +32,16 @@ Christian counseling practice management SaaS for solo counselors, group practic
 
 ## Current Release Focus
 
-v5.4.2 is a two-fix patch on top of the Operations Studio full repair (v5.4.1). The Accounts Receivable section was removed from the Practice Reporting tab — the practice operates on an offerings-and-payment model and does not do insurance billing, so aging buckets and payer columns were displaying hardcoded placeholder data with no database backing. A script-tag cache buster (`?v=5.4.2`) was also added to `operations.html` to prevent browsers from loading stale JavaScript that referenced the now-removed AR elements and caused a null-element crash.
+v5.5.0 introduces **Faithful Workflows** — a counselor-facing care recommendation engine. A three-panel workspace (ranked client list, vertical workflow canvas, detail drawer) runs 27 deterministic rules across 7 clinical categories and surfaces prioritized recommendations with evidence, rationale, and action outputs. Rules fire against real API data: five canonical demo clients (Elena, Jordan, Naomi, Sofia, Isaac) are now seeded with enriched clinical profiles — PHQ-9 score histories, item-9 SI scores, GAD-7, PCL-5, treatment goal objects, faith profiles, and no-show appointments — covering the full urgency range end-to-end after `pnpm demo:finalize`. Safety invariants are hard-enforced: priority ≥ 9 nodes cannot be hidden or deferred, and all spiritual content is strictly opt-in.
 
-> ✅ v5.4.2 is validated. See [docs/v5.4.2-RELEASE-SUMMARY.md](docs/v5.4.2-RELEASE-SUMMARY.md) for the full details.
+> In Development. See [docs/v5.5.0-RELEASE-SUMMARY.md](docs/v5.5.0-RELEASE-SUMMARY.md) for the full details.
 
 ## Key Docs
 
-- Release summary: [docs/v5.4.2-RELEASE-SUMMARY.md](docs/v5.4.2-RELEASE-SUMMARY.md)
-- Previous release: [docs/v5.4.1-RELEASE-SUMMARY.md](docs/v5.4.1-RELEASE-SUMMARY.md)
+- Release summary: [docs/v5.5.0-RELEASE-SUMMARY.md](docs/v5.5.0-RELEASE-SUMMARY.md)
+- Previous release: [docs/v5.4.2-RELEASE-SUMMARY.md](docs/v5.4.2-RELEASE-SUMMARY.md)
+- Faithful Workflows plan: [docs/PLANS/FAITHFUL-WORKFLOWS.md](docs/PLANS/FAITHFUL-WORKFLOWS.md)
+- Demo dataset finalizer agent: [.claude/agents/demo-dataset-finalizer.md](.claude/agents/demo-dataset-finalizer.md)
 - Operations Dashboard summary: [docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md](docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md)
 - Operations Dashboard implementation log: [docs/OPERATIONS-DASHBOARD-IMPLEMENTATION-LOG-2026-03-30.md](docs/OPERATIONS-DASHBOARD-IMPLEMENTATION-LOG-2026-03-30.md)
 - Spanish translation report: [docs/TRANSLATION-GUARDIAN-ES-RUN-2026-03-30.md](docs/TRANSLATION-GUARDIAN-ES-RUN-2026-03-30.md)

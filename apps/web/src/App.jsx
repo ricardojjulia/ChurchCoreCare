@@ -189,6 +189,10 @@ export default function App() {
     if (!isAuthenticated) return;
     if (userRole === 'client') {
       setOperationsSummaryData({ summary: null, loading: false, error: null });
+      setMetricsData((prev) => ({
+        ...prev,
+        faithfulCounts: { critical: 0, moderate: 0, routine: 0 },
+      }));
       return;
     }
 
@@ -199,11 +203,20 @@ export default function App() {
     fetchOperationsSummary(timezone)
       .then((payload) => {
         if (cancelled) return;
+        const faithfulCounts = payload?.summary?.faithfulWorkflowCounts;
         setOperationsSummaryData({
           summary: payload?.summary ?? null,
           loading: false,
           error: null,
         });
+        setMetricsData((prev) => ({
+          ...prev,
+          faithfulCounts: {
+            critical: Number(faithfulCounts?.critical ?? 0),
+            moderate: Number(faithfulCounts?.moderate ?? 0),
+            routine: Number(faithfulCounts?.routine ?? 0),
+          },
+        }));
       })
       .catch((error) => {
         if (cancelled) return;

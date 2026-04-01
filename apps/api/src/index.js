@@ -12167,6 +12167,44 @@ async function buildOperationsSummary(request, timezone, session) {
       };
     }),
   ].sort((left, right) => String(right.requestedAt ?? '').localeCompare(String(left.requestedAt ?? '')));
+
+  // Build a lightweight faithful-workflow risk rollup for dashboard visibility.
+  // These counts are intentionally conservative and based on existing operational signals.
+  const criticalFaithClientIds = new Set();
+  const moderateFaithClientIds = new Set();
+
+  for (const item of noteGapItems) {
+    if (!item?.clientId) continue;
+    if ((item.daysWithoutNote ?? 0) >= 7) {
+      criticalFaithClientIds.add(item.clientId);
+      continue;
+    }
+    if ((item.daysWithoutNote ?? 0) >= 3) {
+      moderateFaithClientIds.add(item.clientId);
+    }
+  }
+
+  for (const item of highTouchpointWithoutFutureAppointmentItems) {
+    if (!item?.clientId) continue;
+    criticalFaithClientIds.add(item.clientId);
+  }
+
+  for (const item of outstandingAssignmentItems) {
+    if (!item?.clientId) continue;
+    if (criticalFaithClientIds.has(item.clientId)) continue;
+    moderateFaithClientIds.add(item.clientId);
+  }
+
+  for (const clientId of criticalFaithClientIds) {
+    moderateFaithClientIds.delete(clientId);
+  }
+
+  const routineFaithCount = Math.max(
+    0,
+    ((data.clients ?? []).filter((client) => ['active', 'waitlist'].includes(client.status)).length)
+    - criticalFaithClientIds.size
+    - moderateFaithClientIds.size,
+  );
   const counselorsWithEntries = new Set(todayAppointments.map((item) => item.counselorId || item.counselorName).filter(Boolean)).size;
   const oneHourGapsTotal = counselorWorkload.reduce((sum, item) => sum + item.oneHourGapCount, 0);
   const thresholds = getOperationsAlertThresholds();
@@ -12321,7 +12359,11 @@ async function buildOperationsSummary(request, timezone, session) {
       ...(data.portalRegistrationRequests ?? []),
       ...(data.portalAppointmentRequests ?? []),
     ].filter((r) => r.status === 'pending').length,
-    faithfulWorkflowCounts: { critical: 0, moderate: 0, routine: 0 },
+    faithfulWorkflowCounts: {
+      critical: criticalFaithClientIds.size,
+      moderate: moderateFaithClientIds.size,
+      routine: routineFaithCount,
+    },
   };
 }
 

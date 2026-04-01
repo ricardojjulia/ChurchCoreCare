@@ -23,11 +23,16 @@ function rowToClientFaithProfile(row) {
     tenantId:                row.tenant_id,
     clientId:                row.client_id,
     denomination:            row.denomination ?? null,
+    tradition:               row.denomination ?? null,  // alias used by Faithful Workflows rules
     churchName:              row.church_name_enc != null ? decrypt(row.church_name_enc) : null,
     pastorName:              row.pastor_name_enc != null ? decrypt(row.pastor_name_enc) : null,
     spiritualDirector:       row.spiritual_director_enc != null ? decrypt(row.spiritual_director_enc) : null,
     faithIntegrationLevel:   row.faith_integration_level,
+    // integratesFaith: true when client actively opted into faith integration.
+    // Used by spiritualRules.js to gate all faith-related recommendations.
+    integratesFaith:         row.faith_integration_level === 'actively_integrated',
     spiritualConcerns:       row.spiritual_concerns_enc != null ? decrypt(row.spiritual_concerns_enc) : null,
+    notes:                   row.spiritual_concerns_enc != null ? decrypt(row.spiritual_concerns_enc) : null,  // alias used by spiritual rules
     religiousRestrictions:   row.religious_restrictions_enc != null ? decrypt(row.religious_restrictions_enc) : null,
     faithStrengths:          row.faith_strengths_enc != null ? decrypt(row.faith_strengths_enc) : null,
     createdAt:               row.created_at,

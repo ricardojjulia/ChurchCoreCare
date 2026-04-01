@@ -73,6 +73,9 @@ function rowToTreatmentPlan(row) {
     status: row.status,
     goals: row.goals_enc ? decryptJson(row.goals_enc) : [],
     interventions: row.interventions_enc ? decryptJson(row.interventions_enc) : [],
+    reviewCadence: row.review_cadence ?? null,
+    reviewedAt: row.reviewed_at ?? null,
+    lastReviewedAt: row.reviewed_at ?? null,  // alias used by Faithful Workflows rules engine
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

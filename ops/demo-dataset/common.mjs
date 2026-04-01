@@ -692,11 +692,13 @@ async function insertClientBundle(connection, dataset, client, hashes) {
     ],
   );
 
+  // faith_integration_level: 'actively_integrated' for clients who opted in (triggers spiritual rules)
+  const faithIntegrationLevel = client.faithIntegration ? 'actively_integrated' : 'open';
   await connection.query(
     `INSERT INTO client_faith_profiles
        (id, tenant_id, client_id, denomination, church_name_enc, pastor_name_enc, spiritual_director_enc,
         faith_integration_level, spiritual_concerns_enc, religious_restrictions_enc, faith_strengths_enc)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       `cfaith-${client.id}`,
       dataset.tenantId,
@@ -705,6 +707,7 @@ async function insertClientBundle(connection, dataset, client, hashes) {
       encrypt(client.churchName),
       encrypt('Pastor Daniel Hart'),
       encrypt('None assigned'),
+      faithIntegrationLevel,
       encrypt('Wants counseling to reinforce hope, trust, and wise boundaries.'),
       encrypt('None reported'),
       encrypt('Prayer, worship, scripture reflection, and trusted church relationships.'),
@@ -766,6 +769,14 @@ async function insertClientBundle(connection, dataset, client, hashes) {
     ],
   );
 
+  // Enriched clients use goal objects { description, status, targetDate } so rules engine
+  // can check g.status === 'completed' (discharge) and g.targetDate (overdue goals).
+  // All other clients use simple string goals that are still clinically coherent.
+  const treatmentPlanGoals = client.treatmentPlanGoals ?? [
+    { description: 'Reduce symptom intensity by 30 percent over the next 90 days.', status: 'in_progress', targetDate: null },
+    { description: 'Strengthen coping consistency between sessions.', status: 'in_progress', targetDate: null },
+    { description: 'Integrate faith practices only where welcomed and clinically helpful.', status: 'in_progress', targetDate: null },
+  ];
   await connection.query(
     `INSERT INTO treatment_plans
        (id, tenant_id, client_id, status, goals_enc, interventions_enc, review_cadence, reviewed_at)
@@ -774,11 +785,7 @@ async function insertClientBundle(connection, dataset, client, hashes) {
       `plan-${client.id}`,
       dataset.tenantId,
       client.id,
-      encryptJson([
-        'Reduce symptom intensity by 30 percent over the next 90 days.',
-        'Strengthen coping consistency between sessions.',
-        'Integrate faith practices only where welcomed and clinically helpful.',
-      ]),
+      encryptJson(treatmentPlanGoals),
       encryptJson([
         'Weekly counseling sessions',
         'Behavioral activation / grounding practice',
@@ -924,6 +931,37 @@ async function insertClientBundle(connection, dataset, client, hashes) {
     );
   }
 
+  // Enriched assessment history: additional PHQ-9/GAD-7/PCL-5 submissions beyond the default 4.
+  // These create the score trends the Faithful Workflows rules engine reads.
+  // Stored as standalone form_submissions without a corresponding form_assignment.
+  for (let i = 0; i < client.enrichedAssessmentHistory.length; i++) {
+    const assessment = client.enrichedAssessmentHistory[i];
+    const responses = {
+      totalScore: assessment.scoreValue,
+      completedAt: assessment.submittedAt,
+      ...(assessment.item9Score != null ? { selfHarm: assessment.item9Score, item9Score: assessment.item9Score } : {}),
+    };
+    await connection.query(
+      `INSERT INTO form_submissions
+         (id, tenant_id, assignment_id, client_id, form_key, form_title, submission_version, submitted_by_type, responses_enc,
+          score_label, score_value, interpretation_label, submitted_at, created_at)
+       VALUES (?, ?, NULL, ?, ?, ?, 1, 'client', ?, ?, ?, ?, ?, ?)`,
+      [
+        `sub-${client.id}-${assessment.formKey}-history-${i}`,
+        dataset.tenantId,
+        client.id,
+        assessment.formKey,
+        assessment.formTitle,
+        encryptJson(responses),
+        assessment.scoreLabel,
+        assessment.scoreValue,
+        assessment.interpretationLabel ?? null,
+        toSqlTimestamp(assessment.submittedAt),
+        toSqlTimestamp(assessment.submittedAt),
+      ],
+    );
+  }
+
   for (const offering of client.offerings) {
     await connection.query(
       `INSERT INTO offerings
@@ -989,6 +1027,10 @@ function buildExpectedCounts(dataset) {
   const appointmentCount = dataset.clients.reduce((sum, client) => sum + client.appointments.length, 0);
   const noteCount = dataset.clients.length;
   const formAssignmentCount = dataset.clients.length * dataset.defaultSignupFormKeys.length;
+  const additionalSubmissionCount = dataset.clients.reduce(
+    (sum, client) => sum + (client.enrichedAssessmentHistory?.length ?? 0),
+    0,
+  );
   const offeringCount = dataset.clients.reduce((sum, client) => sum + client.offerings.length, 0);
   const invoiceCount = dataset.clients.reduce((sum, client) => sum + client.invoices.length, 0);
   const paymentCount = dataset.clients.reduce((sum, client) => sum + client.invoices.length, 0);
@@ -1000,7 +1042,7 @@ function buildExpectedCounts(dataset) {
     appointments: appointmentCount,
     progressNotes: noteCount,
     formAssignments: formAssignmentCount,
-    formSubmissions: formAssignmentCount,
+    formSubmissions: formAssignmentCount + additionalSubmissionCount,
     offerings: offeringCount,
     invoices: invoiceCount,
     payments: paymentCount,
@@ -1173,8 +1215,10 @@ async function collectVerification(connection, dataset) {
     },
     {
       name: 'every_client_has_default_form_submissions',
-      pass: dataset.clients.every((client) => submissionCoverage.get(client.id) === dataset.defaultSignupFormKeys.length),
-      expected: dataset.defaultSignupFormKeys.length,
+      // Enriched clients have additional assessment history submissions (extra distinct form keys).
+      // Invariant: each client has AT LEAST the 4 default signup form keys submitted.
+      pass: dataset.clients.every((client) => (submissionCoverage.get(client.id) ?? 0) >= dataset.defaultSignupFormKeys.length),
+      expected: `>= ${dataset.defaultSignupFormKeys.length}`,
       actual: Object.fromEntries(dataset.clients.map((client) => [client.id, submissionCoverage.get(client.id) ?? 0])),
     },
     {

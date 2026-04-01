@@ -56,6 +56,17 @@ pnpm agent:translation:run
 
 The service listens on `http://127.0.0.1:8098` by default.
 
+### [Demo Dataset Finalizer](/Users/rjulia/FaithCounseling/.claude/agents/demo-dataset-finalizer.md)
+
+Deterministic demo data reset agent. Validates and restores the canonical 10-client dataset for the `system` tenant after tests pass. Runs `pnpm demo:verify` and `pnpm demo:finalize`, confirms all invariants, and reports credentials. Scoped exclusively to `ops/demo-dataset/` — does not touch application code or run browser tests.
+
+Use when you need to reset the demo environment to a known state after security, E2E, and launch-readiness tests have passed.
+
+Recommended flow:
+```bash
+pnpm test:security && pnpm test:e2e && pnpm test:launch-readiness && pnpm demo:finalize
+```
+
 ## Notes
 
 - Security and auditing work must follow [FULL-SECURITY-AND-AUDITING.md](/Users/rjulia/FaithCounseling/PLANS/FULL-SECURITY-AND-AUDITING.md).

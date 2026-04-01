@@ -1,4 +1,6 @@
 import os
+import sys
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -12,14 +14,26 @@ try:
 except Exception:
     FoundryChatClient = None
 
-from .tools import (
-    bootstrap_locale,
-    build_translation_challenge_dataset,
-    evaluate_accepted_terms,
-    evaluate_locale_integrity,
-    prepare_locale_in_application,
-    run_browser_translation_challenge,
-)
+try:
+    from .tools import (
+        bootstrap_locale,
+        build_translation_challenge_dataset,
+        evaluate_accepted_terms,
+        evaluate_locale_integrity,
+        prepare_locale_in_application,
+        run_browser_translation_challenge,
+    )
+except ImportError:
+    if __package__ in {None, ""}:
+        sys.path.append(str(Path(__file__).resolve().parents[2]))
+    from agents.translation_guardian.tools import (
+        bootstrap_locale,
+        build_translation_challenge_dataset,
+        evaluate_accepted_terms,
+        evaluate_locale_integrity,
+        prepare_locale_in_application,
+        run_browser_translation_challenge,
+    )
 
 
 def _create_chat_client():

@@ -524,6 +524,192 @@ function minutes(value) {
   return value * 60 * 1000;
 }
 
+// ─── Faithful Workflows enrichment data ────────────────────────────────────
+// Five clients are given rich clinical profiles so the Faithful Workflows
+// rules engine fires the full range of urgency levels and recommendation
+// categories. Mapped to real demo clients:
+//   critical  → client-001 (Elena Martinez)
+//   high      → client-002 (Jordan Alvarez)
+//   moderate  → client-003 (Naomi Rivera)
+//   discharge → client-005 (Sofia Hernandez)
+//   routine   → client-010 (Isaac Romero)
+const WORKFLOW_ENRICHMENT = Object.freeze({
+  'client-001': {
+    // Critical: PHQ-9 severe (22), item9=3 (SI), 2 consecutive no-shows, faith opt-in
+    faithIntegration: true,
+    noShowCount: 2,
+    noteOverrideDaysAgo: 6,
+    assessmentHistory: (ref) => [
+      {
+        formKey: 'PHQ9', formTitle: 'PHQ-9 Depression Screener',
+        scoreValue: 14, item9Score: 1,
+        scoreLabel: 'Mild depression', interpretationLabel: 'Monitor weekly.',
+        submittedAt: addDays(ref, -90).toISOString(),
+      },
+      {
+        formKey: 'PHQ9', formTitle: 'PHQ-9 Depression Screener',
+        scoreValue: 18, item9Score: 2,
+        scoreLabel: 'Moderately severe depression', interpretationLabel: 'Increase session frequency.',
+        submittedAt: addDays(ref, -45).toISOString(),
+      },
+      {
+        formKey: 'PHQ9', formTitle: 'PHQ-9 Depression Screener',
+        scoreValue: 22, item9Score: 3,
+        scoreLabel: 'Severe depression', interpretationLabel: 'Immediate safety review required.',
+        submittedAt: addDays(ref, -8).toISOString(),
+      },
+      {
+        formKey: 'AnxietyAssessment', formTitle: 'GAD-7 Anxiety Assessment',
+        scoreValue: 13, item9Score: null,
+        scoreLabel: 'Moderate anxiety', interpretationLabel: 'Continue grounding protocol.',
+        submittedAt: addDays(ref, -8).toISOString(),
+      },
+    ],
+    treatmentPlanGoals: (ref) => [
+      { description: 'Reduce anxiety severity from severe to moderate within 90 days', status: 'in_progress', targetDate: formatIsoDate(addDays(ref, -10)) },
+      { description: 'Establish consistent daily grounding routine', status: 'in_progress', targetDate: formatIsoDate(addDays(ref, 30)) },
+    ],
+    treatmentPlanLastReviewedAt: (ref) => formatIsoDate(addDays(ref, -8)),
+  },
+  'client-002': {
+    // High: PHQ-9 worsening trend (12→16→18), GAD-7=15, stale treatment plan (>90d)
+    faithIntegration: false,
+    noShowCount: 0,
+    noteOverrideDaysAgo: null,
+    assessmentHistory: (ref) => [
+      {
+        formKey: 'PHQ9', formTitle: 'PHQ-9 Depression Screener',
+        scoreValue: 12, item9Score: 0,
+        scoreLabel: 'Mild depression', interpretationLabel: 'Continue behavioral activation.',
+        submittedAt: addDays(ref, -120).toISOString(),
+      },
+      {
+        formKey: 'PHQ9', formTitle: 'PHQ-9 Depression Screener',
+        scoreValue: 16, item9Score: 0,
+        scoreLabel: 'Moderately severe depression', interpretationLabel: 'Review treatment approach.',
+        submittedAt: addDays(ref, -60).toISOString(),
+      },
+      {
+        formKey: 'PHQ9', formTitle: 'PHQ-9 Depression Screener',
+        scoreValue: 18, item9Score: 0,
+        scoreLabel: 'Moderately severe depression', interpretationLabel: 'Consider adjunctive supports.',
+        submittedAt: addDays(ref, -14).toISOString(),
+      },
+      {
+        formKey: 'AnxietyAssessment', formTitle: 'GAD-7 Anxiety Assessment',
+        scoreValue: 15, item9Score: null,
+        scoreLabel: 'Severe anxiety', interpretationLabel: 'Coordinate with prescribing physician.',
+        submittedAt: addDays(ref, -14).toISOString(),
+      },
+    ],
+    treatmentPlanGoals: (ref) => [
+      { description: 'Improve sleep consistency to 6+ hours per night', status: 'in_progress', targetDate: formatIsoDate(addDays(ref, -30)) },
+      { description: 'Re-engage with at least one social activity weekly', status: 'in_progress', targetDate: formatIsoDate(addDays(ref, 60)) },
+    ],
+    treatmentPlanLastReviewedAt: (ref) => formatIsoDate(addDays(ref, -110)),
+  },
+  'client-003': {
+    // Moderate: no progress note in 35+ days, overdue goal, no assessment in 95+ days, PTSD
+    faithIntegration: false,
+    noShowCount: 0,
+    noteOverrideDaysAgo: 36,
+    assessmentHistory: (ref) => [
+      {
+        formKey: 'PHQ9', formTitle: 'PHQ-9 Depression Screener',
+        scoreValue: 12, item9Score: 0,
+        scoreLabel: 'Mild depression', interpretationLabel: 'Continue grounding work.',
+        submittedAt: addDays(ref, -97).toISOString(),
+      },
+      {
+        formKey: 'PCL5', formTitle: 'PCL-5 PTSD Checklist',
+        scoreValue: 38, item9Score: null,
+        scoreLabel: 'Moderate PTSD symptoms', interpretationLabel: 'Continue trauma-informed care.',
+        submittedAt: addDays(ref, -97).toISOString(),
+      },
+    ],
+    treatmentPlanGoals: (ref) => [
+      { description: 'Reduce trauma reactivity through daily grounding practice', status: 'in_progress', targetDate: formatIsoDate(addDays(ref, -20)) },
+      { description: 'Build 3 consistent grounding routines across different contexts', status: 'in_progress', targetDate: formatIsoDate(addDays(ref, 45)) },
+    ],
+    treatmentPlanLastReviewedAt: (ref) => formatIsoDate(addDays(ref, -36)),
+  },
+  'client-005': {
+    // Discharge candidate: all goals completed, PHQ-9 improving to minimal (4), faith opt-in
+    faithIntegration: true,
+    noShowCount: 0,
+    noteOverrideDaysAgo: null,
+    assessmentHistory: (ref) => [
+      {
+        formKey: 'PHQ9', formTitle: 'PHQ-9 Depression Screener',
+        scoreValue: 10, item9Score: 0,
+        scoreLabel: 'Mild depression', interpretationLabel: 'Positive progress — continue current approach.',
+        submittedAt: addDays(ref, -90).toISOString(),
+      },
+      {
+        formKey: 'PHQ9', formTitle: 'PHQ-9 Depression Screener',
+        scoreValue: 6, item9Score: 0,
+        scoreLabel: 'Minimal depression', interpretationLabel: 'Continued improvement.',
+        submittedAt: addDays(ref, -45).toISOString(),
+      },
+      {
+        formKey: 'PHQ9', formTitle: 'PHQ-9 Depression Screener',
+        scoreValue: 4, item9Score: 0,
+        scoreLabel: 'Minimal depression', interpretationLabel: 'Goals met — discuss discharge planning.',
+        submittedAt: addDays(ref, -7).toISOString(),
+      },
+      {
+        formKey: 'AnxietyAssessment', formTitle: 'GAD-7 Anxiety Assessment',
+        scoreValue: 5, item9Score: null,
+        scoreLabel: 'Mild anxiety', interpretationLabel: 'Within normal range.',
+        submittedAt: addDays(ref, -7).toISOString(),
+      },
+    ],
+    treatmentPlanGoals: (ref) => [
+      { description: 'Reduce burnout severity and establish sustainable work-life boundaries', status: 'completed', targetDate: formatIsoDate(addDays(ref, -30)) },
+      { description: 'Implement consistent weekly sabbath practice', status: 'completed', targetDate: formatIsoDate(addDays(ref, -15)) },
+      { description: 'Improve assertiveness in professional and relational settings', status: 'completed', targetDate: formatIsoDate(addDays(ref, -5)) },
+    ],
+    treatmentPlanLastReviewedAt: (ref) => formatIsoDate(addDays(ref, -7)),
+  },
+  'client-010': {
+    // Routine: stable PHQ-9, faith opt-in, no homework keywords in notes → triggers ruleNoRecentHomework
+    faithIntegration: true,
+    noShowCount: 0,
+    noteOverrideDaysAgo: null,
+    assessmentHistory: (ref) => [
+      {
+        formKey: 'PHQ9', formTitle: 'PHQ-9 Depression Screener',
+        scoreValue: 7, item9Score: 0,
+        scoreLabel: 'Mild depression', interpretationLabel: 'Stable — continue current plan.',
+        submittedAt: addDays(ref, -90).toISOString(),
+      },
+      {
+        formKey: 'PHQ9', formTitle: 'PHQ-9 Depression Screener',
+        scoreValue: 6, item9Score: 0,
+        scoreLabel: 'Mild depression', interpretationLabel: 'Stable — continue current plan.',
+        submittedAt: addDays(ref, -45).toISOString(),
+      },
+      {
+        formKey: 'PHQ9', formTitle: 'PHQ-9 Depression Screener',
+        scoreValue: 5, item9Score: 0,
+        scoreLabel: 'Minimal depression', interpretationLabel: 'Continued stability.',
+        submittedAt: addDays(ref, -15).toISOString(),
+      },
+      {
+        formKey: 'AnxietyAssessment', formTitle: 'GAD-7 Anxiety Assessment',
+        scoreValue: 7, item9Score: null,
+        scoreLabel: 'Mild anxiety', interpretationLabel: 'Stable — monitor.',
+        submittedAt: addDays(ref, -15).toISOString(),
+      },
+    ],
+    treatmentPlanGoals: (ref) => [
+      { description: 'Reduce conflict escalation through repair conversation practice', status: 'in_progress', targetDate: formatIsoDate(addDays(ref, 30)) },
+      { description: 'Build sustainable self-care routine with spouse', status: 'in_progress', targetDate: formatIsoDate(addDays(ref, 60)) },
+    ],
+    treatmentPlanLastReviewedAt: (ref) => formatIsoDate(addDays(ref, -20)),
+  },
+});
+
 function buildDefaultFormResponses(client, timeline) {
   return [
     {
@@ -598,11 +784,13 @@ function buildDefaultFormResponses(client, timeline) {
   ];
 }
 
-function buildClientTimeline(referenceDate, index) {
+function buildClientTimeline(referenceDate, index, noteOverrideDaysAgo = null) {
   const startDay = startOfUtcDay(referenceDate);
   const scheduledDay = addDays(startDay, -21 + (index % 3));
   const completedDay = addDays(startDay, -14 + (index % 4));
-  const noteDay = addDays(startDay, -7 + (index % 5));
+  const noteDay = noteOverrideDaysAgo != null
+    ? addDays(startDay, -noteOverrideDaysAgo)
+    : addDays(startDay, -7 + (index % 5));
   const futureDayOne = addDays(startDay, 7 + (index % 4));
   const futureDayTwo = addDays(startDay, 21 + (index % 5));
   const scheduledHour = 14 + (index % 3);
@@ -642,21 +830,33 @@ function buildClientTimeline(referenceDate, index) {
 }
 
 function buildClientBundle(client, index, counselorsById, referenceDate) {
+  const enrichment = WORKFLOW_ENRICHMENT[client.id] ?? null;
   const counselor = counselorsById[client.counselorId];
-  const timeline = buildClientTimeline(referenceDate, index);
+  const timeline = buildClientTimeline(referenceDate, index, enrichment?.noteOverrideDaysAgo ?? null);
   const isMinor = new Date(referenceDate).getUTCFullYear() - Number(client.dob.slice(0, 4)) < 18;
   const assignedForms = [...DEMO_DATASET.defaultSignupFormKeys];
   const formResponses = buildDefaultFormResponses(client, timeline);
   const noteSignedAt = new Date(timeline.noteAppointment.endsAt.getTime() + minutes(10));
-  const reviewDate = formatIsoDate(addDays(referenceDate, 30));
+  const reviewDate = enrichment?.treatmentPlanLastReviewedAt
+    ? enrichment.treatmentPlanLastReviewedAt(startOfUtcDay(referenceDate))
+    : formatIsoDate(addDays(referenceDate, 30));
   const lastMonthDate = formatIsoDate(addDays(referenceDate, -30 + index));
 
-  const noteSummary = `${client.firstName} reported progress toward ${client.therapyFocus.toLowerCase()} The session focused on reflection, coping rehearsal, and concrete next steps.`;
-  const noteInterventions = [
-    'Reviewed symptom pattern since last completed session.',
-    'Practiced grounding and paced breathing.',
-    'Updated homework and support-accountability plan.',
-  ];
+  // Isaac (client-010) notes deliberately omit homework keywords → triggers ruleNoRecentHomework
+  const noteSummary = client.id === 'client-010'
+    ? `${client.firstName} reported stability in mood and energy. Session covered conflict patterns, self-care planning, and reflection on relational dynamics.`
+    : `${client.firstName} reported progress toward ${client.therapyFocus.toLowerCase()} The session focused on reflection, coping rehearsal, and concrete next steps.`;
+  const noteInterventions = client.id === 'client-010'
+    ? [
+        'Reviewed recent conflict incidents and applied repair sequence.',
+        'Explored exhaustion patterns and shared reflection on self-care.',
+        'Set agenda for next session around communication pacing.',
+      ]
+    : [
+        'Reviewed symptom pattern since last completed session.',
+        'Practiced grounding and paced breathing.',
+        'Updated homework and support-accountability plan.',
+      ];
 
   const offerings = client.offeringCents.map((amountCents, offeringIndex) => ({
     id: `off-${client.id}-${String(offeringIndex + 1).padStart(2, '0')}`,
@@ -703,6 +903,30 @@ function buildClientBundle(client, index, counselorsById, referenceDate) {
     },
   ] : [];
 
+  // Build no-show appointments for enriched clients (placed as most-recent past appointments)
+  const startDay = startOfUtcDay(referenceDate);
+  const noShowAppointments = [];
+  const noShowCount = enrichment?.noShowCount ?? 0;
+  for (let n = 0; n < noShowCount; n++) {
+    const nsDay = addDays(startDay, -(n + 1));
+    const nsStartsAt = atUtc(nsDay, 10 + (n % 3), 0);
+    noShowAppointments.push({
+      id: `appt-${client.id}-noshow-${n + 1}`,
+      status: 'no_show',
+      appointmentType: 'individual_therapy',
+      startsAt: nsStartsAt,
+      endsAt: new Date(nsStartsAt.getTime() + minutes(50)),
+    });
+  }
+
+  const enrichedGoals = enrichment?.treatmentPlanGoals
+    ? enrichment.treatmentPlanGoals(startDay)
+    : null;
+  const enrichedAssessmentHistory = enrichment?.assessmentHistory
+    ? enrichment.assessmentHistory(startDay)
+    : [];
+  const faithIntegration = enrichment?.faithIntegration ?? false;
+
   return {
     ...client,
     isMinor,
@@ -711,6 +935,8 @@ function buildClientBundle(client, index, counselorsById, referenceDate) {
     intakeSubmittedAt: timeline.noteAppointment.endsAt.toISOString(),
     treatmentPlanReviewCadence: 'monthly',
     treatmentPlanReviewedAt: reviewDate,
+    treatmentPlanGoals: enrichedGoals,
+    faithIntegration,
     noteSummary,
     noteInterventions,
     noteSignedAt: noteSignedAt.toISOString(),
@@ -730,6 +956,7 @@ function buildClientBundle(client, index, counselorsById, referenceDate) {
     ],
     timeline,
     formResponses,
+    enrichedAssessmentHistory,
     appointments: [
       {
         id: `appt-${client.id}-scheduled`,
@@ -761,6 +988,7 @@ function buildClientBundle(client, index, counselorsById, referenceDate) {
         appointmentType: index % 3 === 0 ? 'family_therapy' : 'individual_therapy',
         ...timeline.futureAppointmentTwo,
       },
+      ...noShowAppointments,
     ],
   };
 }

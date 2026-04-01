@@ -41,6 +41,26 @@ async function fetchClientWorkflowData(clientId) {
   const val = (settled) => settled.status === 'fulfilled' ? settled.value : null;
 
   const clientData = val(clientRes);
+
+  // The client-overview endpoint returns `submissions` (all form submissions for the client).
+  // Map each to the shape the rules engine expects:
+  //   inventoryName / title  → for getLatestAssessment name matching (e.g. 'PHQ-9', 'GAD-7')
+  //   score                  → numeric score value
+  //   scoredAt / completedAt → ISO date string for recency comparisons
+  //   item9Score             → PHQ-9 question 9 (suicidal ideation) from responses.selfHarm
+  const rawSubmissions = val(assessmentsRes)?.submissions ?? [];
+  const assessments = rawSubmissions
+    .filter((sub) => sub.scoreValue != null)
+    .map((sub) => ({
+      ...sub,
+      inventoryName: sub.formTitle ?? sub.formKey ?? '',
+      title: sub.formTitle ?? sub.formKey ?? '',
+      score: sub.scoreValue != null ? Number(sub.scoreValue) : null,
+      scoredAt: sub.submittedAt ?? null,
+      completedAt: sub.submittedAt ?? null,
+      item9Score: sub.responses?.item9Score ?? sub.responses?.selfHarm ?? null,
+    }));
+
   return {
     client: clientData?.item ?? clientData ?? { id: clientId },
     diagnoses: val(diagnosesRes)?.items ?? [],
@@ -48,7 +68,7 @@ async function fetchClientWorkflowData(clientId) {
     treatmentPlan: val(planRes)?.item ?? val(planRes) ?? null,
     faithProfile: val(faithRes)?.item ?? val(faithRes) ?? null,
     appointments: val(appointmentsRes)?.items ?? [],
-    assessments: val(assessmentsRes)?.assessments ?? val(assessmentsRes)?.items ?? [],
+    assessments,
     status: 'ready',
     errorMessage: null,
   };
