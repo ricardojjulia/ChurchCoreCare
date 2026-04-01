@@ -259,7 +259,7 @@ export default function FaithWorkflowsPage({ clients = [], currentUser }) {
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
-    <Stack gap={0} style={{ height: '100%', minHeight: 0, flex: 1, overflow: 'hidden' }}>
+    <Stack gap={0} style={{ height: '100%', minHeight: 0, flex: 1, overflow: 'hidden' }} data-testid="faith-workflows-page">
       {/* Page header */}
       <Box p="md" pb="xs" style={{ borderBottom: '1px solid var(--mantine-color-default-border)', flexShrink: 0 }}>
         <Group justify="space-between" align="flex-start">
