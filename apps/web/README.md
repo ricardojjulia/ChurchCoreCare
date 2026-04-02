@@ -56,6 +56,7 @@ Default URL: `http://localhost:3000`
 - Dashboard metric cards consume `/api/v1/appointments` for session and future-appointment counts
 - Counselor Home consumes the same appointment and operations-summary feeds as the legacy dashboard, but presents them through a counselor-first working surface
 - Counselor task workflows derive counselor-assigned note gaps, outstanding assignments, and unscheduled follow-up clients from the shared operations-summary and client feeds
+- The Faithful Workflows banner now uses the same scoped `faithfulWorkflowCounts` summary as the dashboard metric card, so both surfaces present the same critical, moderate, and routine totals
 - Counselor charting handoffs now open directly into the session-notes tab and can pre-open the draft-note composer for note-gap follow-up
 - Counselor-facing client rosters, operations summaries, and appointment collections now request counselor-scoped API payloads instead of loading whole-practice collections and trimming them in the browser
 - Counselor client detail and chart-related API routes now enforce assigned-client access on the server for counselor and intern sessions

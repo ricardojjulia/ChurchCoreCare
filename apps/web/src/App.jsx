@@ -582,7 +582,11 @@ export default function App() {
         ) : showOfferings ? (
           <OfferingsPage clients={clientsData.items} />
         ) : showFaith ? (
-          <FaithWorkflowsPage clients={clientsData.items} currentUser={currentUser} />
+          <FaithWorkflowsPage
+            clients={clientsData.items}
+            currentUser={currentUser}
+            workflowCounts={metricsData.faithfulCounts}
+          />
         ) : showClinical ? (
           <ClinicalChartPage
             clients={clientsData.items}
