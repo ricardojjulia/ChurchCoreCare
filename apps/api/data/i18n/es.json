@@ -389,5 +389,16 @@
   "message.localeRequired": "Primero ingresa un codigo regional.",
   "message.localeLoaded": "Configuracion regional cargada.",
   "message.translationConfigSaved": "Configuracion de traduccion guardada.",
-  "message.invalidGlossary": "Las lineas del glosario deben usar el formato origen=destino."
+  "message.invalidGlossary": "Las lineas del glosario deben usar el formato origen=destino.",
+  "topbar.dashboard.title": "Panel de Operaciones",
+  "topbar.dashboard.subtitle": "Vista general de ubicaciones, consejeros y acciones clínicas.",
+  "metrics.yearlyAppointments": "Citas hasta la fecha (anuales)",
+  "metrics.yearlyMeta": "Citas programadas este año",
+  "metrics.scheduledAhead30": "Aproximadamente próximos 30 días",
+  "metrics.faithfulWorkflows": "Flujos de Trabajo Fieles",
+  "metrics.faithfulCritical": "Crítico",
+  "metrics.faithfulModerate": "Moderado",
+  "metrics.faithfulRoutine": "Rutina",
+  "workflow.title": "Flujos de Trabajo Fieles",
+  "workflow.safetyBanner": "Este seguimiento ayuda a los consejeros a mantener conexiones espirituales significativas y cumplir con el cuidado pastoral integrado en la fe."
 }
