@@ -1432,7 +1432,10 @@ function ClientSessionsPanel({ clients = [], onViewChart }) {
                       <Button
                         size="compact-xs"
                         variant="light"
-                        onClick={() => onViewChart?.(selectedClientId)}
+                        onClick={() => onViewChart?.({
+                          clientId: selectedClientId,
+                          initialTab: 'sessionNotes',
+                        })}
                       >
                         View Chart
                       </Button>
@@ -1516,7 +1519,9 @@ export default function SchedulingPage({
     setError('');
     try {
       const [appointmentsPayload, typesPayload, calendarResponse, staffPayload] = await Promise.all([
-        fetchAppointments(),
+        fetchAppointments({
+          counselorId: canManageAll ? undefined : (currentUser?.staffId ?? undefined),
+        }),
         fetchAppointmentTypes(),
         fetchSchedulingCalendar({
           day: selectedDay,

@@ -1,11 +1,12 @@
 # Web App
 
-Lightweight modern UI shell for Faith Counseling operations.
+Lightweight modern UI shell for Faith Counseling, with counselor-first daily workflows and deeper administrative operations.
 
 ## Goals
 
 - modern, clean visual hierarchy
-- powerful at-a-glance operations dashboard
+- counselor-first daily home for non-technical staff
+- deeper administrative and operational tools without cluttering counselor navigation
 - light runtime footprint without framework overhead
 - responsive behavior across desktop and mobile
 
@@ -24,6 +25,10 @@ Default URL: `http://localhost:3000`
 ## Current UI Scope
 
 - sidebar navigation shell
+- role-aware navigation that gives counselors a smaller primary workspace and keeps monitoring/admin tools in admin-capable paths
+- dedicated counselor home surface for counselor and intern roles
+- dedicated counselor tasks surface for counselor note follow-up, assigned document/form review, and scheduling handoff
+- counselor home and task queues now hand off directly into scheduling composers and session-note charting flows for assigned clients
 - global search across today's schedule
 - redesigned `Practice Operations Center` header with an animated counseling mark and stronger operational hierarchy
 - sidebar heading now uses an animated counseling icon with a simplified `Options` label
@@ -49,6 +54,16 @@ Default URL: `http://localhost:3000`
 - Frontend surfaces emit structured telemetry to `/api/v1/telemetry/events`
 - Health probes are available through `/api/health`, `/api/health/live`, and `/api/health/ready`
 - Dashboard metric cards consume `/api/v1/appointments` for session and future-appointment counts
+- Counselor Home consumes the same appointment and operations-summary feeds as the legacy dashboard, but presents them through a counselor-first working surface
+- Counselor task workflows derive counselor-assigned note gaps, outstanding assignments, and unscheduled follow-up clients from the shared operations-summary and client feeds
+- Counselor charting handoffs now open directly into the session-notes tab and can pre-open the draft-note composer for note-gap follow-up
+- Counselor-facing client rosters, operations summaries, and appointment collections now request counselor-scoped API payloads instead of loading whole-practice collections and trimming them in the browser
+- Counselor client detail and chart-related API routes now enforce assigned-client access on the server for counselor and intern sessions
+- Counselor scheduling, form workflow, assignment, offerings, and faith referral API actions now reuse the same assigned-client access checks for counselor and intern sessions when those routes traverse client context
+- Counselor broad workflow collections now default to assigned-client scope on the server, including reminders, waitlist, document/form/inventory assignment collections, offerings, and faith referral coordination reads
+- Counselor-scoped client, appointment, scheduling calendar, operations-summary, and series collections now ignore caller-supplied counselor overrides for counselor and intern sessions while keeping explicit counselor filters available to admin-capable roles
+- Offerings list and summary routes now follow the same counselor header/session auth path as the other counselor-scoped API surfaces, so route-level coverage can exercise them in the no-DB development path
+- Appointment series now persists through the no-DB development and test path so scheduling recurrence flows exercise real read/create/update behavior instead of empty placeholders
 - Dashboard audit visibility consumes `/api/v1/audit/intelligence?days=7&limit=1` for admin-capable roles and degrades to an explicit admin-visibility message for other roles
 - The active session identity is intentionally rendered in the metric band, not in the top bar, so the header stays focused on navigation and workspace context
 - The live API connection status is intentionally rendered in the sidebar identity area, directly below the user pill, instead of in the top bar
@@ -64,6 +79,5 @@ Default URL: `http://localhost:3000`
 ## Next UI Implementation Slices
 
 - authenticated route shell and session handling
-- role-aware navigation and feature visibility
 - live API-backed dashboards and queue widgets
 - accessibility pass for keyboard and screen reader flows

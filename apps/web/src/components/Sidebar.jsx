@@ -1,31 +1,64 @@
 import { NavLink, Stack, Text, Group, Button, Box, Divider, Badge } from '@mantine/core';
 import { useI18n } from '../lib/i18nContext.jsx';
+import { isAdminRole, isClientRole, isCounselorRole, isOperationsStaffRole } from '../lib/roles.js';
 
-const NAV_ITEMS = [
-  { key: 'dashboard', labelKey: 'nav.dashboard' },
-  { key: 'users', labelKey: 'nav.users' },
-  { key: 'counselors', labelKey: 'nav.counselors' },
-  { key: 'clients', labelKey: 'nav.clients' },
-  { key: 'scheduling', labelKey: 'nav.scheduling' },
-  { key: 'clinical', labelKey: 'nav.clinical' },
-  { key: 'documents', labelKey: 'nav.documents' },
-  { key: 'offerings', labelKey: 'nav.offerings' },
-  { key: 'portal', labelKey: 'nav.portal' },
-  { key: 'workspace-studio', labelKey: 'nav.workspaceStudio' },
-  { key: 'operations', labelKey: 'nav.operationsStudio', href: '/operations.html' },
-  { key: 'faith', labelKey: 'nav.faithWorkflows' },
-  { key: 'about', labelKey: 'nav.about', href: '/about.html' },
-  { key: 'monitor', labelKey: 'nav.monitoring', href: '/monitor.html' },
-];
+function getNavItemsForRole(role) {
+  if (isClientRole(role)) {
+    return [
+      { key: 'portal', labelKey: 'nav.portal' },
+      { key: 'about', labelKey: 'nav.about', href: '/about.html' },
+    ];
+  }
 
-function canViewNavItem(item, role) {
-  if (role === 'client') {
-    return ['portal', 'about', 'monitor'].includes(item.key);
+  if (isCounselorRole(role)) {
+    return [
+      { key: 'counselor-home', labelKey: 'nav.home' },
+      { key: 'clients', labelKey: 'nav.clients' },
+      { key: 'scheduling', labelKey: 'nav.scheduling' },
+      { key: 'clinical', labelKey: 'nav.charting' },
+      { key: 'tasks', labelKey: 'nav.tasks' },
+      { key: 'documents', labelKey: 'nav.documents' },
+    ];
   }
-  if (item.key === 'users' || item.key === 'counselors') {
-    return ['platform_admin', 'practice_owner', 'practice_admin'].includes(role || '');
+
+  if (isAdminRole(role)) {
+    return [
+      { key: 'dashboard', labelKey: 'nav.dashboard' },
+      { key: 'users', labelKey: 'nav.users' },
+      { key: 'counselors', labelKey: 'nav.counselors' },
+      { key: 'clients', labelKey: 'nav.clients' },
+      { key: 'scheduling', labelKey: 'nav.scheduling' },
+      { key: 'clinical', labelKey: 'nav.clinical' },
+      { key: 'documents', labelKey: 'nav.documents' },
+      { key: 'offerings', labelKey: 'nav.offerings' },
+      { key: 'portal', labelKey: 'nav.portal' },
+      { key: 'workspace-studio', labelKey: 'nav.workspaceStudio' },
+      { key: 'operations', labelKey: 'nav.operationsStudio', href: '/operations.html' },
+      { key: 'faith', labelKey: 'nav.faithWorkflows' },
+      { key: 'about', labelKey: 'nav.about', href: '/about.html' },
+      { key: 'monitor', labelKey: 'nav.monitoring', href: '/monitor.html' },
+    ];
   }
-  return true;
+
+  if (isOperationsStaffRole(role)) {
+    return [
+      { key: 'dashboard', labelKey: 'nav.dashboard' },
+      { key: 'clients', labelKey: 'nav.clients' },
+      { key: 'scheduling', labelKey: 'nav.scheduling' },
+      { key: 'documents', labelKey: 'nav.documents' },
+      { key: 'portal', labelKey: 'nav.portal' },
+      { key: 'about', labelKey: 'nav.about', href: '/about.html' },
+    ];
+  }
+
+  return [
+    { key: 'dashboard', labelKey: 'nav.dashboard' },
+    { key: 'clients', labelKey: 'nav.clients' },
+    { key: 'scheduling', labelKey: 'nav.scheduling' },
+    { key: 'clinical', labelKey: 'nav.clinical' },
+    { key: 'documents', labelKey: 'nav.documents' },
+    { key: 'about', labelKey: 'nav.about', href: '/about.html' },
+  ];
 }
 
 function resolveUserLabel(user, role) {
@@ -42,7 +75,7 @@ function resolveUserLabel(user, role) {
 export default function Sidebar({ currentUser, currentView, onNavigate, onOpenClientPicker, onSignOut, connectionStatus }) {
   const { t } = useI18n();
   const userRole = currentUser?.role ?? null;
-  const visibleNavItems = NAV_ITEMS.filter((item) => canViewNavItem(item, userRole));
+  const visibleNavItems = getNavItemsForRole(userRole);
   const CONNECTION_TONE = {
     loading: { color: 'gray', label: t('sidebar.connection.loading') },
     connected: { color: 'green', label: t('sidebar.connection.connected') },

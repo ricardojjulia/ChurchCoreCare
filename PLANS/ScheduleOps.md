@@ -1,6 +1,6 @@
 # SCHEDULE OPS
 
-**Status:** In progress  
+**Status:** ✅ COMPLETE (verified April 1, 2026 — availability overrides, recurring series, utilization tab, and all API routes fully implemented)  
 **Prepared:** March 2026  
 **Stack:** React 18, Mantine 8, Node.js API, modular monolith  
 **Reference version:** `v2.1.0`  

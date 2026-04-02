@@ -1,7 +1,7 @@
 # Project Cleanup Plan
 
 **Created:** 2026-04-01  
-**Status:** Pending execution  
+**Status:** ✅ COMPLETE (April 2, 2026) — `app.js.bak` removed, old release docs removed, `__pycache__` removed, stale `.github/agents/translation_guardian/` copy removed, `test-results/translation-challenge` removed. `.venv/` was already absent. `.gitignore` already had Python/venv coverage.  
 **Priority:** High — pre-beta hygiene pass
 
 ---

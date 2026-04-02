@@ -10,6 +10,8 @@ function resolveTopBarCopy(currentView, isClient, t) {
   }
 
   const viewKeyMap = {
+    'counselor-home': 'counselorHome',
+    tasks: 'tasks',
     dashboard: 'dashboard',
     users: 'users',
     counselors: 'counselors',

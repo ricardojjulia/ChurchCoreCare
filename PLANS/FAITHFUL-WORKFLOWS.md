@@ -2,7 +2,7 @@
 
 **Date:** 2026-03-31
 **Target version:** 5.5.0 (minor — new counselor-facing feature page)
-**Status:** Planning
+**Status:** ✅ COMPLETE (all phases shipped: v5.5.0 engine + data wiring, v5.5.1 action persistence + telemetry, v5.5.2 Radial Hub + Priority Matrix canvas views)
 
 ---
 
@@ -269,7 +269,16 @@ Delivered in commit `8f60c57` / PR #6.
 - `RecommendationDrawer.jsx` — mark complete, defer (date picker), hide, and reopen wired; safety-locked recs (priority ≥ 9) cannot be hidden/deferred
 - `engine/contentTemplates.js` (new) — static template library for all 7 content actions: session agenda, note prep, verse suggestions, prayer prompt, CBT exercise, journal prompt, follow-up message draft
 
+### Phase 6: Visual Impact Upgrade ← NEXT
+**Status: Planning**
+See [`PLANS/FAITHFUL-WORKFLOWS-VISUAL-UPGRADE.md`](FAITHFUL-WORKFLOWS-VISUAL-UPGRADE.md) for the full plan.
+
+Summary: Add two new parallel canvas views (Radial Hub, Priority Matrix) selectable via a picker in the page header. Zero changes to the engine, rules, or Classic canvas. Backup tag `backup/faith-workflows-visual-pre-upgrade` created at Phase 5 completion.
+
+---
+
 ### Phase 5: Testing + Safety Hardening + Performance
+
 **Status: ✅ COMPLETE**
 
 Deliverables:

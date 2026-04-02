@@ -1,6 +1,6 @@
 # USER and USER MAINTENANCE
 
-**Status:** Delivered in the repository without MFA. Current repository release is `v1.6.0`; this document remains as the implementation record for the user maintenance and login work.
+**Status:** ✅ COMPLETE (without MFA) — implementation record for the user maintenance and login work.
 
 ## Purpose
 

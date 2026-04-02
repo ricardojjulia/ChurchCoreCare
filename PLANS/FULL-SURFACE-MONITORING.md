@@ -66,6 +66,8 @@ Required boundary rules:
 ### Top-level application views
 
 - `auth`
+- `counselor_home`
+- `tasks`
 - `dashboard`
 - `users`
 - `counselors`

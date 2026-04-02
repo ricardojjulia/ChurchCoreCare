@@ -462,10 +462,20 @@ export async function createInventoryDefinition({
 // Inventory assignments
 // ---------------------------------------------------------------------------
 
-export async function listInventoryAssignments(clientId, tenantId) {
+export async function listInventoryAssignments(tenantId, { clientId, inventoryId } = {}) {
+  const conditions = ['tenant_id = ?'];
+  const values = [tenantId];
+  if (clientId) {
+    conditions.push('client_id = ?');
+    values.push(clientId);
+  }
+  if (inventoryId) {
+    conditions.push('inventory_id = ?');
+    values.push(inventoryId);
+  }
   const [rows] = await pool.query(
-    'SELECT * FROM inventory_assignments WHERE client_id = ? AND tenant_id = ?',
-    [clientId, tenantId],
+    `SELECT * FROM inventory_assignments WHERE ${conditions.join(' AND ')}`,
+    values,
   );
   return rows.map(rowToInventoryAssignment);
 }
