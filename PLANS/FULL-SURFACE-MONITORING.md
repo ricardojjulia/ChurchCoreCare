@@ -67,6 +67,7 @@ Required boundary rules:
 
 - `auth`
 - `counselor_home`
+- `tasks`
 - `dashboard`
 - `users`
 - `counselors`

@@ -27,6 +27,7 @@ Default URL: `http://localhost:3000`
 - sidebar navigation shell
 - role-aware navigation that gives counselors a smaller primary workspace and keeps monitoring/admin tools in admin-capable paths
 - dedicated counselor home surface for counselor and intern roles
+- dedicated counselor tasks surface for counselor note follow-up, assigned document/form review, and scheduling handoff
 - global search across today's schedule
 - redesigned `Practice Operations Center` header with an animated counseling mark and stronger operational hierarchy
 - sidebar heading now uses an animated counseling icon with a simplified `Options` label
@@ -53,6 +54,7 @@ Default URL: `http://localhost:3000`
 - Health probes are available through `/api/health`, `/api/health/live`, and `/api/health/ready`
 - Dashboard metric cards consume `/api/v1/appointments` for session and future-appointment counts
 - Counselor Home consumes the same appointment and operations-summary feeds as the legacy dashboard, but presents them through a counselor-first working surface
+- Counselor task workflows derive counselor-assigned note gaps, outstanding assignments, and unscheduled follow-up clients from the shared operations-summary and client feeds
 - Dashboard audit visibility consumes `/api/v1/audit/intelligence?days=7&limit=1` for admin-capable roles and degrades to an explicit admin-visibility message for other roles
 - The active session identity is intentionally rendered in the metric band, not in the top bar, so the header stays focused on navigation and workspace context
 - The live API connection status is intentionally rendered in the sidebar identity area, directly below the user pill, instead of in the top bar

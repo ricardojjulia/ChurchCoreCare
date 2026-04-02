@@ -1,9 +1,7 @@
 import {
-  Alert,
   Badge,
   Button,
   Group,
-  Loader,
   Paper,
   SimpleGrid,
   Stack,
@@ -70,8 +68,7 @@ function ActionButton({ action, onClick, children }) {
 export default function CounselorHomePage({
   currentUser,
   metricsData,
-  operationsSummaryData,
-  clientsData,
+  workspaceData,
   onOpenScheduling,
   onOpenClients,
   onOpenClinicalChart,
@@ -79,17 +76,10 @@ export default function CounselorHomePage({
   onOpenClient,
 }) {
   const { t } = useI18n();
-  const summary = operationsSummaryData?.summary ?? null;
-  const loading = Boolean(operationsSummaryData?.loading);
-  const error = operationsSummaryData?.error ?? null;
-  const clients = Array.isArray(clientsData?.items) ? clientsData.items : [];
-  const alerts = Array.isArray(summary?.alerts?.items) ? summary.alerts.items : [];
-  const noteGapClients = summary?.complianceWatch?.noteGapClients ?? {};
-  const outstandingAssignments = summary?.complianceWatch?.outstandingAssignments ?? {};
-  const unscheduledClients = Array.isArray(summary?.clientsBox?.unscheduledClientItems)
-    ? summary.clientsBox.unscheduledClientItems
-    : [];
-  const highTouchpointClients = clients.filter((client) => Boolean(client?.highTouchpoint));
+  const noteGapClients = workspaceData?.noteGapCounts ?? { over1Day: 0, over3Days: 0, over7Days: 0 };
+  const outstandingAssignments = workspaceData?.assignmentCounts ?? { total: 0, documents: 0, forms: 0 };
+  const unscheduledClients = workspaceData?.unscheduledClients ?? [];
+  const highTouchpointClients = workspaceData?.highTouchpointClients ?? [];
   const topFollowUpClients = unscheduledClients.length > 0
     ? unscheduledClients.slice(0, 4)
     : highTouchpointClients.slice(0, 4).map((client) => ({
@@ -101,6 +91,28 @@ export default function CounselorHomePage({
   const firstName = typeof currentUser?.name === 'string'
     ? currentUser.name.trim().split(/\s+/)[0] ?? ''
     : '';
+  const priorities = [
+    noteGapClients.over7Days > 0 ? {
+      title: t('counselorHome.priority.urgentNotesTitle'),
+      detail: t('counselorHome.priority.urgentNotesDetail', { count: noteGapClients.over7Days }),
+      severity: 'critical',
+    } : null,
+    noteGapClients.over3Days > 0 ? {
+      title: t('counselorHome.priority.noteReviewTitle'),
+      detail: t('counselorHome.priority.noteReviewDetail', { count: noteGapClients.over3Days }),
+      severity: 'warning',
+    } : null,
+    outstandingAssignments.total > 0 ? {
+      title: t('counselorHome.priority.assignedWorkTitle'),
+      detail: t('counselorHome.priority.assignedWorkDetail', { count: outstandingAssignments.total }),
+      severity: 'warning',
+    } : null,
+    unscheduledClients.length > 0 ? {
+      title: t('counselorHome.priority.followUpTitle'),
+      detail: t('counselorHome.priority.followUpDetail', { count: unscheduledClients.length }),
+      severity: 'warning',
+    } : null,
+  ].filter(Boolean);
 
   return (
     <Stack gap="lg" p="xl" style={{ minHeight: 0, flex: 1 }}>
@@ -155,18 +167,6 @@ export default function CounselorHomePage({
         />
       </SimpleGrid>
 
-      {loading ? (
-        <Group justify="center" py="xl">
-          <Loader size="sm" />
-        </Group>
-      ) : null}
-
-      {error ? (
-        <Alert color="red" variant="light">
-          {error}
-        </Alert>
-      ) : null}
-
       <SimpleGrid cols={{ base: 1, lg: 3 }} spacing="md">
         <Paper withBorder radius="md" p="md">
           <Stack gap="sm">
@@ -175,14 +175,14 @@ export default function CounselorHomePage({
               <Text c="dimmed" fz="sm" mt={4}>{t('counselorHome.priorities.subtitle')}</Text>
             </div>
 
-            {alerts.length === 0 ? (
+            {priorities.length === 0 ? (
               <Text c="dimmed" fz="sm">{t('counselorHome.priorities.empty')}</Text>
-            ) : alerts.slice(0, 4).map((item, index) => (
-              <Paper key={`${item.id ?? 'alert'}-${index}`} withBorder radius="sm" p="sm">
+            ) : priorities.slice(0, 4).map((item, index) => (
+              <Paper key={`${item.title}-${index}`} withBorder radius="sm" p="sm">
                 <Group justify="space-between" align="flex-start" wrap="nowrap">
                   <Stack gap={4} style={{ flex: 1 }}>
                     <Text fw={600} fz="sm">{item.title}</Text>
-                    {item.description ? <Text c="dimmed" fz="sm">{item.description}</Text> : null}
+                    {item.detail ? <Text c="dimmed" fz="sm">{item.detail}</Text> : null}
                   </Stack>
                   <Badge color={item.severity === 'critical' ? 'red' : 'orange'} variant="light">
                     {item.severity === 'critical'

@@ -7,6 +7,7 @@ import TopBar from './components/TopBar';
 import Metrics from './components/Metrics';
 import WorkspaceGrid from './components/WorkspaceGrid';
 import CounselorHomePage from './components/CounselorHomePage.jsx';
+import CounselorTasksPage from './components/CounselorTasksPage.jsx';
 import ClientsPage from './components/ClientsPage.jsx';
 import ClientDetailPage from './components/ClientDetail/ClientDetailPage.jsx';
 import CounselorDetailPage from './components/CounselorDetail/CounselorDetailPage.jsx';
@@ -25,6 +26,7 @@ import { fetchOperationsSummary } from './lib/clientApi.js';
 import { frontendTelemetry } from './lib/frontendTelemetry.js';
 import { useSurfaceTelemetry } from './lib/useSurfaceTelemetry.js';
 import { useI18n } from './lib/i18nContext.jsx';
+import { buildCounselorWorkspaceData } from './lib/counselorWorkspace.js';
 import { isClientRole, isCounselorRole } from './lib/roles.js';
 import './App.css';
 
@@ -146,6 +148,7 @@ export default function App() {
     initialPortalRequest: null,
   });
   const userRole = currentUser?.role ?? null;
+  const counselorWorkspaceData = buildCounselorWorkspaceData(operationsSummaryData.summary, clientsData.items, currentUser);
 
   useEffect(() => {
     fetch('/api/health', { credentials: 'include' })
@@ -364,6 +367,7 @@ export default function App() {
 
   const showDashboard        = currentView === 'dashboard';
   const showCounselorHome    = currentView === 'counselor-home';
+  const showTasks            = currentView === 'tasks';
   const showUsers            = currentView === 'users';
   const showCounselors       = currentView === 'counselors';
   const showClients          = currentView === 'clients';
@@ -374,13 +378,15 @@ export default function App() {
   const showOfferings        = currentView === 'offerings';
   const showClinical         = currentView === 'clinical';
   const showFaith            = currentView === 'faith';
-  const showFallbackWorkspace = !showDashboard && !showCounselorHome && !showUsers && !showCounselors && !showClients && !showScheduling && !showWorkspaceStudio && !showDocuments && !showPortal && !showOfferings && !showClinical && !showFaith;
+  const showFallbackWorkspace = !showDashboard && !showCounselorHome && !showTasks && !showUsers && !showCounselors && !showClients && !showScheduling && !showWorkspaceStudio && !showDocuments && !showPortal && !showOfferings && !showClinical && !showFaith;
   const topLevelSurfaceId = !isAuthenticated
     ? 'auth'
     : selectedClientId || selectedCounselorId
       ? null
       : showCounselorHome
         ? 'counselor_home'
+      : showTasks
+        ? 'tasks'
       : showUsers
         ? 'users'
         : showCounselors
@@ -501,8 +507,7 @@ export default function App() {
           <CounselorHomePage
             currentUser={currentUser}
             metricsData={metricsData}
-            operationsSummaryData={operationsSummaryData}
-            clientsData={clientsData}
+            workspaceData={counselorWorkspaceData}
             onOpenScheduling={() => handleOpenScheduling({ initialView: defaultCalendarView(userRole) })}
             onOpenClients={() => handleNavigate('clients')}
             onOpenClinicalChart={() => {
@@ -511,6 +516,17 @@ export default function App() {
             }}
             onOpenDocuments={handleOpenDocuments}
             onOpenClient={handleOpenClient}
+          />
+        ) : showTasks ? (
+          <CounselorTasksPage
+            workspaceData={counselorWorkspaceData}
+            onOpenClient={handleOpenClient}
+            onOpenDocuments={handleOpenDocuments}
+            onOpenScheduling={(clientId) => handleOpenScheduling({
+              composerOpen: true,
+              initialClientId: clientId,
+              initialView: defaultCalendarView(userRole),
+            })}
           />
         ) : showWorkspaceStudio ? (
           <WorkspaceStudioPage
