@@ -1,6 +1,6 @@
 # CALENDAR
 
-**Status:** In progress
+**Status:** ✅ COMPLETE (verified April 1, 2026 — Phases 1–3 fully implemented in SchedulingPage.jsx; Phase 4 superseded and completed by ScheduleOps.md)
 **Prepared:** March 27, 2026
 **Stack:** React 18, Mantine 8, Node.js API, modular monolith
 **Reference codebase state:** `v1.6.0` on `feature/mantine-ui`

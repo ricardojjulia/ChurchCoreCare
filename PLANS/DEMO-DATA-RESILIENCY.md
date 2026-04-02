@@ -1,6 +1,6 @@
 # DEMO DATA RESILIENCY
 
-**Status:** Approved implementation plan
+**Status:** ✅ COMPLETE (verified April 2, 2026 — all ops/demo-dataset scripts implemented: apply.mjs, common.mjs, finalize.mjs, manifest.mjs, verify.mjs)
 **Prepared:** March 30, 2026
 **Scope:** Demo dataset finalization, DB reset workflow, verification, docs
 **Security baseline:** [PLANS/FULL-SECURITY-AND-AUDITING.md](FULL-SECURITY-AND-AUDITING.md)

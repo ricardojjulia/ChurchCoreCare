@@ -1,6 +1,6 @@
 # OPERATIONS DASHBOARD UPGRADE
 
-**Status:** Approved implementation plan
+**Status:** ✅ COMPLETE (verified April 2, 2026 — all dashboard cards wired: todaySchedule, priorityQueue, complianceWatch, clientsBox with full note-gap/utilization/portal-request metrics)
 **Prepared:** March 30, 2026
 **Scope:** React dashboard, operations summary API, client schema, docs, tests
 **Monitoring baseline:** [PLANS/FULL-SURFACE-MONITORING.md](FULL-SURFACE-MONITORING.md)

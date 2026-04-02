@@ -1,6 +1,6 @@
 # Mantine UI Migration
 
-**Status:** Delivered in the repository. Current repository release is `v1.6.0`; this document remains as the implementation record for the Mantine migration.
+**Status:** ✅ COMPLETE — implementation record for the Mantine migration.
 
 ## Purpose
 

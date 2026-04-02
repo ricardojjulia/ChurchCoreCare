@@ -2,7 +2,7 @@
 
 **Date:** 2026-03-31
 **Target version:** 5.5.0 (minor — new counselor-facing feature page)
-**Status:** Planning
+**Status:** ✅ COMPLETE (all phases shipped: v5.5.0 engine + data wiring, v5.5.1 action persistence + telemetry, v5.5.2 Radial Hub + Priority Matrix canvas views)
 
 ---
 
