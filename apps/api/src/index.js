@@ -3430,8 +3430,16 @@ async function handleDocumentAssignments(request, response, requestUrl, session)
       const client = await resolveOptionalAuthorizedClient(request, response, clientId, session, 'documents.assignment.read');
       if (!client) return;
     }
+    const counselorScope = await resolveCounselorCollectionScope(request, response, session, 'documents.assignment.read');
+    if (counselorScope === false) return;
     if (process.env.DB_NAME) {
-      const items = await listDocumentAssignments(callerTenant(request, session), { clientId: clientId || undefined, assigneeId: assigneeId || undefined, templateId: templateId || undefined });
+      let items = await listDocumentAssignments(callerTenant(request, session), { clientId: clientId || undefined, assigneeId: assigneeId || undefined, templateId: templateId || undefined });
+      if (counselorScope && !clientId) {
+        items = items.filter((item) => (
+          (item.assigneeType === 'client' && counselorScope.clientIds.has(item.assigneeId))
+          || (item.assigneeType === 'staff' && item.assigneeId === counselorScope.counselorScopeId)
+        ));
+      }
       emitAudit(request, 'documents.assignment.read', 'document_assignment', 'collection', session);
       writeJson(response, 200, { items });
       return;
@@ -3440,6 +3448,12 @@ async function handleDocumentAssignments(request, response, requestUrl, session)
     if (clientId) items = items.filter((item) => item.assigneeType === 'client' && item.assigneeId === clientId);
     if (assigneeId) items = items.filter((item) => item.assigneeId === assigneeId);
     if (templateId) items = items.filter((item) => item.templateId === templateId);
+    if (counselorScope && !clientId) {
+      items = items.filter((item) => (
+        (item.assigneeType === 'client' && counselorScope.clientIds.has(item.assigneeId))
+        || (item.assigneeType === 'staff' && item.assigneeId === counselorScope.counselorScopeId)
+      ));
+    }
     emitAudit(request, 'documents.assignment.read', 'document_assignment', 'collection');
     writeJson(response, 200, { items });
     return;
@@ -3795,8 +3809,13 @@ async function handleInventoryAssignments(request, response, requestUrl, session
       const client = await resolveOptionalAuthorizedClient(request, response, clientId, session, 'inventory.assignment.read');
       if (!client) return;
     }
-    if (process.env.DB_NAME && clientId) {
-      const items = await listInventoryAssignments(clientId, callerTenant(request, session));
+    const counselorScope = await resolveCounselorCollectionScope(request, response, session, 'inventory.assignment.read');
+    if (counselorScope === false) return;
+    if (process.env.DB_NAME) {
+      let items = await listInventoryAssignments(callerTenant(request, session), { clientId: clientId || undefined, inventoryId: inventoryId || undefined });
+      if (counselorScope && !clientId) {
+        items = items.filter((item) => counselorScope.clientIds.has(item.clientId));
+      }
       emitAudit(request, 'inventory.assignment.read', 'inventory_assignment', 'collection', session);
       writeJson(response, 200, { items });
       return;
@@ -3804,6 +3823,7 @@ async function handleInventoryAssignments(request, response, requestUrl, session
     let items = filterByTenant(inventoryAssignments, request);
     if (clientId) items = items.filter((item) => item.clientId === clientId);
     if (inventoryId) items = items.filter((item) => item.inventoryId === inventoryId);
+    if (counselorScope && !clientId) items = items.filter((item) => counselorScope.clientIds.has(item.clientId));
     emitAudit(request, 'inventory.assignment.read', 'inventory_assignment', 'collection');
     writeJson(response, 200, { items });
     return;
@@ -4126,8 +4146,11 @@ async function handleFormWorkflowAssignments(request, response, requestUrl, sess
       const client = await resolveOptionalAuthorizedClient(request, response, clientId, session, 'forms.assignment.read');
       if (!client) return;
     }
+    const counselorScope = await resolveCounselorCollectionScope(request, response, session, 'forms.assignment.read');
+    if (counselorScope === false) return;
     if (process.env.DB_NAME) {
-      const items = await listFormAssignments(tenantId, { clientId: clientId || undefined, status: status || undefined });
+      let items = await listFormAssignments(tenantId, { clientId: clientId || undefined, status: status || undefined });
+      if (counselorScope && !clientId) items = items.filter((item) => counselorScope.clientIds.has(item.clientId));
       emitAudit(request, 'forms.assignment.read', 'form_assignment', 'collection', session);
       writeJson(response, 200, { items });
       return;
@@ -4135,6 +4158,7 @@ async function handleFormWorkflowAssignments(request, response, requestUrl, sess
     let items = formWorkflowAssignments.filter((item) => item.tenantId === tenantId);
     if (clientId) items = items.filter((item) => item.clientId === clientId);
     if (status) items = items.filter((item) => item.status === status);
+    if (counselorScope && !clientId) items = items.filter((item) => counselorScope.clientIds.has(item.clientId));
     emitAudit(request, 'forms.assignment.read', 'form_assignment', 'collection');
     writeJson(response, 200, { items });
     return;
@@ -4298,8 +4322,11 @@ async function handleFormWorkflowSubmissions(request, response, requestUrl, sess
       const client = await resolveOptionalAuthorizedClient(request, response, clientId, session, 'forms.submission.read');
       if (!client) return;
     }
+    const counselorScope = await resolveCounselorCollectionScope(request, response, session, 'forms.submission.read');
+    if (counselorScope === false) return;
     if (process.env.DB_NAME) {
-      const items = await listFormSubmissions(tenantId, { clientId: clientId || undefined, formKey: formKey || undefined });
+      let items = await listFormSubmissions(tenantId, { clientId: clientId || undefined, formKey: formKey || undefined });
+      if (counselorScope && !clientId) items = items.filter((item) => counselorScope.clientIds.has(item.clientId));
       emitAudit(request, 'forms.submission.read', 'form_submission', 'collection', session);
       writeJson(response, 200, { items });
       return;
@@ -4307,6 +4334,7 @@ async function handleFormWorkflowSubmissions(request, response, requestUrl, sess
     let items = formWorkflowSubmissions.filter((item) => item.tenantId === tenantId);
     if (clientId) items = items.filter((item) => item.clientId === clientId);
     if (formKey) items = items.filter((item) => item.formKey === formKey);
+    if (counselorScope && !clientId) items = items.filter((item) => counselorScope.clientIds.has(item.clientId));
     emitAudit(request, 'forms.submission.read', 'form_submission', 'collection');
     writeJson(response, 200, { items });
     return;
@@ -5164,12 +5192,16 @@ async function handleSchedulingCalendar(request, response, requestUrl, session) 
   const counselorIdFilter = sanitizeStr(requestUrl.searchParams.get('counselorId') ?? '', 64);
   const counselorFilter = sanitizeStr(requestUrl.searchParams.get('counselorName') ?? '', 200);
   const locationFilter = sanitizeStr(requestUrl.searchParams.get('locationName') ?? '', 200);
+  const counselorScope = await resolveCounselorCollectionScope(request, response, session, 'scheduling.calendar.read');
+  if (counselorScope === false) return;
+  const scopedCounselorId = counselorScope?.counselorScopeId ?? null;
 
   if (process.env.DB_NAME) {
     const tenantId = callerTenant(request, session);
     const dayStart = `${day}T00:00:00.000Z`;
     const dayEnd = `${day}T23:59:59.999Z`;
     let allItems = await listAppointmentsByDateRange(tenantId, dayStart, dayEnd);
+    if (scopedCounselorId) allItems = allItems.filter((a) => a.counselorId === scopedCounselorId);
     if (counselorIdFilter) allItems = allItems.filter((a) => a.counselorId === counselorIdFilter);
     if (counselorFilter) allItems = allItems.filter((a) => a.counselorName === counselorFilter);
     if (locationFilter) allItems = allItems.filter((a) => a.locationName === locationFilter);
@@ -5178,19 +5210,26 @@ async function handleSchedulingCalendar(request, response, requestUrl, session) 
     const counselorCalendars = Object.entries(groupBy(allItems, (a) => a.counselorName)).map(([counselorName, entries]) => ({ counselorName, appointments: entries }));
     const locationCalendars = Object.entries(groupBy(allItems, (a) => a.locationName)).map(([locationName, entries]) => ({ locationName, appointments: entries }));
 
-    const [staffRows] = await pool.query('SELECT id, first_name_enc, last_name_enc FROM staff_members WHERE tenant_id = ?', [tenantId]);
+    const [staffRows] = await pool.query(
+      'SELECT id, first_name_enc, last_name_enc FROM staff_members WHERE tenant_id = ?',
+      [tenantId],
+    );
     const availability = await Promise.all(staffRows.map(async (staff) => {
       const slots = await listAvailabilityTemplates(staff.id, tenantId);
       return { staffId: staff.id, counselorName: `${decrypt(staff.first_name_enc)} ${decrypt(staff.last_name_enc)}`, template: slots };
     }));
+    const scopedAvailability = scopedCounselorId
+      ? availability.filter((item) => item.staffId === scopedCounselorId)
+      : availability;
 
     emitAudit(request, 'scheduling.calendar.read', 'appointment', 'collection', session);
-    writeJson(response, 200, { timezone, day, counselorCalendars, locationCalendars, availability });
+    writeJson(response, 200, { timezone, day, counselorCalendars, locationCalendars, availability: scopedAvailability });
     return;
   }
 
   const items = filterByTenant(appointments, request)
     .filter((appointment) => dateKeyInTimezone(appointment.startsAt, timezone) === day)
+    .filter((appointment) => !scopedCounselorId || appointment.counselorId === scopedCounselorId)
     .filter((appointment) => !counselorIdFilter || appointment.counselorId === counselorIdFilter)
     .filter((appointment) => !counselorFilter || appointment.counselorName === counselorFilter)
     .filter((appointment) => !locationFilter || appointment.locationName === locationFilter)
@@ -5210,7 +5249,7 @@ async function handleSchedulingCalendar(request, response, requestUrl, session) 
     staffId: staff.id,
     counselorName: `${staff.firstName} ${staff.lastName}`,
     template: availabilityTemplates[staff.id] ?? [],
-  }));
+  })).filter((item) => !scopedCounselorId || item.staffId === scopedCounselorId);
 
   emitAudit(request, 'scheduling.calendar.read', 'appointment', 'collection');
   writeJson(response, 200, {
@@ -5230,9 +5269,14 @@ async function handleReminders(request, response, requestUrl, session) {
       const appointment = await resolveAuthorizedAppointment(request, response, appointmentIdFilter, session, 'reminder.read');
       if (!appointment) return;
     }
+    const counselorScope = await resolveCounselorCollectionScope(request, response, session, 'reminder.read');
+    if (counselorScope === false) return;
     if (process.env.DB_NAME) {
       const tenantId = callerTenant(request, session);
-      const items = await listReminders(tenantId, { status: statusFilter || undefined, appointmentId: appointmentIdFilter || undefined });
+      let items = await listReminders(tenantId, { status: statusFilter || undefined, appointmentId: appointmentIdFilter || undefined });
+      if (counselorScope && !appointmentIdFilter) {
+        items = items.filter((item) => item.clientId && counselorScope.clientIds.has(item.clientId));
+      }
       emitAudit(request, 'reminder.read', 'reminder', 'collection', session);
       writeJson(response, 200, { items });
       return;
@@ -5240,6 +5284,7 @@ async function handleReminders(request, response, requestUrl, session) {
     let items = filterByTenant(reminderRecords, request);
     if (statusFilter) items = items.filter((record) => record.status === statusFilter);
     if (appointmentIdFilter) items = items.filter((record) => record.appointmentId === appointmentIdFilter);
+    if (counselorScope && !appointmentIdFilter) items = items.filter((record) => record.clientId && counselorScope.clientIds.has(record.clientId));
     emitAudit(request, 'reminder.read', 'reminder', 'collection');
     writeJson(response, 200, { items });
     return;
@@ -5347,10 +5392,12 @@ async function handleReminders(request, response, requestUrl, session) {
 
 async function handleWaitlist(request, response, session) {
   if (request.method === 'GET') {
+    const counselorScope = await resolveCounselorCollectionScope(request, response, session, 'waitlist.read');
+    if (counselorScope === false) return;
     if (process.env.DB_NAME) {
       const tenantId = callerTenant(request, session);
       const rows = await listWaitlist(tenantId);
-      const enriched = await Promise.all(rows.map(async (entry) => {
+      let enriched = await Promise.all(rows.map(async (entry) => {
         const [clientRows] = await pool.query(
           'SELECT first_name_enc, last_name_enc FROM clients WHERE id = ? AND tenant_id = ?',
           [entry.clientId, tenantId]
@@ -5363,13 +5410,16 @@ async function handleWaitlist(request, response, session) {
             : entry.clientId,
         };
       }));
+      if (counselorScope) {
+        enriched = enriched.filter((entry) => counselorScope.clientIds.has(entry.clientId));
+      }
       enriched.sort((a, b) => a.priorityRank - b.priorityRank);
       emitAudit(request, 'waitlist.read', 'client', 'collection', session);
       writeJson(response, 200, { items: enriched });
       return;
     }
 
-    const items = clients
+    let items = clients
       .filter((client) => client.status === 'waitlist')
       .map((client) => {
         const lifecycle = clientLifecycles[client.id] ?? null;
@@ -5392,6 +5442,7 @@ async function handleWaitlist(request, response, session) {
         };
       })
       .sort((left, right) => left.priorityRank - right.priorityRank);
+    if (counselorScope) items = items.filter((item) => counselorScope.clientIds.has(item.clientId));
 
     emitAudit(request, 'waitlist.read', 'client', 'collection');
     writeJson(response, 200, { items });
@@ -5405,12 +5456,14 @@ async function handleWaitlist(request, response, session) {
 
   const payload = await readJsonBody(request);
   const clientId = sanitizeStr(payload.clientId, 50);
+  const client = await resolveAuthorizedClient(request, response, clientId, session, 'waitlist.update');
+  if (!client) return;
 
   if (process.env.DB_NAME) {
     const tenantId = callerTenant(request, session);
     const [existing] = await pool.query(
       'SELECT id FROM waitlist_metadata WHERE client_id = ? AND tenant_id = ?',
-      [clientId, tenantId]
+      [client.id, tenantId]
     );
     if (!existing[0]) { writeJson(response, 404, { error: 'Waitlist client not found' }); return; }
     const fields = {};
@@ -5420,31 +5473,30 @@ async function handleWaitlist(request, response, session) {
     if (payload.notes !== undefined) fields.notes = sanitizeStr(payload.notes, 500);
     const item = await updateWaitlistEntry(existing[0].id, tenantId, fields);
     telemetry.recordMutation('waitlist.update');
-    emitAudit(request, 'waitlist.update', 'client', clientId, session);
-    writeJson(response, 200, { item: { clientId, ...item } });
+    emitAudit(request, 'waitlist.update', 'client', client.id, session);
+    writeJson(response, 200, { item: { clientId: client.id, ...item } });
     return;
   }
 
-  const client = clients.find((item) => item.id === clientId && item.status === 'waitlist');
-  if (!client) {
+  if (client.status !== 'waitlist') {
     writeJson(response, 404, { error: 'Waitlist client not found' });
     return;
   }
 
-  waitlistMetadataByClientId[clientId] = {
-    priorityRank: Number.isFinite(Number(payload.priorityRank)) ? Number(payload.priorityRank) : waitlistMetadataByClientId[clientId]?.priorityRank ?? 99,
-    requestedService: sanitizeStr(payload.requestedService, 160) ?? waitlistMetadataByClientId[clientId]?.requestedService ?? 'General counseling',
-    preferredSessionType: sanitizeStr(payload.preferredSessionType, 40) ?? waitlistMetadataByClientId[clientId]?.preferredSessionType ?? 'either',
-    notes: sanitizeStr(payload.notes, 500) ?? waitlistMetadataByClientId[clientId]?.notes ?? '',
+  waitlistMetadataByClientId[client.id] = {
+    priorityRank: Number.isFinite(Number(payload.priorityRank)) ? Number(payload.priorityRank) : waitlistMetadataByClientId[client.id]?.priorityRank ?? 99,
+    requestedService: sanitizeStr(payload.requestedService, 160) ?? waitlistMetadataByClientId[client.id]?.requestedService ?? 'General counseling',
+    preferredSessionType: sanitizeStr(payload.preferredSessionType, 40) ?? waitlistMetadataByClientId[client.id]?.preferredSessionType ?? 'either',
+    notes: sanitizeStr(payload.notes, 500) ?? waitlistMetadataByClientId[client.id]?.notes ?? '',
     updatedAt: new Date().toISOString(),
   };
 
   telemetry.recordMutation('waitlist.update');
-  emitAudit(request, 'waitlist.update', 'client', clientId);
+  emitAudit(request, 'waitlist.update', 'client', client.id);
   writeJson(response, 200, {
     item: {
-      clientId,
-      ...waitlistMetadataByClientId[clientId],
+      clientId: client.id,
+      ...waitlistMetadataByClientId[client.id],
     },
   });
 }
@@ -8385,6 +8437,8 @@ async function handleOfferings(request, response, requestUrl, session) {
       writeJson(response, 405, { error: 'Method not allowed' });
       return;
     }
+    const counselorScope = await resolveCounselorCollectionScope(request, response, session, 'offerings.list');
+    if (counselorScope === false) return;
     let clientId = sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 50);
     if (role === 'client') {
       const portalClient = await resolvePortalClient(request, response, clientId, session);
@@ -8395,7 +8449,8 @@ async function handleOfferings(request, response, requestUrl, session) {
       if (!client) return;
       clientId = client.id;
     }
-    const items = await listOfferingsForTenant(tenantId, { clientId });
+    let items = await listOfferingsForTenant(tenantId, { clientId });
+    if (counselorScope && !clientId) items = items.filter((item) => counselorScope.clientIds.has(item.clientId));
     emitAudit(request, 'offerings.list', 'offering', tenantId, session);
     writeJson(response, 200, { items });
     return;
@@ -8475,8 +8530,15 @@ async function handleOfferingsSummary(request, response, session) {
     return;
   }
   const tenantId = callerTenant(request, session);
-
-  const summary = await summarizeOfferingsForTenant(tenantId);
+  const counselorScope = await resolveCounselorCollectionScope(request, response, session, 'offerings.summary.read');
+  if (counselorScope === false) return;
+  let summary;
+  if (counselorScope) {
+    const items = await listOfferingsForTenant(tenantId);
+    summary = summarizeOfferings(items.filter((item) => counselorScope.clientIds.has(item.clientId)));
+  } else {
+    summary = await summarizeOfferingsForTenant(tenantId);
+  }
 
   emitAudit(request, 'offerings.summary.read', 'offering', tenantId, session);
   writeJson(response, 200, summary);
@@ -9001,13 +9063,18 @@ async function handleFaithInventories(request, response, session) {
 
 async function handleFaithReferralCoordination(request, response, session) {
   if (request.method === 'GET') {
+    const counselorScope = await resolveCounselorCollectionScope(request, response, session, 'faith.referral_coordination.read');
+    if (counselorScope === false) return;
     if (process.env.DB_NAME) {
-      const items = await listFaithChurchReferrals(callerTenant(request, session));
+      let items = await listFaithChurchReferrals(callerTenant(request, session));
+      if (counselorScope) items = items.filter((item) => counselorScope.clientIds.has(item.clientId));
       await emitAudit(request, 'faith.referral_coordination.read', 'faith_referral_coordination', 'collection', session);
       writeJson(response, 200, { items });
       return;
     }
-    writeJson(response, 200, { items: filterByTenant(churchReferralCoordinations, request, session) });
+    let items = filterByTenant(churchReferralCoordinations, request, session);
+    if (counselorScope) items = items.filter((item) => counselorScope.clientIds.has(item.clientId));
+    writeJson(response, 200, { items });
     return;
   }
 
@@ -12807,6 +12874,36 @@ async function resolveCounselorScopeId(request, requestUrl, session) {
   }
 
   return await resolveCallerStaffMemberId(session) ?? requestedCounselorId;
+}
+
+async function resolveCounselorCollectionScope(request, response, session, deniedAction = 'client.record.read') {
+  if (!COUNSELOR_SESSION_ROLES.has(callerRole(request, session))) {
+    return null;
+  }
+
+  const counselorScopeId = await resolveCallerCounselorScopeIdForAccess(request, session);
+  if (!counselorScopeId) {
+    await emitAudit(request, `${deniedAction}.denied`, 'client', 'collection', session);
+    writeJson(response, 403, { error: 'Access to this resource is not permitted' });
+    return false;
+  }
+
+  let clientIds;
+  if (process.env.DB_NAME) {
+    const [rows] = await pool.query(
+      'SELECT id FROM clients WHERE tenant_id = ? AND primary_counselor_id = ?',
+      [callerTenant(request, session), counselorScopeId],
+    );
+    clientIds = new Set(rows.map((row) => row.id));
+  } else {
+    clientIds = new Set(
+      clients
+        .filter((client) => client.tenantId === callerTenant(request, session) && client.primaryCounselorId === counselorScopeId)
+        .map((client) => client.id),
+    );
+  }
+
+  return { counselorScopeId, clientIds };
 }
 
 function scopeOperationsDataToCounselor(data, counselorId) {
