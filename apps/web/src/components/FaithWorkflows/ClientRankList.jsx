@@ -1,7 +1,10 @@
-import { Badge, Box, Group, Loader, Paper, ScrollArea, Stack, Text, TextInput } from '@mantine/core';
-import { useState, useMemo } from 'react';
+import { Badge, Box, Button, Group, Loader, Paper, ScrollArea, Stack, Text, TextInput } from '@mantine/core';
+import { useState, useMemo, useEffect } from 'react';
 import { formatRelativeDate } from './engine/utils.js';
 import { useI18n } from '../../lib/i18nContext.jsx';
+
+const INITIAL_RENDER_LIMIT = 100;
+const RENDER_CHUNK = 50;
 
 const URGENCY_COLORS = {
   critical: 'red',
@@ -26,9 +29,10 @@ const TREND_ICONS = {
  *   onSelect     — (clientId) => void
  *   loading      — bool
  */
-export default function ClientRankList({ entries = [], selectedId, onSelect, loading = false }) {
+export default function ClientRankList({ entries = [], selectedId, onSelect, loading = false, onShowMore }) {
   const { t } = useI18n();
   const [query, setQuery] = useState('');
+  const [renderLimit, setRenderLimit] = useState(INITIAL_RENDER_LIMIT);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -41,12 +45,29 @@ export default function ClientRankList({ entries = [], selectedId, onSelect, loa
     );
   }, [entries, query]);
 
+  useEffect(() => {
+    setRenderLimit(INITIAL_RENDER_LIMIT);
+  }, [query, entries.length]);
+
+  const visibleEntries = filtered.slice(0, renderLimit);
+  const hasMore = filtered.length > visibleEntries.length;
+
+  const handleShowMore = () => {
+    const nextLimit = renderLimit + RENDER_CHUNK;
+    setRenderLimit(nextLimit);
+    onShowMore?.({
+      shown: Math.min(nextLimit, filtered.length),
+      remaining: Math.max(0, filtered.length - nextLimit),
+      total: filtered.length,
+    });
+  };
   return (
     <Stack gap={0} style={{ height: '100%', borderRight: '1px solid var(--mantine-color-default-border)' }}>
       {/* Header */}
       <Box p="sm" style={{ borderBottom: '1px solid var(--mantine-color-default-border)' }}>
         <Text fw={700} size="sm" mb="xs">{t('workflow.clientList.title')}</Text>
         <TextInput
+          data-testid="workflow-client-search"
           size="xs"
           placeholder="Search clients…"
           value={query}
@@ -59,9 +80,9 @@ export default function ClientRankList({ entries = [], selectedId, onSelect, loa
       ) : filtered.length === 0 ? (
         <Text c="dimmed" size="sm" p="md">{t('workflow.clientList.empty')}</Text>
       ) : (
-        <ScrollArea style={{ flex: 1 }}>
+        <ScrollArea style={{ flex: 1 }} data-testid="workflow-client-list">
           <Stack gap={0}>
-            {filtered.map((entry) => {
+            {visibleEntries.map((entry) => {
               const isSelected = entry.clientId === selectedId;
               const urgencyColor = URGENCY_COLORS[entry.urgencyLevel] ?? 'gray';
               const trend = TREND_ICONS[entry.trend] ?? TREND_ICONS.unknown;
@@ -69,6 +90,8 @@ export default function ClientRankList({ entries = [], selectedId, onSelect, loa
               return (
                 <Paper
                   key={entry.clientId}
+                  data-testid="workflow-client-row"
+                  data-client-id={entry.clientId}
                   radius={0}
                   p="sm"
                   onClick={() => onSelect?.(entry.clientId)}
@@ -126,6 +149,19 @@ export default function ClientRankList({ entries = [], selectedId, onSelect, loa
                 </Paper>
               );
             })}
+            {hasMore && (
+              <Box p="sm" style={{ borderTop: '1px solid var(--mantine-color-default-border)' }}>
+                <Button
+                  data-testid="workflow-show-more-clients"
+                  size="xs"
+                  variant="subtle"
+                  fullWidth
+                  onClick={handleShowMore}
+                >
+                  Show more clients ({filtered.length - visibleEntries.length} remaining)
+                </Button>
+              </Box>
+            )}
           </Stack>
         </ScrollArea>
       )}
