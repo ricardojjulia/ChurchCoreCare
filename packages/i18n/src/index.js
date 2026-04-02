@@ -405,6 +405,7 @@ export const baseMessages = Object.freeze({
   'telemetry.ttfb': 'Time to First Byte',
   'state.loading': 'Loading...',
   'state.loadingDashboard': 'Fetching live dashboard data.',
+  'state.loadingWorkspace': 'Loading the selected workspace.',
   'state.unableToLoad': 'Unable to load',
   'state.deleted': 'Deleted',
   'state.error': 'Error',
