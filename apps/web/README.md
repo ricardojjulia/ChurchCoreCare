@@ -1,11 +1,12 @@
 # Web App
 
-Lightweight modern UI shell for Faith Counseling operations.
+Lightweight modern UI shell for Faith Counseling, with counselor-first daily workflows and deeper administrative operations.
 
 ## Goals
 
 - modern, clean visual hierarchy
-- powerful at-a-glance operations dashboard
+- counselor-first daily home for non-technical staff
+- deeper administrative and operational tools without cluttering counselor navigation
 - light runtime footprint without framework overhead
 - responsive behavior across desktop and mobile
 
@@ -24,6 +25,8 @@ Default URL: `http://localhost:3000`
 ## Current UI Scope
 
 - sidebar navigation shell
+- role-aware navigation that gives counselors a smaller primary workspace and keeps monitoring/admin tools in admin-capable paths
+- dedicated counselor home surface for counselor and intern roles
 - global search across today's schedule
 - redesigned `Practice Operations Center` header with an animated counseling mark and stronger operational hierarchy
 - sidebar heading now uses an animated counseling icon with a simplified `Options` label
@@ -49,6 +52,7 @@ Default URL: `http://localhost:3000`
 - Frontend surfaces emit structured telemetry to `/api/v1/telemetry/events`
 - Health probes are available through `/api/health`, `/api/health/live`, and `/api/health/ready`
 - Dashboard metric cards consume `/api/v1/appointments` for session and future-appointment counts
+- Counselor Home consumes the same appointment and operations-summary feeds as the legacy dashboard, but presents them through a counselor-first working surface
 - Dashboard audit visibility consumes `/api/v1/audit/intelligence?days=7&limit=1` for admin-capable roles and degrades to an explicit admin-visibility message for other roles
 - The active session identity is intentionally rendered in the metric band, not in the top bar, so the header stays focused on navigation and workspace context
 - The live API connection status is intentionally rendered in the sidebar identity area, directly below the user pill, instead of in the top bar
@@ -64,6 +68,5 @@ Default URL: `http://localhost:3000`
 ## Next UI Implementation Slices
 
 - authenticated route shell and session handling
-- role-aware navigation and feature visibility
 - live API-backed dashboards and queue widgets
 - accessibility pass for keyboard and screen reader flows

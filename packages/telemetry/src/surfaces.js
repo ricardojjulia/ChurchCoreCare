@@ -1,5 +1,6 @@
 export const SURFACE_DEFINITIONS = Object.freeze([
   { id: 'auth', kind: 'view' },
+  { id: 'counselor_home', kind: 'view' },
   { id: 'dashboard', kind: 'view' },
   { id: 'users', kind: 'view' },
   { id: 'counselors', kind: 'view' },

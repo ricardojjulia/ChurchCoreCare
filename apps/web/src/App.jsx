@@ -6,6 +6,7 @@ import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
 import Metrics from './components/Metrics';
 import WorkspaceGrid from './components/WorkspaceGrid';
+import CounselorHomePage from './components/CounselorHomePage.jsx';
 import ClientsPage from './components/ClientsPage.jsx';
 import ClientDetailPage from './components/ClientDetail/ClientDetailPage.jsx';
 import CounselorDetailPage from './components/CounselorDetail/CounselorDetailPage.jsx';
@@ -24,6 +25,7 @@ import { fetchOperationsSummary } from './lib/clientApi.js';
 import { frontendTelemetry } from './lib/frontendTelemetry.js';
 import { useSurfaceTelemetry } from './lib/useSurfaceTelemetry.js';
 import { useI18n } from './lib/i18nContext.jsx';
+import { isClientRole, isCounselorRole } from './lib/roles.js';
 import './App.css';
 
 function firstString(...values) {
@@ -67,7 +69,9 @@ function defaultCalendarView(role) {
 }
 
 function defaultViewForRole(role) {
-  return role === 'client' ? 'portal' : 'dashboard';
+  if (isClientRole(role)) return 'portal';
+  if (isCounselorRole(role)) return 'counselor-home';
+  return 'dashboard';
 }
 
 function toValidDate(value) {
@@ -167,7 +171,7 @@ export default function App() {
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    if (userRole === 'client') {
+    if (isClientRole(userRole)) {
       setClientsData({ items: [], loading: false, error: null });
       return;
     }
@@ -187,7 +191,7 @@ export default function App() {
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    if (userRole === 'client') {
+    if (isClientRole(userRole)) {
       setOperationsSummaryData({ summary: null, loading: false, error: null });
       setMetricsData((prev) => ({
         ...prev,
@@ -231,7 +235,7 @@ export default function App() {
   }, [isAuthenticated, refreshOperationsKey, t, userRole]);
 
   useEffect(() => {
-    if (!isAuthenticated || userRole === 'client' || currentView !== 'dashboard') return undefined;
+    if (!isAuthenticated || isClientRole(userRole) || !['dashboard', 'counselor-home'].includes(currentView)) return undefined;
     const intervalId = window.setInterval(() => {
       setRefreshOperationsKey((value) => value + 1);
     }, 60_000);
@@ -240,8 +244,11 @@ export default function App() {
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    if (userRole === 'client') return;
-    fetch('/api/v1/appointments', { credentials: 'include' })
+    if (isClientRole(userRole)) return;
+    const appointmentUrl = isCounselorRole(userRole) && currentUser?.staffId
+      ? `/api/v1/appointments?counselorId=${encodeURIComponent(currentUser.staffId)}`
+      : '/api/v1/appointments';
+    fetch(appointmentUrl, { credentials: 'include' })
       .then((res) => { if (!res.ok) throw new Error(); return res.json(); })
       .then((payload) => {
         const items = Array.isArray(payload?.items) ? payload.items : [];
@@ -256,7 +263,7 @@ export default function App() {
         }));
       })
       .catch(() => {});
-  }, [isAuthenticated, t, userRole]);
+  }, [currentUser?.staffId, isAuthenticated, t, userRole]);
 
   const handleAuthContinue = (profile) => {
     const normalized = normalizeSessionUser(profile);
@@ -356,6 +363,7 @@ export default function App() {
   };
 
   const showDashboard        = currentView === 'dashboard';
+  const showCounselorHome    = currentView === 'counselor-home';
   const showUsers            = currentView === 'users';
   const showCounselors       = currentView === 'counselors';
   const showClients          = currentView === 'clients';
@@ -366,11 +374,13 @@ export default function App() {
   const showOfferings        = currentView === 'offerings';
   const showClinical         = currentView === 'clinical';
   const showFaith            = currentView === 'faith';
-  const showFallbackWorkspace = !showDashboard && !showUsers && !showCounselors && !showClients && !showScheduling && !showWorkspaceStudio && !showDocuments && !showPortal && !showOfferings && !showClinical && !showFaith;
+  const showFallbackWorkspace = !showDashboard && !showCounselorHome && !showUsers && !showCounselors && !showClients && !showScheduling && !showWorkspaceStudio && !showDocuments && !showPortal && !showOfferings && !showClinical && !showFaith;
   const topLevelSurfaceId = !isAuthenticated
     ? 'auth'
     : selectedClientId || selectedCounselorId
       ? null
+      : showCounselorHome
+        ? 'counselor_home'
       : showUsers
         ? 'users'
         : showCounselors
@@ -486,6 +496,21 @@ export default function App() {
             onAppointmentsUpdated={() => setRefreshOperationsKey((value) => value + 1)}
             onOpenClient={handleOpenClient}
             onViewChart={handleOpenClinicalChart}
+          />
+        ) : showCounselorHome ? (
+          <CounselorHomePage
+            currentUser={currentUser}
+            metricsData={metricsData}
+            operationsSummaryData={operationsSummaryData}
+            clientsData={clientsData}
+            onOpenScheduling={() => handleOpenScheduling({ initialView: defaultCalendarView(userRole) })}
+            onOpenClients={() => handleNavigate('clients')}
+            onOpenClinicalChart={() => {
+              setClinicalChartInitialClientId('');
+              handleNavigate('clinical');
+            }}
+            onOpenDocuments={handleOpenDocuments}
+            onOpenClient={handleOpenClient}
           />
         ) : showWorkspaceStudio ? (
           <WorkspaceStudioPage
