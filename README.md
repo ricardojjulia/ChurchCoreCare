@@ -247,17 +247,23 @@ The change log summarizes completed work across releases and documents the detai
 
 ## Contributing
 
-1. Create a feature branch from `main`.
-2. Keep changes focused and include relevant tests or validation commands.
-3. Run local checks before opening a PR:
+- Create a feature branch from `main`.
+- Keep changes focused and include relevant tests or validation commands.
+- Enable shared repository hooks (recommended):
+
+```bash
+git config core.hooksPath .githooks
+```
+
+- Run local checks before opening a PR:
 
 ```bash
 pnpm lint
 pnpm test
 ```
 
-1. Update docs when user-visible behavior changes.
-2. Open a pull request with a clear summary and validation notes.
+- Update docs when user-visible behavior changes.
+- Open a pull request with a clear summary and validation notes.
 
 ## Open Source License
 
