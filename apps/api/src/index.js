@@ -1103,7 +1103,7 @@ const retentionPolicies = [
 const runtimeAuditEvents = [];
 const MAX_RUNTIME_AUDIT_EVENTS = 4000;
 
-const server = http.createServer(async (request, response) => {
+export async function handleApiRequest(request, response) {
   const requestUrl = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
   const route = resolveRoute(requestUrl.pathname);
   const requestStartedAt = Date.now();
@@ -1745,7 +1745,9 @@ const server = http.createServer(async (request, response) => {
     });
     requestScope.end(response.statusCode || 200, requestTelemetryAttributes);
   }
-});
+}
+
+export const server = http.createServer(handleApiRequest);
 
 server.on('error', (error) => {
   if (error?.code === 'EADDRINUSE') {
@@ -1765,17 +1767,19 @@ server.on('error', (error) => {
   process.exit(1);
 });
 
-server.listen(port, () => {
-  logInfo('server.listening', {
-    port,
-    dbConfigured: Boolean(process.env.DB_NAME),
-    otelExportConfigured: Boolean(
-      process.env.OTEL_EXPORTER_OTLP_ENDPOINT
-      || process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
-      || process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT
-    ),
+if (process.env.FAITH_API_DISABLE_LISTEN !== '1') {
+  server.listen(port, () => {
+    logInfo('server.listening', {
+      port,
+      dbConfigured: Boolean(process.env.DB_NAME),
+      otelExportConfigured: Boolean(
+        process.env.OTEL_EXPORTER_OTLP_ENDPOINT
+        || process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+        || process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT
+      ),
+    });
   });
-});
+}
 
 // ─── Auth handlers ────────────────────────────────────────────────────────────
 

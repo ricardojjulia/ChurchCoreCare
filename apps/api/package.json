@@ -14,6 +14,6 @@
     "start": "node --env-file=../../.env src/db/migrate.js && node --env-file=../../.env src/index.js",
     "start:standalone": "node --env-file=../../.env src/db/migrate.js && PORT=3104 node --env-file=../../.env src/index.js",
     "lint": "node -e \"console.log('No lint rules configured for @faith/api yet')\"",
-    "test": "node -e \"console.log('No tests configured for @faith/api yet')\""
+    "test": "node --test test/*.test.mjs"
   }
 }
