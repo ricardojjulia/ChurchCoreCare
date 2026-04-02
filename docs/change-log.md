@@ -2,6 +2,53 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## v5.5.2 — Faithful Workflows: Phase 6 — Visual Impact Upgrade (3 Canvas Views)
+
+**Date:** 2026-04-01
+**Type:** Minor — new UI views, no functional or data changes
+
+### Summary
+
+Adds two new parallel canvas views to the Faithful Workflows page (Radial Hub and Priority Matrix), selectable via a floating cycle button. The original Classic List view is fully preserved. Zero changes to the rules engine, recommendation logic, data fetching, or API.
+
+### What changed
+
+**New: Radial Hub view** (`WorkflowCanvasRadial.jsx`)
+
+- Client snapshot lives inside a central hub circle (name, urgency badge, trend, pending rec count)
+- Category groups are satellites connected by SVG spokes radiating outward
+- Safety category always at 12-o'clock; its spoke is solid and thicker; all others are dashed
+- Non-selected satellites fade to 35% opacity when one is active — draws the eye to the selection
+- Clicking a satellite expands its recommendation cards below the hub (uses existing `WorkflowNode` unchanged)
+- Fully keyboard accessible (`role="button"`, `aria-pressed`, Enter/Space)
+- Narrow-screen notice appears at < 480px
+
+**New: Priority Matrix view** (`WorkflowCanvasPriority.jsx`)
+
+- 2D CSS Grid — rows = priority tier (Critical / High / Medium / Low), columns = care category
+- Safety always leftmost; Spiritual rightmost with muted styling per safety invariants
+- Only active tiers and categories rendered — no phantom empty rows or columns
+- Empty cells shown as subtle dashed outlines
+- Mini-cards: title + priority badge; tooltip shows summary; click opens the existing drawer
+- Sticky row-label column; horizontal scroll for wide datasets
+
+**New: Floating view-cycle button** (in `FaithWorkflowsPage.jsx`)
+
+- `⊙` gray → `≡` blue → `⊞` violet → loops: Classic List → Radial Hub → Priority Matrix → Classic List
+- Position: `absolute` bottom-right of canvas panel — non-intrusive, always reachable
+- Choice persisted to `localStorage` (`fw_view_variant`); survives page refresh
+- Tooltip shows current view name and what the next click will switch to
+
+### What did not change
+
+- `WorkflowCanvas.jsx` (Classic) — untouched
+- `WorkflowNode.jsx`, `RecommendationDrawer.jsx`, `ClientRankList.jsx`, `SafetyBanner.jsx` — untouched
+- All engine rules, scoring, and data fetch logic — untouched
+- All 51 engine integration tests — still passing
+- Bundle size delta: +5.7 KB gzipped (no new dependencies)
+
+---
+
 ## v5.5.1 — Faithful Workflows: Phase 5 — Testing, Telemetry, and Bug Fixes
 
 **Date:** 2026-04-02

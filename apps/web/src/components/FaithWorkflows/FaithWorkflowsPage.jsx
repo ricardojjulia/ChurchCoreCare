@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Alert, Box, Group, Loader, Stack, Text, Title } from '@mantine/core';
+import { ActionIcon, Alert, Box, Group, Loader, Stack, Text, Title, Tooltip } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { useSurfaceTelemetry } from '../../lib/useSurfaceTelemetry.js';
 import { frontendTelemetry } from '../../lib/frontendTelemetry.js';
@@ -7,9 +7,31 @@ import { useI18n } from '../../lib/i18nContext.jsx';
 import SafetyBanner from './SafetyBanner.jsx';
 import ClientRankList from './ClientRankList.jsx';
 import WorkflowCanvas from './WorkflowCanvas.jsx';
+import WorkflowCanvasRadial from './WorkflowCanvasRadial.jsx';
+import WorkflowCanvasPriority from './WorkflowCanvasPriority.jsx';
 import RecommendationDrawer from './RecommendationDrawer.jsx';
 import { runWorkflow, buildClientRankEntry, buildLightweightRankEntry } from './engine/runWorkflow.js';
 import { getMockClientData, MOCK_CLIENTS } from './engine/mockData.js';
+
+// ─── View variant metadata ────────────────────────────────────────────────────
+
+const VARIANT_ICONS = {
+  classic:  '≡',
+  radial:   '⊙',
+  priority: '⊞',
+};
+
+const VARIANT_COLORS = {
+  classic:  'gray',
+  radial:   'blue',
+  priority: 'violet',
+};
+
+const VARIANT_LABELS = {
+  classic:  'Classic List — click for Radial Hub',
+  radial:   'Radial Hub — click for Priority Matrix',
+  priority: 'Priority Matrix — click for Classic List',
+};
 
 /**
  * Fetches enriched client workflow data from the API.
@@ -127,6 +149,19 @@ async function persistStateChange(clientId, ruleId, status, deferredUntil = null
 export default function FaithWorkflowsPage({ clients = [], currentUser }) {
   const { t } = useI18n();
   useSurfaceTelemetry('faith_workflows', { surfaceKind: 'view', workflow: 'faith_workflows' });
+
+  // ─── Canvas view variant ─────────────────────────────────────────────────
+  const [variant, setVariant] = useState(() => {
+    try { return localStorage.getItem('fw_view_variant') ?? 'classic'; } catch { return 'classic'; }
+  });
+  const VARIANTS = ['classic', 'radial', 'priority'];
+  const cycleVariant = useCallback(() => {
+    setVariant((v) => {
+      const next = VARIANTS[(VARIANTS.indexOf(v) + 1) % VARIANTS.length];
+      try { localStorage.setItem('fw_view_variant', next); } catch {}
+      return next;
+    });
+  }, []);
 
   // ─── State ────────────────────────────────────────────────────────────────
   const [selectedClientId, setSelectedClientId] = useState(null);
@@ -355,7 +390,7 @@ export default function FaithWorkflowsPage({ clients = [], currentUser }) {
         </Box>
 
         {/* Center panel — workflow canvas */}
-        <Box style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--mantine-color-default-border)' }}>
+        <Box style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--mantine-color-default-border)', position: 'relative' }}>
           {!selectedClientId ? (
             <Stack align="center" justify="center" style={{ flex: 1 }} gap="sm">
               <Text size="xl">🗺</Text>
@@ -370,6 +405,34 @@ export default function FaithWorkflowsPage({ clients = [], currentUser }) {
             <Box p="md">
               <Alert color="red" variant="light">{loadError}</Alert>
             </Box>
+          ) : variant === 'radial' ? (
+            <WorkflowCanvasRadial
+              client={selectedClientData?.client}
+              recommendations={recommendations}
+              urgencyScore={selectedEntry?.urgencyScore ?? 0}
+              urgencyLevel={selectedEntry?.urgencyLevel ?? 'routine'}
+              diagnosisSummary={selectedEntry?.diagnosisSummary ?? ''}
+              trend={selectedEntry?.trend ?? 'unknown'}
+              selectedRecId={selectedRec?.id}
+              onSelectRec={handleSelectRec}
+              onAction={handleAction}
+              onStatusChange={handleStatusChange}
+              onToggleCategory={handleToggleCategory}
+            />
+          ) : variant === 'priority' ? (
+            <WorkflowCanvasPriority
+              client={selectedClientData?.client}
+              recommendations={recommendations}
+              urgencyScore={selectedEntry?.urgencyScore ?? 0}
+              urgencyLevel={selectedEntry?.urgencyLevel ?? 'routine'}
+              diagnosisSummary={selectedEntry?.diagnosisSummary ?? ''}
+              trend={selectedEntry?.trend ?? 'unknown'}
+              selectedRecId={selectedRec?.id}
+              onSelectRec={handleSelectRec}
+              onAction={handleAction}
+              onStatusChange={handleStatusChange}
+              onToggleCategory={handleToggleCategory}
+            />
           ) : (
             <WorkflowCanvas
               client={selectedClientData?.client}
@@ -385,6 +448,27 @@ export default function FaithWorkflowsPage({ clients = [], currentUser }) {
               onToggleCategory={handleToggleCategory}
             />
           )}
+
+          {/* Floating view-cycle button — cycles Classic → Radial → Priority → Classic */}
+          <Tooltip
+            label={VARIANT_LABELS[variant]}
+            withArrow
+            position="left"
+          >
+            <ActionIcon
+              size="lg"
+              variant="filled"
+              color={VARIANT_COLORS[variant]}
+              radius="xl"
+              onClick={cycleVariant}
+              aria-label={VARIANT_LABELS[variant]}
+              style={{ position: 'absolute', bottom: 20, right: 20, zIndex: 10, boxShadow: '0 2px 12px rgba(0,0,0,0.15)' }}
+            >
+              <Text size="sm" style={{ lineHeight: 1 }}>
+                {VARIANT_ICONS[variant]}
+              </Text>
+            </ActionIcon>
+          </Tooltip>
         </Box>
 
         {/* Right panel — placeholder when drawer is closed on wider screens */}
