@@ -164,7 +164,15 @@ export default function FaithWorkflowsPage({ clients = [], currentUser }) {
       .sort((a, b) => b.urgencyScore - a.urgencyScore);
   }, [clients, dataCache, persistedStates, selectedClientId]);
 
-  const hasCriticalClient = rankEntries.some((e) => e.urgencyLevel === 'critical');
+  const urgencyCounts = useMemo(() => {
+    const counts = { critical: 0, moderate: 0, routine: 0 };
+    for (const e of rankEntries) {
+      if (e.urgencyLevel === 'critical') counts.critical++;
+      else if (e.urgencyLevel === 'high' || e.urgencyLevel === 'moderate') counts.moderate++;
+      else counts.routine++;
+    }
+    return counts;
+  }, [rankEntries]);
 
   // ─── Selected client data ─────────────────────────────────────────────────
   const selectedEntry = rankEntries.find((e) => e.clientId === selectedClientId) ?? null;
@@ -329,7 +337,7 @@ export default function FaithWorkflowsPage({ clients = [], currentUser }) {
 
       {/* Safety banner — always visible */}
       <Box style={{ flexShrink: 0 }}>
-        <SafetyBanner hasCriticalClient={hasCriticalClient} />
+        <SafetyBanner urgencyCounts={urgencyCounts} />
       </Box>
 
       {/* Three-panel layout */}
