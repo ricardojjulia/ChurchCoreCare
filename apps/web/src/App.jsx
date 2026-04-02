@@ -590,13 +590,14 @@ export default function App() {
             />
           ) : showDocuments ? (
             <DocumentsPage />
-          ) : showClients ? (
-            <ClientsPage
-              clientsData={clientsData}
-              onClientsUpdated={() => {
-                setRefreshClientsKey((k) => k + 1);
-                setRefreshOperationsKey((value) => value + 1);
-              }}
+        ) : showClients ? (
+          <ClientsPage
+            clientsData={clientsData}
+            intakePreviewItems={operationsSummaryData?.summary?.clientsBox?.intakePreviews?.items ?? []}
+            onClientsUpdated={() => {
+              setRefreshClientsKey((k) => k + 1);
+              setRefreshOperationsKey((value) => value + 1);
+            }}
               onViewClient={handleOpenClient}
               onScheduleClient={(clientId) => handleOpenScheduling({
                 composerOpen: true,
