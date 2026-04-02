@@ -212,11 +212,11 @@ telemetry.updateHealth({
 });
 
 const clients = [
-  { id: 'c-001', tenantId: 'system', firstName: 'Sarah', lastName: 'Kim', status: 'active', faithBackground: 'Evangelical', highTouchpoint: true },
-  { id: 'c-002', tenantId: 'system', firstName: 'David', lastName: 'Miller', status: 'active', faithBackground: 'Baptist', highTouchpoint: false },
-  { id: 'c-003', tenantId: 'system', firstName: 'Emily', lastName: 'Reyes', status: 'waitlist', faithBackground: 'Catholic', highTouchpoint: true },
-  { id: 'c-004', tenantId: 'system', firstName: 'Michael', lastName: 'Owens', status: 'inactive', faithBackground: 'Non-denominational', highTouchpoint: false },
-  { id: 'c-005', tenantId: 'system', firstName: 'Olivia', lastName: 'Scott', status: 'discharged', faithBackground: 'Methodist', highTouchpoint: false },
+  { id: 'c-001', tenantId: 'system', firstName: 'Sarah', lastName: 'Kim', status: 'active', faithBackground: 'Evangelical', highTouchpoint: true, primaryCounselorId: 's-001' },
+  { id: 'c-002', tenantId: 'system', firstName: 'David', lastName: 'Miller', status: 'active', faithBackground: 'Baptist', highTouchpoint: false, primaryCounselorId: 's-001' },
+  { id: 'c-003', tenantId: 'system', firstName: 'Emily', lastName: 'Reyes', status: 'waitlist', faithBackground: 'Catholic', highTouchpoint: true, primaryCounselorId: 's-002' },
+  { id: 'c-004', tenantId: 'system', firstName: 'Michael', lastName: 'Owens', status: 'inactive', faithBackground: 'Non-denominational', highTouchpoint: false, primaryCounselorId: 's-001' },
+  { id: 'c-005', tenantId: 'system', firstName: 'Olivia', lastName: 'Scott', status: 'discharged', faithBackground: 'Methodist', highTouchpoint: false, primaryCounselorId: 's-002' },
 ];
 
 const clientLifecycles = {
@@ -2044,10 +2044,49 @@ function dbRowToClientSummary(row) {
   };
 }
 
-async function handleClientById(request, response, requestUrl, session) {
-  const clientId = requestUrl.pathname.replace('/v1/clients/', '');
+function defaultClientAccessAuditAction(method) {
+  if (method === 'GET') return 'client.record.read';
+  if (method === 'DELETE') return 'client.record.delete';
+  return 'client.record.update';
+}
 
-  // Fetch client from DB or in-memory
+function resolveDevCounselorScopeId(request) {
+  return sanitizeStr(
+    request.headers['x-staff-id']
+    ?? request.headers['x-staff-member-id']
+    ?? '',
+    64,
+  ) || null;
+}
+
+async function resolveCallerCounselorScopeIdForAccess(request, session) {
+  if (!COUNSELOR_SESSION_ROLES.has(callerRole(request, session))) {
+    return null;
+  }
+
+  if (process.env.DB_NAME) {
+    return await resolveCallerStaffMemberId(session) ?? resolveDevCounselorScopeId(request);
+  }
+
+  return resolveDevCounselorScopeId(request);
+}
+
+async function enforceAssignedClientAccess(request, response, client, session, deniedAction = 'client.record.read') {
+  if (!COUNSELOR_SESSION_ROLES.has(callerRole(request, session))) {
+    return false;
+  }
+
+  const counselorScopeId = await resolveCallerCounselorScopeIdForAccess(request, session);
+  if (counselorScopeId && client?.primaryCounselorId === counselorScopeId) {
+    return false;
+  }
+
+  await emitAudit(request, `${deniedAction}.denied`, 'client', client?.id ?? 'unknown', session);
+  writeJson(response, 403, { error: 'Access to this resource is not permitted' });
+  return true;
+}
+
+async function resolveAuthorizedClient(request, response, clientId, session, deniedAction = defaultClientAccessAuditAction(request.method)) {
   let client;
   if (process.env.DB_NAME) {
     const [rows] = await pool.query('SELECT * FROM clients WHERE id = ?', [clientId]);
@@ -2058,10 +2097,18 @@ async function handleClientById(request, response, requestUrl, session) {
 
   if (!client) {
     writeJson(response, 404, { error: 'Client not found' });
-    return;
+    return null;
   }
 
-  if (enforceTenantScope(request, response, client.tenantId, session)) return;
+  if (enforceTenantScope(request, response, client.tenantId, session)) return null;
+  if (await enforceAssignedClientAccess(request, response, client, session, deniedAction)) return null;
+  return client;
+}
+
+async function handleClientById(request, response, requestUrl, session) {
+  const clientId = requestUrl.pathname.replace('/v1/clients/', '');
+  const client = await resolveAuthorizedClient(request, response, clientId, session, defaultClientAccessAuditAction(request.method));
+  if (!client) return;
 
   if (request.method === 'GET') {
     await emitAudit(request, 'client.read', 'client', client.id, session);
@@ -2208,13 +2255,9 @@ function parseClientSubresource(pathname) {
   return { clientId: parts[0], subresource: parts[1], subId: parts[2] ?? null };
 }
 
-/** Fetch client row and enforce tenant scope; returns client or writes 404/403 and returns null. */
+/** Fetch client row and enforce tenant plus counselor assignment scope; returns client or writes 404/403 and returns null. */
 async function resolveClientForSubresource(request, response, clientId, session) {
-  const [rows] = await pool.query('SELECT * FROM clients WHERE id = ?', [clientId]);
-  const client = rows[0] ? dbRowToClient(rows[0]) : null;
-  if (!client) { writeJson(response, 404, { error: 'Client not found' }); return null; }
-  if (enforceTenantScope(request, response, client.tenantId, session)) return null;
-  return client;
+  return resolveAuthorizedClient(request, response, clientId, session, defaultClientAccessAuditAction(request.method));
 }
 
 // ─── Sub-resource handlers ────────────────────────────────────────────────────
@@ -2568,13 +2611,10 @@ async function handleClientLegalRoute(request, response, { clientId }, session) 
 
 async function handleClientLifecycle(request, response, requestUrl, session) {
   const clientId = extractClientIdForSegment(requestUrl.pathname, 'lifecycle');
+  const client = await resolveAuthorizedClient(request, response, clientId, session, defaultClientAccessAuditAction(request.method));
+  if (!client) return;
 
   if (process.env.DB_NAME) {
-    const [crows] = await pool.query('SELECT * FROM clients WHERE id = ?', [clientId]);
-    const client = crows[0] ? dbRowToClient(crows[0]) : null;
-    if (!client) { writeJson(response, 404, { error: 'Client not found' }); return; }
-    if (enforceTenantScope(request, response, client.tenantId, session)) return;
-
     if (request.method === 'GET') {
       let lc = await getLifecycle(client.id, client.tenantId);
       if (!lc) lc = await createLifecycle({ id: genId('lc'), clientId: client.id, tenantId: client.tenantId, caseStatus: 'active', referralSource: '', emergencyContact: null });
@@ -2627,14 +2667,6 @@ async function handleClientLifecycle(request, response, requestUrl, session) {
     writeJson(response, 200, { item: updated });
     return;
   }
-
-  const client = clients.find((item) => item.id === clientId);
-  if (!client) {
-    writeJson(response, 404, { error: 'Client not found' });
-    return;
-  }
-
-  if (enforceTenantScope(request, response, client.tenantId, session)) return;
 
   const lifecycle = getOrCreateLifecycle(client);
 
@@ -2691,23 +2723,8 @@ async function handleClientLifecycle(request, response, requestUrl, session) {
 
 async function handleClientConsents(request, response, requestUrl, session) {
   const clientId = extractClientIdForSegment(requestUrl.pathname, 'consents');
-  let client;
-  if (process.env.DB_NAME) {
-    const tenantId = callerTenant(request, session);
-    const [rows] = await pool.query('SELECT id, tenant_id FROM clients WHERE id = ? AND tenant_id = ?', [clientId, tenantId]);
-    if (!rows[0]) {
-      writeJson(response, 404, { error: 'Client not found' });
-      return;
-    }
-    client = { id: rows[0].id, tenantId: rows[0].tenant_id };
-  } else {
-    client = clients.find((item) => item.id === clientId);
-    if (!client) {
-      writeJson(response, 404, { error: 'Client not found' });
-      return;
-    }
-    if (enforceTenantScope(request, response, client.tenantId, session)) return;
-  }
+  const client = await resolveAuthorizedClient(request, response, clientId, session, defaultClientAccessAuditAction(request.method));
+  if (!client) return;
 
   if (request.method === 'GET') {
     if (process.env.DB_NAME) {
@@ -2823,23 +2840,8 @@ async function handleClientConsents(request, response, requestUrl, session) {
 
 async function handleClientIntakePackets(request, response, requestUrl, session) {
   const clientId = extractClientIdForSegment(requestUrl.pathname, 'intake-packets');
-  let client;
-  if (process.env.DB_NAME) {
-    const tenantId = callerTenant(request, session);
-    const [rows] = await pool.query('SELECT id, tenant_id FROM clients WHERE id = ? AND tenant_id = ?', [clientId, tenantId]);
-    if (!rows[0]) {
-      writeJson(response, 404, { error: 'Client not found' });
-      return;
-    }
-    client = { id: rows[0].id, tenantId: rows[0].tenant_id };
-  } else {
-    client = clients.find((item) => item.id === clientId);
-    if (!client) {
-      writeJson(response, 404, { error: 'Client not found' });
-      return;
-    }
-    if (enforceTenantScope(request, response, client.tenantId, session)) return;
-  }
+  const client = await resolveAuthorizedClient(request, response, clientId, session, defaultClientAccessAuditAction(request.method));
+  if (!client) return;
 
   if (request.method === 'GET') {
     if (process.env.DB_NAME) {
@@ -2951,23 +2953,8 @@ async function handleClientIntakePackets(request, response, requestUrl, session)
 
 async function handleClientTreatmentPlan(request, response, requestUrl, session) {
   const clientId = extractClientIdForSegment(requestUrl.pathname, 'treatment-plan');
-  let client;
-  if (process.env.DB_NAME) {
-    const tenantId = callerTenant(request, session);
-    const [rows] = await pool.query('SELECT id, tenant_id FROM clients WHERE id = ? AND tenant_id = ?', [clientId, tenantId]);
-    if (!rows[0]) {
-      writeJson(response, 404, { error: 'Client not found' });
-      return;
-    }
-    client = { id: rows[0].id, tenantId: rows[0].tenant_id };
-  } else {
-    client = clients.find((item) => item.id === clientId);
-    if (!client) {
-      writeJson(response, 404, { error: 'Client not found' });
-      return;
-    }
-    if (enforceTenantScope(request, response, client.tenantId, session)) return;
-  }
+  const client = await resolveAuthorizedClient(request, response, clientId, session, defaultClientAccessAuditAction(request.method));
+  if (!client) return;
 
   if (request.method === 'GET') {
     if (process.env.DB_NAME) {
@@ -3051,23 +3038,8 @@ async function handleClientTreatmentPlan(request, response, requestUrl, session)
 
 async function handleClientProgressNotes(request, response, requestUrl, session) {
   const clientId = extractClientIdForSegment(requestUrl.pathname, 'progress-notes');
-  let client;
-  if (process.env.DB_NAME) {
-    const tenantId = callerTenant(request, session);
-    const [rows] = await pool.query('SELECT id, tenant_id FROM clients WHERE id = ? AND tenant_id = ?', [clientId, tenantId]);
-    if (!rows[0]) {
-      writeJson(response, 404, { error: 'Client not found' });
-      return;
-    }
-    client = { id: rows[0].id, tenantId: rows[0].tenant_id };
-  } else {
-    client = clients.find((item) => item.id === clientId);
-    if (!client) {
-      writeJson(response, 404, { error: 'Client not found' });
-      return;
-    }
-    if (enforceTenantScope(request, response, client.tenantId, session)) return;
-  }
+  const client = await resolveAuthorizedClient(request, response, clientId, session, defaultClientAccessAuditAction(request.method));
+  if (!client) return;
 
   if (request.method === 'GET') {
     if (process.env.DB_NAME) {
@@ -3158,17 +3130,9 @@ async function handleClientProgressNoteById(request, response, requestUrl, sessi
     return;
   }
 
-  let tenantId;
-  if (process.env.DB_NAME) {
-    tenantId = callerTenant(request, session);
-    const [rows] = await pool.query('SELECT id FROM clients WHERE id = ? AND tenant_id = ?', [clientId, tenantId]);
-    if (!rows[0]) { writeJson(response, 404, { error: 'Client not found' }); return; }
-  } else {
-    const c = clients.find((item) => item.id === clientId);
-    if (!c) { writeJson(response, 404, { error: 'Client not found' }); return; }
-    if (enforceTenantScope(request, response, c.tenantId, session)) return;
-    tenantId = c.tenantId;
-  }
+  const client = await resolveAuthorizedClient(request, response, clientId, session, 'chart.progress_note.update');
+  if (!client) return;
+  const tenantId = client.tenantId;
 
   if (request.method !== 'PATCH') {
     writeJson(response, 405, { error: 'Method not allowed' });
