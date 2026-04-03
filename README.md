@@ -226,7 +226,7 @@ Only the latest two entries are listed here. Full release history is in `docs/ch
 
 ### v5.6.0 (April 3, 2026)
 
-Portal client conversion flow: approved `account_signup` portal requests now link to the client they created. A **"View Client"** button on any approved request navigates directly to that client record in the Clients workspace. The `portal_registration_requests` table gains a `converted_client_id` column (zero-downtime column migration) written on activation.
+Portal client conversion flow: approved `account_signup` portal requests still auto-create and link a client on activation, and approved `care_request` items in Workspace Studio Portal now show **"Create Client"** so staff can generate the client record on demand and then open it from **"View Client"**.
 
 ### v5.5.2 (April 1, 2026)
 

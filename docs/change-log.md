@@ -4,6 +4,27 @@
 
 ## v5.6.0 — April 3, 2026 — Portal Client Conversion and Plan Hygiene
 
+### fix: approved care requests can create client records from Workspace Studio
+
+Closes the remaining approval dead-end for non-signup portal requests. Approved `care_request` items in Workspace Studio Portal now expose a direct `Create Client` action instead of stopping at an approved status with no conversion path.
+
+**What changed:**
+
+- new admin-only `POST /v1/portal/public-requests/convert` action converts approved `care_request` items into client records
+- conversion creates the client record, writes `converted_client_id` back to the portal request, creates a lifecycle record for care intake tracking, and seeds the portal contact profile from submitted request details
+- Workspace Studio Portal now shows **"Create Client"** for approved care requests without a linked client and switches to **"View Client"** after conversion
+- `studio.portal` action telemetry now records success/failure for care-request client conversion without sending client-identifying data
+
+**Files changed:**
+
+| File | Change |
+| --- | --- |
+| `apps/api/src/index.js` | Added care-request conversion endpoint, shared portal-request client creation helper, lifecycle/profile linking, and audited mutation path |
+| `apps/api/test/portal-public-request-conversion.test.mjs` | Added route coverage for approve → convert flow, invalid-state rejection, and admin gating |
+| `apps/web/src/components/WorkspaceStudio/tabs/PortalTab.jsx` | Added `Create Client` action and `studio.portal` conversion telemetry |
+| `apps/web/README.md` | Documented approved care-request conversion behavior |
+| `README.md` | Updated recent release summary for the expanded portal conversion flow |
+
 ### release: portal request → client conversion flow (v5.6.0)
 
 Closes the approval dead-end in the public portal request workflow. Previously, approving an `account_signup` request created a client and portal account but provided no way to navigate back to that client. The approved request was a dead end.

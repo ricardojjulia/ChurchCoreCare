@@ -42,6 +42,7 @@ Default URL: `http://localhost:3000`
 - operational alerts now surface when counselor intake previews are available and can deep-link directly into the client Intake Preview tab
 - counselor home and task views now surface assigned intake previews directly and can open the client on the Intake Preview tab without requiring the dashboard
 - the client workspace list now marks preview-ready clients and can open the client record directly on the Intake Preview tab
+- approved care requests in Workspace Studio Portal can now create a client record directly, after which the request switches to a `View Client` action
 - Faithful Workflows demo/mock clients are disabled by default and only appear when explicitly enabled through `VITE_ENABLE_FAITH_WORKFLOWS_DEMO=true` or `localStorage['faith_workflows.demo_mode']='true'`
 - care flow progress indicators
 - Offerings workspace and Workspace Studio suggested-giving settings, including correction of incorrect offering entries
@@ -66,6 +67,7 @@ Default URL: `http://localhost:3000`
 - Counselor client detail and chart-related API routes now enforce assigned-client access on the server for counselor and intern sessions
 - Counselor-only intake preview reads now follow the same assigned-client authorization model as client detail routes and remain explicitly provisional rather than diagnostic
 - Dashboard operational alerts now use the shared operations summary to surface intake-preview-ready clients and can open the client record directly on the Intake Preview tab
+- Workspace Studio Portal now uses an explicit admin-only conversion endpoint for approved `care_request` items so portal approvals can create a real client record without relying on `account_signup` activation paths
 - Counselor scheduling, form workflow, assignment, offerings, and faith referral API actions now reuse the same assigned-client access checks for counselor and intern sessions when those routes traverse client context
 - Counselor broad workflow collections now default to assigned-client scope on the server, including reminders, waitlist, document/form/inventory assignment collections, offerings, and faith referral coordination reads
 - Counselor-scoped client, appointment, scheduling calendar, operations-summary, and series collections now ignore caller-supplied counselor overrides for counselor and intern sessions while keeping explicit counselor filters available to admin-capable roles
