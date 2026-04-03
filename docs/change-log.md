@@ -2,6 +2,13 @@
 
 <!-- markdownlint-disable MD024 -->
 
+### fix: portal navigation not switching when client detail is open
+
+**Date:** April 3, 2026
+**Affected area:** `apps/web/src/App.jsx`, portal navigation
+
+Fixed: clicking "View / Assign Documents" from Client Detail had no visible effect. Root cause — `handleOpenPortal` set `currentView = 'portal'` but did not clear `selectedClientRequest`, so the render chain kept showing `ClientDetailPage` (which takes priority) instead of switching to the portal. Added `setSelectedClientRequest(null)` to `handleOpenPortal`. Rebuilt public bundle.
+
 ### fix: refresh public web bundle so client detail documents action is visible
 
 **Date:** April 3, 2026
