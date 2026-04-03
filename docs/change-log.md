@@ -2,6 +2,13 @@
 
 <!-- markdownlint-disable MD024 -->
 
+### fix: refresh public web bundle so client detail documents action is visible
+
+**Date:** April 3, 2026
+**Affected area:** `apps/web/public/index.html`, `apps/web/public/assets/*`
+
+Rebuilt and refreshed checked-in public web artifacts so the Client Detail header action "View / Assign Documents" appears in environments serving the static public bundle.
+
 ### chore: include full pending web public assets bundle
 
 **Date:** April 3, 2026

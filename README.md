@@ -54,6 +54,7 @@ All `DateInput` components (Mantine v8) across the application accept dates in `
 ## Client Detail Documents Shortcut
 
 Client Detail now includes a direct header action to open documents for the active client. The action routes staff into the Client Portal Documents tab with that client preselected, so records can be viewed and document tasks can be assigned without manually switching surfaces or reselecting the client.
+The checked-in public web bundle includes this shortcut so environments serving `apps/web/public` render the button without requiring local source recompilation.
 
 ## Public Web Build Artifacts
 
