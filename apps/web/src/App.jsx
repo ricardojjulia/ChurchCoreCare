@@ -384,6 +384,7 @@ export default function App() {
   };
   const handleOpenPortal = ({ initialClientId = null, initialTab = 'dashboard' } = {}) => {
     setPortalState({ initialClientId, initialTab });
+    setSelectedClientRequest(null);
     setCurrentView('portal');
     closeNav();
   };
