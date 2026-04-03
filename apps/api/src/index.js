@@ -1655,6 +1655,11 @@ export async function handleApiRequest(request, response) {
       return;
     }
 
+    if (requestUrl.pathname === '/v1/portal/public-requests/convert') {
+      await handlePortalPublicRequestConversion(request, response, session);
+      return;
+    }
+
     if (requestUrl.pathname === '/v1/portal/public-requests') {
       await handlePortalPublicRequests(request, response, requestUrl, session);
       return;
@@ -4770,8 +4775,6 @@ async function activatePortalSignupRequest({ tenantId, requestRecord, actorId = 
   const normalizedEmail = normalizePortalEmail(requestRecord.email);
   if (!normalizedEmail) return null;
 
-  const onboardingDetails = normalizePortalOnboardingDetails(requestRecord.onboardingDetails ?? {});
-  const preferredName = onboardingDetails.preferredName || requestRecord.firstName;
   const temporaryPassword = generateTemporaryPassword();
 
   if (process.env.DB_NAME) {
@@ -4789,13 +4792,11 @@ async function activatePortalSignupRequest({ tenantId, requestRecord, actorId = 
       };
     }
 
-    const client = await createClientRecord({
-      id: genId('c'),
+    const { client } = await createPortalRequestClientRecord({
       tenantId,
-      firstName: requestRecord.firstName,
-      lastName: requestRecord.lastName,
-      status: 'active',
-      faithBackground: onboardingDetails.faithPreference || 'Undeclared',
+      requestRecord,
+      clientStatus: 'active',
+      createLifecycleRecord: false,
     });
     const passwordHash = await argon2.hash(temporaryPassword, {
       type: argon2.argon2id,
@@ -4811,31 +4812,6 @@ async function activatePortalSignupRequest({ tenantId, requestRecord, actorId = 
       passwordHash,
       status: 'active',
       mfaEnabled: false,
-    });
-    await upsertPortalClientProfile({
-      id: genId('pcp'),
-      tenantId,
-      clientId: client.id,
-      preferredName,
-      contactEmail: normalizedEmail,
-      contactPhone: requestRecord.phone ?? '',
-      contactPreferences: {
-        preferredContactMethod: requestRecord.preferredContactMethod || 'email',
-        okToText: requestRecord.preferredContactMethod === 'sms',
-        okToLeaveMessage: true,
-        enabledChannels: [requestRecord.preferredContactMethod || 'email'],
-      },
-      profileDetails: {
-        demographics: {
-          pronouns: onboardingDetails.pronouns || '',
-          maritalStatus: '',
-        },
-        education: {
-          level: onboardingDetails.educationLevel || '',
-          occupation: '',
-        },
-        affiliations: onboardingDetails.affiliations ?? [],
-      },
     });
     const assignedForms = await autoAssignStandardSignupForms({
       tenantId,
@@ -4865,15 +4841,12 @@ async function activatePortalSignupRequest({ tenantId, requestRecord, actorId = 
     };
   }
 
-  const client = {
-    id: createId('c', clients),
+  const { client } = await createPortalRequestClientRecord({
     tenantId,
-    firstName: requestRecord.firstName,
-    lastName: requestRecord.lastName,
-    status: 'active',
-    faithBackground: onboardingDetails.faithPreference || 'Undeclared',
-  };
-  clients.push(client);
+    requestRecord,
+    clientStatus: 'active',
+    createLifecycleRecord: false,
+  });
 
   const account = {
     id: createId('pa', portalAccounts),
@@ -4887,35 +4860,6 @@ async function activatePortalSignupRequest({ tenantId, requestRecord, actorId = 
     invitedAt: new Date().toISOString(),
   };
   portalAccounts.push(account);
-
-  const now = new Date().toISOString();
-  portalClientProfiles.push({
-    id: createId('pcp', portalClientProfiles),
-    tenantId,
-    clientId: client.id,
-    preferredName,
-    contactEmail: normalizedEmail,
-    contactPhone: requestRecord.phone ?? '',
-    contactPreferences: {
-      preferredContactMethod: requestRecord.preferredContactMethod || 'email',
-      okToText: requestRecord.preferredContactMethod === 'sms',
-      okToLeaveMessage: true,
-      enabledChannels: [requestRecord.preferredContactMethod || 'email'],
-    },
-    profileDetails: {
-      demographics: {
-        pronouns: onboardingDetails.pronouns || '',
-        maritalStatus: '',
-      },
-      education: {
-        level: onboardingDetails.educationLevel || '',
-        occupation: '',
-      },
-      affiliations: onboardingDetails.affiliations ?? [],
-    },
-    createdAt: now,
-    updatedAt: now,
-  });
   const assignedForms = await autoAssignStandardSignupForms({
     tenantId,
     clientId: client.id,
@@ -4929,6 +4873,230 @@ async function activatePortalSignupRequest({ tenantId, requestRecord, actorId = 
     clientId: client.id,
     assignedForms,
   };
+}
+
+function buildPortalRequestContactPreferences(requestRecord) {
+  const preferredContactMethod = sanitizeStr(requestRecord?.preferredContactMethod, 64) || 'email';
+  return {
+    preferredContactMethod,
+    okToText: preferredContactMethod === 'sms',
+    okToLeaveMessage: true,
+    enabledChannels: [preferredContactMethod],
+  };
+}
+
+function buildPortalRequestProfileDetails(onboardingDetails) {
+  return {
+    demographics: {
+      pronouns: onboardingDetails.pronouns || '',
+      maritalStatus: '',
+    },
+    education: {
+      level: onboardingDetails.educationLevel || '',
+      occupation: '',
+    },
+    affiliations: onboardingDetails.affiliations ?? [],
+  };
+}
+
+async function resolveLinkedPortalRequestClient(tenantId, requestRecord) {
+  const convertedClientId = sanitizeStr(requestRecord?.convertedClientId, 64);
+  if (!convertedClientId) return null;
+
+  if (process.env.DB_NAME) {
+    const [rows] = await pool.query('SELECT * FROM clients WHERE id = ? AND tenant_id = ? LIMIT 1', [convertedClientId, tenantId]);
+    return rows[0] ? dbRowToClient(rows[0]) : null;
+  }
+
+  return clients.find((item) => item.id === convertedClientId && item.tenantId === tenantId) ?? null;
+}
+
+async function createPortalRequestClientRecord({
+  tenantId,
+  requestRecord,
+  clientStatus = 'active',
+  createLifecycleRecord = false,
+}) {
+  if (!requestRecord) return null;
+
+  const existingClient = await resolveLinkedPortalRequestClient(tenantId, requestRecord);
+  if (existingClient) {
+    return { client: existingClient, linked: true };
+  }
+
+  const firstName = sanitizeStr(requestRecord.firstName, 120);
+  const lastName = sanitizeStr(requestRecord.lastName, 120);
+  if (!firstName || !lastName) {
+    return null;
+  }
+
+  const onboardingDetails = normalizePortalOnboardingDetails(requestRecord.onboardingDetails ?? {});
+  const normalizedClientStatus = normalizeClientStatus(clientStatus) ?? 'active';
+  const faithBackground = onboardingDetails.faithPreference || 'Undeclared';
+  const preferredName = onboardingDetails.preferredName || firstName;
+  const referralSource = onboardingDetails.referralSource || 'portal_care_request';
+  const contactPreferences = buildPortalRequestContactPreferences(requestRecord);
+  const profileDetails = buildPortalRequestProfileDetails(onboardingDetails);
+
+  if (process.env.DB_NAME) {
+    const client = await createClientRecord({
+      id: genId('c'),
+      tenantId,
+      firstName,
+      lastName,
+      status: normalizedClientStatus,
+      faithBackground,
+    });
+    if (createLifecycleRecord) {
+      await createLifecycle({
+        id: genId('lc'),
+        clientId: client.id,
+        tenantId,
+        caseStatus: normalizeCaseStatus(normalizedClientStatus) ?? 'active',
+        referralSource,
+        emergencyContact: null,
+      });
+    }
+    await upsertPortalClientProfile({
+      id: genId('pcp'),
+      tenantId,
+      clientId: client.id,
+      preferredName,
+      contactEmail: normalizePortalEmail(requestRecord.email),
+      contactPhone: sanitizeStr(requestRecord.phone, 40) ?? '',
+      contactPreferences,
+      profileDetails,
+    });
+    if (requestRecord.id) {
+      await updatePortalRegistrationRequest(requestRecord.id, tenantId, { convertedClientId: client.id });
+    }
+    return { client, linked: false };
+  }
+
+  const now = new Date().toISOString();
+  const client = {
+    id: createId('c', clients),
+    tenantId,
+    firstName,
+    lastName,
+    status: normalizedClientStatus,
+    faithBackground,
+    highTouchpoint: false,
+    primaryCounselorId: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  clients.push(client);
+
+  if (createLifecycleRecord) {
+    clientLifecycles[client.id] = {
+      tenantId,
+      clientId: client.id,
+      caseStatus: normalizeCaseStatus(normalizedClientStatus) ?? 'active',
+      referralSource,
+      emergencyContact: null,
+      dischargeRecord: null,
+      updatedAt: now,
+    };
+  }
+
+  const existingProfileIndex = portalClientProfiles.findIndex((item) => item.clientId === client.id && item.tenantId === tenantId);
+  const profile = {
+    id: existingProfileIndex >= 0 ? portalClientProfiles[existingProfileIndex].id : createId('pcp', portalClientProfiles),
+    tenantId,
+    clientId: client.id,
+    preferredName,
+    contactEmail: normalizePortalEmail(requestRecord.email),
+    contactPhone: sanitizeStr(requestRecord.phone, 40) ?? '',
+    contactPreferences,
+    profileDetails,
+    createdAt: existingProfileIndex >= 0 ? portalClientProfiles[existingProfileIndex].createdAt : now,
+    updatedAt: now,
+  };
+  if (existingProfileIndex >= 0) {
+    portalClientProfiles[existingProfileIndex] = profile;
+  } else {
+    portalClientProfiles.push(profile);
+  }
+
+  if (requestRecord.id) {
+    requestRecord.convertedClientId = client.id;
+    requestRecord.updatedAt = now;
+  }
+
+  return { client, linked: false };
+}
+
+async function convertPortalCareRequestToClient({ tenantId, requestRecord }) {
+  if (!requestRecord || requestRecord.requestType !== 'care_request') {
+    return null;
+  }
+
+  const result = await createPortalRequestClientRecord({
+    tenantId,
+    requestRecord,
+    clientStatus: 'active',
+    createLifecycleRecord: true,
+  });
+  if (!result?.client) return null;
+
+  return {
+    status: result.linked ? 'already_converted' : 'created',
+    clientId: result.client.id,
+  };
+}
+
+async function handlePortalPublicRequestConversion(request, response, session) {
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+  if (requirePracticeAdmin(request, response, session)) return;
+
+  const payload = await readJsonBody(request);
+  const requestId = sanitizeStr(payload.requestId, 64);
+  if (!requestId) {
+    writeJson(response, 400, { error: 'requestId is required' });
+    return;
+  }
+
+  const tenantId = callerTenant(request, session);
+  let requestRecord;
+  if (process.env.DB_NAME) {
+    const items = await listPortalRegistrationRequests(tenantId);
+    requestRecord = items.find((item) => item.id === requestId) ?? null;
+  } else {
+    requestRecord = portalRegistrationRequests.find((item) => item.id === requestId && item.tenantId === tenantId) ?? null;
+  }
+
+  if (!requestRecord) {
+    writeJson(response, 404, { error: 'Portal registration request not found' });
+    return;
+  }
+  if (requestRecord.requestType !== 'care_request') {
+    writeJson(response, 409, { error: 'Only approved care requests can create client records' });
+    return;
+  }
+  if (requestRecord.status !== 'approved') {
+    writeJson(response, 409, { error: 'Request must be approved before creating a client record' });
+    return;
+  }
+
+  const conversion = await convertPortalCareRequestToClient({ tenantId, requestRecord });
+  if (!conversion?.clientId) {
+    writeJson(response, 500, { error: 'Unable to create client record from portal request' });
+    return;
+  }
+
+  let item = requestRecord;
+  if (process.env.DB_NAME) {
+    const items = await listPortalRegistrationRequests(tenantId);
+    item = items.find((entry) => entry.id === requestId) ?? requestRecord;
+  }
+
+  telemetry.recordMutation('portal.public_request.convert');
+  await emitAudit(request, 'portal.public_request.convert', 'portal_registration_request', requestId, session);
+  writeJson(response, 200, { item, conversion });
 }
 
 async function handlePortalPublicRequests(request, response, requestUrl, session) {
