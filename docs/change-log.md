@@ -2,6 +2,19 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 4, 2026 — Faithful Workflow Count Prop Sync
+
+### fix(workflows): keep the Faithful Workflows banner on the same canonical counts as the dashboard
+
+**Date:** April 4, 2026
+**Affected area:** `apps/web/src/App.jsx`, `apps/web/src/components/FaithWorkflows/FaithWorkflowsPage.jsx`
+
+The dashboard and Faithful Workflows page were both intended to show the same critical, moderate, and routine totals, but the workflow page could still drift when it fell back to its own local count derivation while the dashboard was already rendering the canonical metrics payload held in the app shell.
+
+The app now passes the dashboard's `faithfulCounts` object directly into Faithful Workflows. The page banner prefers that canonical payload first, then only falls back to operations-summary or local derived counts when the canonical counts are unavailable. This keeps the visible dashboard panel and the Faithful Workflows summary banner aligned.
+
+---
+
 ## April 4, 2026 — Encrypted Buffer Read Fix
 
 ### fix(api): accept Buffer-backed ciphertext during decrypt
