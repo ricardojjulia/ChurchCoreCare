@@ -2,6 +2,19 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 4, 2026 — Runtime Label Catalog Sync
+
+### fix(i18n): align English runtime labels with current workspace names
+
+**Date:** April 4, 2026
+**Affected area:** `apps/api/data/i18n/en.json`
+
+The shared frontend label catalog had already been updated to use `Dashboard`, `Client Scheduling`, `Documents`, and `Client Portal`, but the API-backed English locale file was still overriding some of those values with older strings like `Operations Dashboard` and `Portal`.
+
+The English runtime catalog now matches the active workspace naming so the side menu and top bar render the same labels whether they come from base frontend messages or the API locale payload.
+
+---
+
 ## April 4, 2026 — Navigation Label Cleanup
 
 ### fix(nav): simplify top-level workspace labels
@@ -76,6 +89,15 @@ The page now uses a warmer, more deliberate visual system and reframes the produ
 - preserved standalone telemetry coverage for the existing `about` surface
 
 Documentation was also updated in the root `README.md` and `apps/web/README.md` so the checked-in public surface is described consistently with the current product direction.
+
+### fix(about): align refreshed About page with shared app palette
+
+**Date:** April 4, 2026
+**Affected area:** `apps/web/public/about.html`
+
+The first refresh improved the page structure and message, but its warmer standalone palette drifted from the light indigo visual system used across the main workspace, monitoring, and operations pages.
+
+The About page now keeps the stronger content and hierarchy while realigning its background, accents, cards, CTAs, and highlight treatments to the shared app palette so it feels like the same product family rather than a separate microsite.
 
 ---
 

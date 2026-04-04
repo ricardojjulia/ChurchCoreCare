@@ -29,6 +29,8 @@ It is built specifically for Christian counseling practices and supports daily e
 - **Monitoring and telemetry:** local monitoring + optional OpenTelemetry export
 - **Security and audit foundations:** role-aware access controls and structured audit event patterns
 
+The checked-in English runtime locale catalog also mirrors the current counselor-facing workspace labels so API-backed i18n does not drift back to older names like `Operations Dashboard` or `Portal`.
+
 ## API Security And Compliance Baseline (v5.6.0)
 
 This repository now includes a versioned API security and compliance engineering baseline for high-trust environments where sensitive data may exist.
@@ -76,7 +78,7 @@ The `apps/web/public/assets` bundle files may be refreshed and committed when sh
 
 ## Standalone Product Pages
 
-The static public surfaces are meant to reflect the current product posture, not an older generic admin-console identity. The checked-in About page at `/about` now presents Faith Counseling as a counselor-first, faith-aware practice platform with a stronger product narrative while still linking back to live monitoring and API documentation.
+The static public surfaces are meant to reflect the current product posture, not an older generic admin-console identity. The checked-in About page at `/about` now presents Faith Counseling as a counselor-first, faith-aware practice platform with a stronger product narrative and the same light indigo visual language used across the rest of the app, while still linking back to live monitoring and API documentation.
 
 ## Architecture At A Glance
 
