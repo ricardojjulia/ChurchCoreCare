@@ -21,6 +21,19 @@ The chart now opens with a richer summary layer and functional visual cues:
 
 The change keeps the existing chart surfaces and telemetry IDs intact, so no surface-registry update was required. Documentation was updated in `README.md` and `apps/web/README.md`.
 
+## April 4, 2026 — Faithful Workflow Count Sync
+
+### fix(workflows): keep Faithful Workflows banner counts aligned with dashboard metrics
+
+**Date:** April 4, 2026
+**Affected area:** `apps/web/src/App.jsx`, `apps/web/src/components/FaithWorkflows/FaithWorkflowsPage.jsx`
+
+The dashboard and Faithful Workflows page had drifted apart again. The dashboard was rendering the canonical `faithfulWorkflowCounts` values from the operations summary, while the Faithful Workflows banner was recomputing its own counts from local rank entries. That could produce conflicting totals for the same counselor session.
+
+Faithful Workflows now consumes the same shared operations-summary count object that the dashboard uses. The page keeps its local urgency rollup only as a fallback when the shared summary is unavailable, so both surfaces now report the same critical, moderate, and routine totals under normal operation.
+
+Documentation was updated in `apps/web/README.md` to record the shared-count behavior.
+
 ---
 
 ## April 4, 2026 — About Page Refresh
