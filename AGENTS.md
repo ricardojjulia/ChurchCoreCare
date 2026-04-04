@@ -84,7 +84,7 @@ Every commit must update the following, with no exceptions:
 - **`docs/change-log.md`** — add an entry for the change. Entry format depends on the commit type:
 
   | Commit type | Entry format |
-  |---|---|
+  | --- | --- |
   | Bug fix / error | `### fix: <short description>` with date, affected area, and what was corrected |
   | Feature / enhancement | `### feat: <short description>` with date and summary |
   | Major revision / release | `### release: vX.Y.Z — <title>` with date and summary; **also** create a release summary file (see below) |

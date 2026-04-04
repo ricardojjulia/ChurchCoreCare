@@ -269,6 +269,7 @@ Faithful Workflows no longer injects hardcoded mock clients after a real databas
 The `INTAKE_FORM_KEYS` constant in `buildIntakePreview` used PascalCase JS export names (`'LongIntakeForm'`, `'ShortIntakeForm'`) instead of the snake_case `form_key` values actually stored in the `form_submissions` table (`'long_intake'`, `'short_intake'`). This caused `hasIntakeFormSubmission` to always evaluate to `false` for any client who submitted forms through the live UI, blocking the preview for every real client. The `submittedAt` fallback in the return object had the same wrong keys. The `packetStatus` field returned `null` (displayed as "Not on file") for clients without a formal intake packet row even when they had completed form submissions.
 
 **Changes:**
+
 - `INTAKE_FORM_KEYS` now includes all four variants (`'long_intake'`, `'short_intake'`, `'LongIntakeForm'`, `'ShortIntakeForm'`) to cover both real UI submissions and legacy seed data
 - `submittedAt` fallback chain now tries snake_case keys first, then PascalCase, so the submission timestamp is returned correctly for all clients
 - `packetStatus` now synthesizes `'submitted'` from form submissions when no formal `intake_packets` row exists, so clients who completed forms directly see the correct status
@@ -385,7 +386,6 @@ Makes `pnpm start` the permanent and reliable local startup path by enforcing en
 - reduces startup failures where API booted without DB env loaded
 - prevents false "DB disconnected" states caused by starting with legacy commands
 - gives humans and AI agents one consistent startup contract
-
 
 ## v5.5.2 — Faithful Workflows: Phase 6 — Visual Impact Upgrade (3 Canvas Views)
 
