@@ -39,6 +39,7 @@ Default URL: `http://localhost:3000`
 - the hamburger menu now collapses and restores the sidebar on both desktop and mobile
 - the top bar title and subtitle now follow the active workspace instead of reusing the dashboard label across unrelated screens
 - scheduling appointment creation and counselor-calendar filtering now use stable counselor IDs instead of counselor display names
+- recurring appointment series creation now uses a guided recurrence builder with readable cadence choices, weekday selection, a live schedule preview, and an advanced raw-rule fallback only when needed
 - key metric cards for today's sessions, future appointments, audit-event visibility, and current session identity/state
 - the dashboard `Faithful Workflows` metric card now opens the full Faithful Workflows workspace directly
 - operations panels for schedule, priority queue, and compliance watch

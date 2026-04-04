@@ -2,6 +2,27 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 4, 2026 — Recurring Series Builder
+
+### fix(scheduling): replace raw recurrence syntax with a guided recurring-series builder
+
+**Date:** April 4, 2026
+**Affected area:** `apps/web/src/components/SchedulingPage.jsx`
+
+Creating a recurring series still required staff to type raw RRULE syntax such as `FREQ=WEEKLY;BYDAY=MO`, which is technically correct but not friendly for counselors, schedulers, or other non-technical staff. The form also showed that raw syntax back in the series list, making the whole recurrence flow feel more technical than the rest of Scheduling.
+
+The recurring-series modal now defaults to a guided recurrence builder:
+
+- readable cadence choices for weekly, every two weeks, or monthly repeats
+- weekday checkboxes for weekly and biweekly schedules
+- a live schedule preview that explains the rule in plain language
+- raw RRULE entry kept behind an explicit advanced toggle instead of as the primary field
+- existing series rows now show a friendly recurrence description first, with the raw stored rule preserved as a secondary label
+
+This is a UI-only workflow improvement. The API contract and stored recurrence rule format remain unchanged.
+
+---
+
 ## April 4, 2026 — Encrypted Buffer Read Fix
 
 ### fix(api): accept Buffer-backed ciphertext during decrypt
