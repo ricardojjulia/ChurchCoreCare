@@ -2,6 +2,27 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 4, 2026 — About Page Refresh
+
+### feat(about): reposition the About page with stronger product impact
+
+**Date:** April 4, 2026
+**Affected area:** `apps/web/public/about.html`
+
+The standalone About page was visually polished but still read like an older operations-console brochure. It leaned on soft indigo styling, generic platform copy, and a product posture that undersold the counselor-first direction of the application.
+
+The page now uses a warmer, more deliberate visual system and reframes the product around the actual work of counseling:
+
+- stronger hero hierarchy with a clearer product point of view
+- counselor-first messaging instead of generic admin-console language
+- sharper articulation of the platform's purpose, workflow spine, and trust posture
+- platform-depth section that keeps monitoring and API documentation links visible without letting them dominate the page
+- preserved standalone telemetry coverage for the existing `about` surface
+
+Documentation was also updated in the root `README.md` and `apps/web/README.md` so the checked-in public surface is described consistently with the current product direction.
+
+---
+
 ## April 4, 2026 — Telemetry Fix
 
 ### fix(telemetry): correct emptyState signal for implemented Workspace Studio tabs
