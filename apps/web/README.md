@@ -40,6 +40,7 @@ Default URL: `http://localhost:3000`
 - the top bar title and subtitle now follow the active workspace instead of reusing the dashboard label across unrelated screens
 - scheduling appointment creation and counselor-calendar filtering now use stable counselor IDs instead of counselor display names
 - key metric cards for today's sessions, future appointments, audit-event visibility, and current session identity/state
+- the dashboard `Faithful Workflows` metric card now opens the full Faithful Workflows workspace directly
 - operations panels for schedule, priority queue, and compliance watch
 - operational alerts now surface when counselor intake previews are available and can deep-link directly into the client Intake Preview tab
 - counselor home and task views now surface assigned intake previews directly and can open the client on the Intake Preview tab without requiring the dashboard

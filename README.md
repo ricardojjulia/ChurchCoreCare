@@ -31,6 +31,8 @@ It is built specifically for Christian counseling practices and supports daily e
 
 The checked-in English runtime locale catalog also mirrors the current counselor-facing workspace labels so API-backed i18n does not drift back to older names like `Operations Dashboard` or `Portal`.
 
+The dashboard Faithful Workflows metric card also acts as a direct workspace handoff into the full Faithful Workflows page, matching the drill-down behavior already used by the other dashboard metric cards.
+
 ## API Security And Compliance Baseline (v5.6.0)
 
 This repository now includes a versioned API security and compliance engineering baseline for high-trust environments where sensitive data may exist.
