@@ -74,6 +74,10 @@ The checked-in public web bundle includes this shortcut so environments serving 
 
 The `apps/web/public/assets` bundle files may be refreshed and committed when shipping UI workflow updates so the checked-in public web surface stays aligned with the latest source behavior.
 
+## Standalone Product Pages
+
+The static public surfaces are meant to reflect the current product posture, not an older generic admin-console identity. The checked-in About page at `/about` now presents Faith Counseling as a counselor-first, faith-aware practice platform with a stronger product narrative while still linking back to live monitoring and API documentation.
+
 ## Architecture At A Glance
 
 - `apps/web`: React + Mantine web UI, served by a lightweight Node server

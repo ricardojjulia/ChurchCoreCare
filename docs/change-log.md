@@ -2,6 +2,27 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 4, 2026 — About Page Refresh
+
+### feat(about): reposition the About page with stronger product impact
+
+**Date:** April 4, 2026
+**Affected area:** `apps/web/public/about.html`
+
+The standalone About page was visually polished but still read like an older operations-console brochure. It leaned on soft indigo styling, generic platform copy, and a product posture that undersold the counselor-first direction of the application.
+
+The page now uses a warmer, more deliberate visual system and reframes the product around the actual work of counseling:
+
+- stronger hero hierarchy with a clearer product point of view
+- counselor-first messaging instead of generic admin-console language
+- sharper articulation of the platform's purpose, workflow spine, and trust posture
+- platform-depth section that keeps monitoring and API documentation links visible without letting them dominate the page
+- preserved standalone telemetry coverage for the existing `about` surface
+
+Documentation was also updated in the root `README.md` and `apps/web/README.md` so the checked-in public surface is described consistently with the current product direction.
+
+---
+
 ## April 4, 2026 — Telemetry Fix
 
 ### fix(telemetry): correct emptyState signal for implemented Workspace Studio tabs
@@ -248,6 +269,7 @@ Faithful Workflows no longer injects hardcoded mock clients after a real databas
 The `INTAKE_FORM_KEYS` constant in `buildIntakePreview` used PascalCase JS export names (`'LongIntakeForm'`, `'ShortIntakeForm'`) instead of the snake_case `form_key` values actually stored in the `form_submissions` table (`'long_intake'`, `'short_intake'`). This caused `hasIntakeFormSubmission` to always evaluate to `false` for any client who submitted forms through the live UI, blocking the preview for every real client. The `submittedAt` fallback in the return object had the same wrong keys. The `packetStatus` field returned `null` (displayed as "Not on file") for clients without a formal intake packet row even when they had completed form submissions.
 
 **Changes:**
+
 - `INTAKE_FORM_KEYS` now includes all four variants (`'long_intake'`, `'short_intake'`, `'LongIntakeForm'`, `'ShortIntakeForm'`) to cover both real UI submissions and legacy seed data
 - `submittedAt` fallback chain now tries snake_case keys first, then PascalCase, so the submission timestamp is returned correctly for all clients
 - `packetStatus` now synthesizes `'submitted'` from form submissions when no formal `intake_packets` row exists, so clients who completed forms directly see the correct status
@@ -364,7 +386,6 @@ Makes `pnpm start` the permanent and reliable local startup path by enforcing en
 - reduces startup failures where API booted without DB env loaded
 - prevents false "DB disconnected" states caused by starting with legacy commands
 - gives humans and AI agents one consistent startup contract
-
 
 ## v5.5.2 — Faithful Workflows: Phase 6 — Visual Impact Upgrade (3 Canvas Views)
 
