@@ -32,7 +32,9 @@ The dashboard and Faithful Workflows page had drifted apart again. The dashboard
 
 Faithful Workflows now consumes the same shared operations-summary count object that the dashboard uses. The page keeps its local urgency rollup only as a fallback when the shared summary is unavailable, so both surfaces now report the same critical, moderate, and routine totals under normal operation.
 
-Documentation was updated in `apps/web/README.md` to record the shared-count behavior.
+The left-panel client roster now also applies the same operational urgency signals used by the shared summary. Clients with critical note gaps or high-touchpoint-without-follow-up conditions are visibly elevated in the list, so a banner showing a critical client now corresponds to an actual critical row in the page.
+
+Documentation was updated in `README.md` and `apps/web/README.md` to record the shared-count and shared-urgency behavior.
 
 ---
 
