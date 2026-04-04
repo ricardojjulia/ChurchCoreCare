@@ -29,6 +29,8 @@ It is built specifically for Christian counseling practices and supports daily e
 - **Monitoring and telemetry:** local monitoring + optional OpenTelemetry export
 - **Security and audit foundations:** role-aware access controls and structured audit event patterns
 
+The checked-in English runtime locale catalog also mirrors the current counselor-facing workspace labels so API-backed i18n does not drift back to older names like `Operations Dashboard` or `Portal`.
+
 ## API Security And Compliance Baseline (v5.6.0)
 
 This repository now includes a versioned API security and compliance engineering baseline for high-trust environments where sensitive data may exist.

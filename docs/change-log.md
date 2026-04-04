@@ -2,6 +2,19 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 4, 2026 — Runtime Label Catalog Sync
+
+### fix(i18n): align English runtime labels with current workspace names
+
+**Date:** April 4, 2026
+**Affected area:** `apps/api/data/i18n/en.json`
+
+The shared frontend label catalog had already been updated to use `Dashboard`, `Client Scheduling`, `Documents`, and `Client Portal`, but the API-backed English locale file was still overriding some of those values with older strings like `Operations Dashboard` and `Portal`.
+
+The English runtime catalog now matches the active workspace naming so the side menu and top bar render the same labels whether they come from base frontend messages or the API locale payload.
+
+---
+
 ## April 4, 2026 — Navigation Label Cleanup
 
 ### fix(nav): simplify top-level workspace labels
