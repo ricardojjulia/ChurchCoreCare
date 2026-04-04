@@ -2,6 +2,19 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 4, 2026 — Telemetry Fix
+
+### fix(telemetry): correct emptyState signal for implemented Workspace Studio tabs
+
+**Date:** April 4, 2026
+**Affected area:** `apps/web/src/components/WorkspaceStudio/WorkspaceStudioPage.jsx`
+
+`useSurfaceTelemetry` was reporting `emptyState: 'placeholder'` for all non-portal Workspace Studio tabs. Now that Practice, Locations, Staff, Lifecycle, Appointments, Documents, and Offerings are fully implemented, only the two remaining placeholder tabs (Chart, Clients) report `emptyState: 'placeholder'`. All implemented tabs report `emptyState: null`, correctly signalling active surfaces to the monitoring layer.
+
+The five new studio surface IDs (`studio.practice`, `studio.locations`, `studio.staff`, `studio.lifecycle`, `studio.appointments`) were already registered in `packages/telemetry/src/surfaces.js`; no registry change was needed.
+
+---
+
 ## v5.7.0 — April 4, 2026 — Workspace Studio Full-Tab Activation
 
 ### feat: activate all Workspace Studio placeholder tabs
