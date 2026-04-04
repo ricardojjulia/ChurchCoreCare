@@ -2,6 +2,19 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 4, 2026 — Dashboard Faithful Workflows Navigation
+
+### fix(dashboard): make the Faithful Workflows metric card open the workflow workspace
+
+**Date:** April 4, 2026
+**Affected area:** `apps/web/src/components/Metrics.jsx`, `apps/web/src/App.jsx`
+
+The dashboard already let staff drill from the session and appointment metric cards into deeper workflow views, but the `Faithful Workflows` panel was still a static summary tile. That made the panel look interactive without actually helping the user move into the workflow.
+
+The Faithful Workflows metric card now uses the same clickable metric treatment as the other dashboard cards and routes directly into the Faithful Workflows page through the existing `faith` workspace view.
+
+---
+
 ## April 4, 2026 — Runtime Label Catalog Sync
 
 ### fix(i18n): align English runtime labels with current workspace names
