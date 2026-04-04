@@ -33,10 +33,11 @@ export default function WorkspaceStudioPage({ initialTab = 'portal', onScheduleP
     setActiveTab(initialTab || 'portal');
   }, [initialTab]);
 
+  const PLACEHOLDER_TABS = new Set(['chart', 'clients']);
   useSurfaceTelemetry(activeSurfaceId, {
     surfaceKind: 'tab',
     workflow: 'workspace_studio',
-    emptyState: activeTab === 'portal' ? null : 'placeholder',
+    emptyState: PLACEHOLDER_TABS.has(activeTab) ? 'placeholder' : null,
   });
 
   return (
