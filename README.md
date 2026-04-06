@@ -66,6 +66,7 @@ Behind that presentation, the recent work has made the platform easier to trust 
 
 The platform has moved quickly over the last few iterations, and the most recent work is aimed at making Faith Counseling easier to explore, easier to operate, and easier to present with confidence.
 
+- **The platform speaks like a counseling practice:** every screen title, nav label, dashboard panel, and key empty state was audited and rewritten — `My Day`, `My Tasks`, `Needs Attention`, `Caseload`, `Forms & Documents`, `Privacy & Data`, and `Welcome to Faith Counseling` at sign-in, among others.
 - **A full User Manual is now live:** `docs/User Manual/README.md` walks every major role and product surface, from onboarding and scheduling to charting, monitoring, and security.
 - **Demo data is now reproducible in SQL:** `pnpm demo:sql:generate`, `pnpm demo:sql:apply`, and `pnpm demo:sql:refresh` create and load the canonical dataset under `ops/demo-dataset/generated/`, which makes local demos and reset workflows much more predictable.
 - **The README now shows the real product shape:** the new `LATEST LOOK` section and embedded screenshot grids turn the repository front door into an actual product tour instead of a bare technical landing page.
@@ -392,6 +393,12 @@ If `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` is unset, trace export is skipped and te
 ## Recent Updates
 
 Only the latest entries are listed here. Full release history is in `docs/change-log.md`.
+
+### Humanized UI Language (April 6, 2026)
+
+Every screen title, page subtitle, navigation label, dashboard panel heading, and key empty state was audited and rewritten to feel natural to a Christian counseling practice rather than an enterprise SaaS back-office. No route or navigation logic was changed — only what people see.
+
+Notable changes: `My Day` and `My Tasks` for counselors, `Today's Overview` for the admin dashboard, `Needs Attention` replacing `Priority Queue`, `Documentation Watch` replacing `Compliance Watch`, `Caseload` replacing `Lifecycle` in Workspace Studio, `Forms & Documents` replacing `Documents & Inventories`, `Privacy & Data` replacing `Data Rights` in the client portal, and `Welcome to Faith Counseling` on the sign-in screen.
 
 ### Jaeger + Prometheus Observability Stack (April 6, 2026 — v5.7.0)
 
