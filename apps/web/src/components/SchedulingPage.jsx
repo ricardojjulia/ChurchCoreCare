@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from '@mantine/form';
-import { DatePickerInput, MonthPickerInput } from '@mantine/dates';
+import { DatePickerInput, MonthPickerInput, TimePicker } from '@mantine/dates';
 import {
   Alert,
   Badge,
@@ -46,6 +46,7 @@ import {
   deleteAvailabilityOverride,
   fetchAvailabilityOverrides,
   fetchSeries,
+  fetchSeriesAppointments,
   fetchUtilization,
   updateAvailabilityOverride,
   updateSeries,
@@ -74,6 +75,20 @@ function detectTimezone() {
 
 function padDatePart(value) {
   return String(value).padStart(2, '0');
+}
+
+function dateToTime24(date) {
+  if (!date) return '';
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+function buildDateTimeFrom24(base, hhmm24) {
+  if (!base || !hhmm24) return null;
+  const [h, m] = hhmm24.split(':').map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return null;
+  const d = new Date(base);
+  d.setHours(h, m, 0, 0);
+  return d;
 }
 
 function toDatePickerValue(day) {
@@ -323,6 +338,8 @@ function AppointmentComposer({
   const [saving, setSaving] = useState(false);
   const [conflictMessage, setConflictMessage] = useState('');
   const [conflicts, setConflicts] = useState([]);
+  const [startTime24, setStartTime24] = useState('');
+  const [endTime24, setEndTime24] = useState('');
 
   const counselorOptions = counselors.map((staff) => ({
     value: staff.id,
@@ -339,13 +356,15 @@ function AppointmentComposer({
     label: item.label,
   }));
 
+  const endsAtAutoFilled = useRef(false);
+
   const form = useForm({
     initialValues: {
       clientId: initialClientId || '',
       appointmentType: 'individual_therapy',
       counselorId: resolveCounselorId(counselors, currentUser),
-      startsAt: '',
-      endsAt: '',
+      startsAt: null,
+      endsAt: null,
       locationName: 'Main Office',
       remoteSession: false,
       timezone: timezone || detectTimezone(),
@@ -359,21 +378,34 @@ function AppointmentComposer({
     },
   });
 
+  function handleStartsAtChange(date) {
+    form.setFieldValue('startsAt', date);
+    if (date && (form.values.endsAt === null || endsAtAutoFilled.current)) {
+      const suggested = new Date(date.getTime() + 55 * 60 * 1000);
+      form.setFieldValue('endsAt', suggested);
+      endsAtAutoFilled.current = true;
+      setEndTime24(dateToTime24(suggested));
+    }
+  }
+
+  function handleEndsAtChange(date) {
+    form.setFieldValue('endsAt', date);
+    endsAtAutoFilled.current = false;
+  }
+
   useEffect(() => {
     if (!opened) return;
-    const startsAtValue = editingAppointment
-      ? toLocalDateTimeInputValue(editingAppointment.startsAt)
-      : toLocalDateTimeInputValue(initialPortalRequest?.preferredStartAt);
-    const endsAtValue = editingAppointment
-      ? toLocalDateTimeInputValue(editingAppointment.endsAt)
-      : toLocalDateTimeInputValue(initialPortalRequest?.preferredEndAt);
+    const isoToDate = (iso) => { if (!iso) return null; const d = new Date(iso); return Number.isNaN(d.getTime()) ? null : d; };
+    const startsAtValue = isoToDate(editingAppointment?.startsAt ?? initialPortalRequest?.preferredStartAt);
+    const endsAtValue = isoToDate(editingAppointment?.endsAt ?? initialPortalRequest?.preferredEndAt);
     const isRemoteFromRequest = initialPortalRequest?.mode === 'remote';
+    endsAtAutoFilled.current = false;
     form.setValues({
       clientId: editingAppointment?.clientId || initialClientId || '',
       appointmentType: editingAppointment?.appointmentType || 'individual_therapy',
       counselorId: resolveCounselorId(counselors, editingAppointment || currentUser),
-      startsAt: startsAtValue || '',
-      endsAt: endsAtValue || '',
+      startsAt: startsAtValue,
+      endsAt: endsAtValue,
       locationName: editingAppointment?.locationName || (isRemoteFromRequest ? 'Remote Session' : 'Main Office'),
       remoteSession: editingAppointment?.remoteSession ?? isRemoteFromRequest,
       timezone: timezone || detectTimezone(),
@@ -381,6 +413,8 @@ function AppointmentComposer({
     form.resetDirty();
     setConflictMessage('');
     setConflicts([]);
+    setStartTime24(startsAtValue ? dateToTime24(startsAtValue) : '');
+    setEndTime24(endsAtValue ? dateToTime24(endsAtValue) : '');
   }, [opened, editingAppointment, initialClientId, initialPortalRequest, timezone, currentUser, counselors]);
 
   const submit = form.onSubmit(async (values) => {
@@ -388,8 +422,8 @@ function AppointmentComposer({
     setConflictMessage('');
     setConflicts([]);
     try {
-      const startsAt = toIsoFromLocalDateTime(values.startsAt);
-      const endsAt = toIsoFromLocalDateTime(values.endsAt);
+      const startsAt = values.startsAt instanceof Date ? values.startsAt.toISOString() : null;
+      const endsAt = values.endsAt instanceof Date ? values.endsAt.toISOString() : null;
       const counselorName = resolveCounselorDisplayName(counselors, values.counselorId, editingAppointment?.counselorName || currentUser?.name || '');
 
       if (!startsAt || !endsAt) {
@@ -510,16 +544,62 @@ function AppointmentComposer({
           </SimpleGrid>
 
           <SimpleGrid cols={{ base: 1, sm: 2 }}>
-            <TextInput
-              label="Start"
-              type="datetime-local"
-              {...form.getInputProps('startsAt')}
-            />
-            <TextInput
-              label="End"
-              type="datetime-local"
-              {...form.getInputProps('endsAt')}
-            />
+            <Stack gap={4}>
+              <Text size="sm" fw={500}>Start</Text>
+              <Group gap="xs" wrap="nowrap" align="flex-start">
+                <DatePickerInput
+                  style={{ flex: 1 }}
+                  placeholder="Pick a date"
+                  value={form.values.startsAt}
+                  onChange={(dateOnly) => {
+                    if (!dateOnly) { handleStartsAtChange(null); return; }
+                    const d = buildDateTimeFrom24(dateOnly, startTime24 || '09:00');
+                    handleStartsAtChange(d || dateOnly);
+                  }}
+                  error={form.errors.startsAt}
+                  clearable
+                />
+                <TimePicker
+                  format="12h"
+                  value={startTime24}
+                  onChange={(val) => {
+                    setStartTime24(val);
+                    if (form.values.startsAt) {
+                      const d = buildDateTimeFrom24(form.values.startsAt, val);
+                      if (d) handleStartsAtChange(d);
+                    }
+                  }}
+                />
+              </Group>
+            </Stack>
+            <Stack gap={4}>
+              <Text size="sm" fw={500}>End</Text>
+              <Group gap="xs" wrap="nowrap" align="flex-start">
+                <DatePickerInput
+                  style={{ flex: 1 }}
+                  placeholder="Auto-filled 55 min after start"
+                  value={form.values.endsAt}
+                  onChange={(dateOnly) => {
+                    if (!dateOnly) { handleEndsAtChange(null); return; }
+                    const d = buildDateTimeFrom24(dateOnly, endTime24 || '09:00');
+                    handleEndsAtChange(d || dateOnly);
+                  }}
+                  error={form.errors.endsAt}
+                  clearable
+                />
+                <TimePicker
+                  format="12h"
+                  value={endTime24}
+                  onChange={(val) => {
+                    setEndTime24(val);
+                    if (form.values.endsAt) {
+                      const d = buildDateTimeFrom24(form.values.endsAt, val);
+                      if (d) handleEndsAtChange(d);
+                    }
+                  }}
+                />
+              </Group>
+            </Stack>
           </SimpleGrid>
 
           <SimpleGrid cols={{ base: 1, sm: 2 }}>
@@ -1028,7 +1108,8 @@ function SeriesPanel({ staff, clients }) {
       recurrenceRule: SERIES_RECURRENCE_DEFAULT_RULE,
       startDate: '',
       endDate: '',
-      durationMinutes: '50',
+      startTime: '09:00',
+      durationMinutes: '55',
       appointmentType: '',
       remoteSession: false,
     },
@@ -1089,9 +1170,9 @@ function SeriesPanel({ staff, clients }) {
     const counselor = staff.find((s) => s.id === values.counselorId);
     const client = clients.find((c) => c.id === values.clientId);
     try {
-      await createSeries({
+      const result = await createSeries({
         ...values,
-        durationMinutes: Number(values.durationMinutes) || 50,
+        durationMinutes: Number(values.durationMinutes) || 55,
         counselorName: counselor ? [counselor.firstName, counselor.lastName].filter(Boolean).join(' ') : '',
         clientName: client ? [client.firstName, client.lastName].filter(Boolean).join(' ') : '',
       });
@@ -1208,9 +1289,17 @@ function SeriesPanel({ staff, clients }) {
               <TextInput label="End Date" type="date" {...form.getInputProps('endDate')} />
             </Group>
             <Group grow>
-              <TextInput label="Duration (min)" type="number" placeholder="50" {...form.getInputProps('durationMinutes')} />
-              <TextInput label="Appointment Type" placeholder="Individual therapy" {...form.getInputProps('appointmentType')} />
+              <Stack gap={4}>
+                <Text size="sm" fw={500}>Session Time</Text>
+                <TimePicker
+                  format="12h"
+                  value={form.values.startTime}
+                  onChange={(val) => form.setFieldValue('startTime', val)}
+                />
+              </Stack>
+              <TextInput label="Duration (min)" type="number" placeholder="55" {...form.getInputProps('durationMinutes')} />
             </Group>
+            <TextInput label="Appointment Type" placeholder="Individual Therapy" {...form.getInputProps('appointmentType')} />
             <Checkbox label="Remote session" {...form.getInputProps('remoteSession', { type: 'checkbox' })} />
             <Group justify="flex-end" mt="sm">
               <Button type="button" variant="default" onClick={closeCreator}>Cancel</Button>
@@ -1218,6 +1307,45 @@ function SeriesPanel({ staff, clients }) {
             </Group>
           </Stack>
         </form>
+      </Modal>
+
+      <Modal
+        opened={!!viewingSeries}
+        onClose={() => setViewingSeries(null)}
+        title={viewingSeries ? `${viewingSeries.clientName || viewingSeries.clientId} — Scheduled Dates` : ''}
+        size="lg"
+      >
+        {seriesApptsLoading ? (
+          <Group justify="center" py="md"><Loader size="sm" /></Group>
+        ) : seriesAppts.length === 0 ? (
+          <Text c="dimmed" fz="sm" ta="center" py="md">No appointments generated for this series.</Text>
+        ) : (
+          <Table striped highlightOnHover>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>#</Table.Th>
+                <Table.Th>Date</Table.Th>
+                <Table.Th>Time</Table.Th>
+                <Table.Th>Status</Table.Th>
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {seriesAppts.map((appt, idx) => {
+                const dt = appt.startsAt ? new Date(appt.startsAt) : null;
+                const dateStr = dt ? dt.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+                const timeStr = dt ? dt.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : '—';
+                return (
+                  <Table.Tr key={appt.id}>
+                    <Table.Td>{idx + 1}</Table.Td>
+                    <Table.Td>{dateStr}</Table.Td>
+                    <Table.Td>{timeStr}</Table.Td>
+                    <Table.Td><Badge color={appt.status === 'scheduled' ? 'blue' : appt.status === 'completed' ? 'green' : 'gray'} size="sm">{appt.status}</Badge></Table.Td>
+                  </Table.Tr>
+                );
+              })}
+            </Table.Tbody>
+          </Table>
+        )}
       </Modal>
 
       {items.length === 0 ? (
@@ -1240,7 +1368,11 @@ function SeriesPanel({ staff, clients }) {
             </Table.Thead>
             <Table.Tbody>
               {items.map((item) => (
-                <Table.Tr key={item.id}>
+                <Table.Tr
+                  key={item.id}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => handleViewSeries(item)}
+                >
                   <Table.Td>{item.clientName || item.clientId}</Table.Td>
                   <Table.Td>{item.counselorName || item.counselorId}</Table.Td>
                   <Table.Td>
@@ -1256,7 +1388,10 @@ function SeriesPanel({ staff, clients }) {
                   <Table.Td><Badge color={seriesStatusColor(item.status)}>{item.status}</Badge></Table.Td>
                   <Table.Td>
                     {item.status === 'active' && (
-                      <Button size="xs" color="orange" variant="light" onClick={() => handleCancel(item.id)}>Cancel</Button>
+                      <Button
+                        size="xs" color="orange" variant="light"
+                        onClick={(e) => { e.stopPropagation(); handleCancel(item.id); }}
+                      >Cancel</Button>
                     )}
                   </Table.Td>
                 </Table.Tr>
@@ -2061,7 +2196,14 @@ export default function SchedulingPage({
                     label="Month"
                     value={toMonthPickerValue(selectedMonth)}
                     onChange={(value) => {
-                      const nextMonth = toMonthKey(value);
+                      // Mantine v8 passes a "YYYY-MM-DD" string (not a Date object).
+                      // Slicing directly avoids timezone bugs from new Date("YYYY-MM-DD")
+                      // which parses as UTC and shifts the month in negative-offset timezones.
+                      const nextMonth = typeof value === 'string'
+                        ? value.slice(0, 7)
+                        : value instanceof Date
+                          ? `${value.getFullYear()}-${padDatePart(value.getMonth() + 1)}`
+                          : toMonthKey(value);
                       if (!nextMonth) return;
                       setSelectedMonth(nextMonth);
                       setScheduleScope('month');

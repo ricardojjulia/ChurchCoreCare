@@ -21,8 +21,8 @@ It is built specifically for Christian counseling practices and supports daily e
 ## Core Capabilities
 
 - **Faithful Workflows:** counselor-facing recommendation workspace powered by 27 deterministic clinical rules across 8 care categories, with explainable rationale, trend analysis, three interchangeable canvas views (Classic List, Radial Hub, Priority Matrix), and shared operational urgency cues that keep banner counts and visible client severity aligned
-- **Clinical Chart:** session notes, internal notes, treatment plans, progress tracking, and homework, now with a chart summary header, session-status timeline, and visual assessment/progress cues
-- **Dashboard:** live daily operations summary with counselor workload, note-gap compliance watch, portal request tracking, configurable operational alerts, and 7-day trend context
+- **Clinical Chart:** session notes, internal notes, treatment plans, progress tracking, and homework
+- **Operations Dashboard:** live daily operations summary with counselor workload, note-gap compliance watch, portal request tracking, configurable operational alerts, and 7-day trend context
 - **Workspace Studio:** full-featured practice administration hub with tabs for Practice profile, Locations CRUD, Staff roster, Lifecycle caseload board, Appointments (service codes), Documents, Offerings, and Portal workflows
 - **Scheduling and operations workflows:** appointments, waitlists, reminders, utilization visibility, and a guided recurring-series builder so staff can create repeat schedules without typing raw RRULE syntax
 - **Client portal workflows:** onboarding, forms, documents, and client self-service surfaces
@@ -31,7 +31,7 @@ It is built specifically for Christian counseling practices and supports daily e
 
 The checked-in English runtime locale catalog also mirrors the current counselor-facing workspace labels so API-backed i18n does not drift back to older names like `Operations Dashboard` or `Portal`.
 
-The dashboard Faithful Workflows metric card also acts as a direct workspace handoff into the full Faithful Workflows page, matching the drill-down behavior already used by the other dashboard metric cards.
+The dashboard Faithful Workflows metric card also acts as a direct workspace handoff into the full Faithful Workflows page, matching the drill-down behavior already used by the other dashboard metric cards. The Faithful Workflows banner now also receives the same canonical count payload the dashboard renders, so both surfaces stay aligned even if the workflow page falls back to lighter local ranking data while loading.
 
 Encrypted DB reads now normalize Buffer-backed ciphertext values returned by MySQL before decrypting. That keeps authenticated workflow reads, including recurring scheduling series, stable even when legacy rows are hydrated as `Buffer` objects instead of plain strings.
 
@@ -273,6 +273,12 @@ Portal client conversion flow: approved `account_signup` portal requests still a
 Faithful Workflows visual upgrade: adds two new parallel canvas views (Radial Hub and Priority Matrix) alongside the original Classic List view. A floating cycle button in the page header switches between all three. Zero functional or engine changes; all 51 engine tests pass.
 
 - Full summary: `docs/v5.5.2-RELEASE-SUMMARY.md`
+
+### Month Picker Bug Fix (April 5, 2026)
+
+- Fixed a bug in the Scheduling calendar where selecting a month in the month picker could select the wrong month (e.g., clicking May would select June and vice versa).
+- The month picker now correctly sets the selected month, matching the user's choice.
+- See `docs/change-log.md` for details.
 
 ## Change Log
 
