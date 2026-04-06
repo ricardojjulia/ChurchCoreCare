@@ -4,7 +4,12 @@ import { Stack, Title, SimpleGrid, TextInput, Select, Textarea, Checkbox, Button
 import { DateInput } from '@mantine/dates';
 import { upsertClientLegal, upsertClinicalHistory, patchClient } from '../../../lib/clientApi.js';
 
-function dateToStr(d) { return d ? (typeof d === 'string' ? d.slice(0, 10) : d.toISOString().slice(0, 10)) : null; }
+function strToDate(s) { if (!s) return null; const d = new Date(s); return isNaN(d) ? null : d; }
+function dateToStr(value) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
+}
 
 export default function LegalAdminTab({ client, clientId }) {
   const legal = client.legal ?? {};

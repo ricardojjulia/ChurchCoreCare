@@ -4,7 +4,12 @@ import { Stack, Title, Paper, SimpleGrid, TextInput, Select, Checkbox, Button, G
 import { DateInput } from '@mantine/dates';
 import { createClientInsurance, updateClientInsurance, createReferringProvider, updateReferringProvider } from '../../../lib/clientApi.js';
 
-function dateToStr(d) { return d ? (typeof d === 'string' ? d.slice(0, 10) : d.toISOString().slice(0, 10)) : null; }
+function strToDate(s) { if (!s) return null; const d = new Date(s); return isNaN(d) ? null : d; }
+function dateToStr(value) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
+}
 
 function InsuranceCard({ title, initialData, clientId, coverageOrder }) {
   const [selfPay,   setSelfPay]   = useState(initialData?.self_pay ?? false);

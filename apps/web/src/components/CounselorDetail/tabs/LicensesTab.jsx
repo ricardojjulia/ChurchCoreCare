@@ -31,7 +31,12 @@ const STATUS_OPTIONS = [
 
 const STATUS_COLOR = { active: 'green', expired: 'red', inactive: 'gray', pending_renewal: 'yellow' };
 
-function dateToStr(d) { return d ? (typeof d === 'string' ? d.slice(0, 10) : d.toISOString().slice(0, 10)) : null; }
+function dateToStr(value) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
+}
+function strToDate(s) { if (!s) return null; const d = new Date(s); return isNaN(d) ? null : d; }
 
 export default function LicensesTab({ staffId, currentUser }) {
   const isAdmin = ['platform_admin', 'practice_owner', 'practice_admin'].includes(currentUser?.role);
