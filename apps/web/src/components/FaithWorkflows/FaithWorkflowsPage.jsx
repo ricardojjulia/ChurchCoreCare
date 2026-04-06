@@ -194,15 +194,9 @@ async function persistStateChange(clientId, ruleId, status, deferredUntil = null
  * Props:
  *   clients                — basic client list from App.jsx (already loaded)
  *   currentUser            — session user
- *   canonicalUrgencyCounts — canonical dashboard-visible counts from App.jsx metrics state
  *   sharedOperationsSummary — canonical operations-summary payload for counts and urgency overlays
  */
-export default function FaithWorkflowsPage({
-  clients = [],
-  currentUser,
-  canonicalUrgencyCounts = null,
-  sharedOperationsSummary = null,
-}) {
+export default function FaithWorkflowsPage({ clients = [], currentUser, sharedOperationsSummary = null }) {
   const { t } = useI18n();
   useSurfaceTelemetry('faith_workflows', { surfaceKind: 'view', workflow: 'faith_workflows' });
   const demoModeEnabled = useMemo(() => isFaithWorkflowDemoEnabled(), []);
@@ -299,13 +293,6 @@ export default function FaithWorkflowsPage({
   }, [rankEntries]);
 
   const urgencyCounts = useMemo(() => {
-    if (canonicalUrgencyCounts) {
-      return {
-        critical: Number(canonicalUrgencyCounts.critical ?? 0),
-        moderate: Number(canonicalUrgencyCounts.moderate ?? 0),
-        routine: Number(canonicalUrgencyCounts.routine ?? 0),
-      };
-    }
     const sharedUrgencyCounts = sharedOperationsSummary?.faithfulWorkflowCounts;
     if (!sharedUrgencyCounts) return localUrgencyCounts;
     return {
@@ -313,7 +300,7 @@ export default function FaithWorkflowsPage({
       moderate: Number(sharedUrgencyCounts.moderate ?? 0),
       routine: Number(sharedUrgencyCounts.routine ?? 0),
     };
-  }, [canonicalUrgencyCounts, localUrgencyCounts, sharedOperationsSummary]);
+  }, [localUrgencyCounts, sharedOperationsSummary]);
 
   // ─── Selected client data ─────────────────────────────────────────────────
   const selectedEntry = rankEntries.find((e) => e.clientId === selectedClientId) ?? null;
