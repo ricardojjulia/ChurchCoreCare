@@ -658,7 +658,15 @@ export default function App() {
             />
           ) : (
             <>
-              {showDashboard ? <Metrics data={metricsData} currentUser={currentUser} onTodaySessions={handleViewTodaySessions} onFutureAppointments={handleViewFutureAppointments} /> : null}
+              {showDashboard ? (
+                <Metrics
+                  data={metricsData}
+                  currentUser={currentUser}
+                  onTodaySessions={handleViewTodaySessions}
+                  onFutureAppointments={handleViewFutureAppointments}
+                  onFaithWorkflows={() => setCurrentView('faith')}
+                />
+              ) : null}
               {showFallbackWorkspace || showDashboard ? (
                 <WorkspaceGrid
                   clientsData={clientsData}

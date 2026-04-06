@@ -29,6 +29,12 @@ It is built specifically for Christian counseling practices and supports daily e
 - **Monitoring and telemetry:** local monitoring + optional OpenTelemetry export
 - **Security and audit foundations:** role-aware access controls and structured audit event patterns
 
+The checked-in English runtime locale catalog also mirrors the current counselor-facing workspace labels so API-backed i18n does not drift back to older names like `Operations Dashboard` or `Portal`.
+
+The dashboard Faithful Workflows metric card also acts as a direct workspace handoff into the full Faithful Workflows page, matching the drill-down behavior already used by the other dashboard metric cards. The Faithful Workflows banner now also receives the same canonical count payload the dashboard renders, so both surfaces stay aligned even if the workflow page falls back to lighter local ranking data while loading.
+
+Encrypted DB reads now normalize Buffer-backed ciphertext values returned by MySQL before decrypting. That keeps authenticated workflow reads, including recurring scheduling series, stable even when legacy rows are hydrated as `Buffer` objects instead of plain strings.
+
 ## API Security And Compliance Baseline (v5.6.0)
 
 This repository now includes a versioned API security and compliance engineering baseline for high-trust environments where sensitive data may exist.
@@ -76,7 +82,7 @@ The `apps/web/public/assets` bundle files may be refreshed and committed when sh
 
 ## Standalone Product Pages
 
-The static public surfaces are meant to reflect the current product posture, not an older generic admin-console identity. The checked-in About page at `/about` now presents Faith Counseling as a counselor-first, faith-aware practice platform with a stronger product narrative while still linking back to live monitoring and API documentation.
+The static public surfaces are meant to reflect the current product posture, not an older generic admin-console identity. The checked-in About page at `/about` now presents Faith Counseling as a counselor-first, faith-aware practice platform with a stronger product narrative and the same light indigo visual language used across the rest of the app, while still linking back to live monitoring and API documentation.
 
 ## Architecture At A Glance
 
@@ -265,6 +271,12 @@ Portal client conversion flow: approved `account_signup` portal requests still a
 Faithful Workflows visual upgrade: adds two new parallel canvas views (Radial Hub and Priority Matrix) alongside the original Classic List view. A floating cycle button in the page header switches between all three. Zero functional or engine changes; all 51 engine tests pass.
 
 - Full summary: `docs/v5.5.2-RELEASE-SUMMARY.md`
+
+### Month Picker Bug Fix (April 5, 2026)
+
+- Fixed a bug in the Scheduling calendar where selecting a month in the month picker could select the wrong month (e.g., clicking May would select June and vice versa).
+- The month picker now correctly sets the selected month, matching the user's choice.
+- See `docs/change-log.md` for details.
 
 ## Change Log
 

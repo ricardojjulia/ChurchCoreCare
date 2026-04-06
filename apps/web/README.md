@@ -25,11 +25,13 @@ Default URL: `http://localhost:3000`
 ## Current UI Scope
 
 - sidebar navigation shell
+- top-level workspace labels now use simpler counselor-friendly names: `Dashboard`, `Client Scheduling`, `Documents`, and `Client Portal`
 - role-aware navigation that gives counselors a smaller primary workspace and keeps monitoring/admin tools in admin-capable paths
 - dedicated counselor home surface for counselor and intern roles
 - dedicated counselor tasks surface for counselor note follow-up, assigned document/form review, and scheduling handoff
 - counselor home and task queues now hand off directly into scheduling composers and session-note charting flows for assigned clients
 - client detail now includes a counselor-only Intake Preview tab for clients with completed intake materials
+- Clinical Chart now opens with a summary header, functional overview cards, session-status timeline, and stronger assessment/treatment-plan visual cues
 - global search across today's schedule
 - redesigned `Practice Operations Center` header with an animated counseling mark and stronger operational hierarchy
 - sidebar heading now uses an animated counseling icon with a simplified `Options` label
@@ -38,6 +40,7 @@ Default URL: `http://localhost:3000`
 - the top bar title and subtitle now follow the active workspace instead of reusing the dashboard label across unrelated screens
 - scheduling appointment creation and counselor-calendar filtering now use stable counselor IDs instead of counselor display names
 - key metric cards for today's sessions, future appointments, audit-event visibility, and current session identity/state
+- the dashboard `Faithful Workflows` metric card now opens the full Faithful Workflows workspace directly
 - operations panels for schedule, priority queue, and compliance watch
 - operational alerts now surface when counselor intake previews are available and can deep-link directly into the client Intake Preview tab
 - counselor home and task views now surface assigned intake previews directly and can open the client on the Intake Preview tab without requiring the dashboard
@@ -52,7 +55,7 @@ Default URL: `http://localhost:3000`
 - branded Operations Studio page at `/operations.html` aligned to the same indigo/light workspace palette as the main app
 - OTEL status UI that reflects shared OTLP, traces-only, or metrics-only endpoint configuration
 - interactive API docs served through the same-origin proxy at `/api/docs`
-- branded static About page at `/about` with a stronger counselor-first product narrative, bolder visual system, and operational linkouts
+- branded static About page at `/about` with a stronger counselor-first product narrative, shared light-indigo app palette, and operational linkouts
 
 ## Monitoring Notes
 

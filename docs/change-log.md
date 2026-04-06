@@ -38,6 +38,15 @@ The page now uses a warmer, more deliberate visual system and reframes the produ
 
 Documentation was also updated in the root `README.md` and `apps/web/README.md` so the checked-in public surface is described consistently with the current product direction.
 
+### fix(about): align refreshed About page with shared app palette
+
+**Date:** April 4, 2026
+**Affected area:** `apps/web/public/about.html`
+
+The first refresh improved the page structure and message, but its warmer standalone palette drifted from the light indigo visual system used across the main workspace, monitoring, and operations pages.
+
+The About page now keeps the stronger content and hierarchy while realigning its background, accents, cards, CTAs, and highlight treatments to the shared app palette so it feels like the same product family rather than a separate microsite.
+
 ---
 
 ## April 4, 2026 — Telemetry Fix
@@ -1003,7 +1012,7 @@ Replaces the billing model with a faith-based voluntary offering system througho
 
 ### Changed
 
-- `apps/api/data/i18n/en.json` — renamed `nav.billing` → `nav.offerings`, `studio.tab.billing` → `studio.tab.offerings`, `portal.tab.financials` → `portal.tab.giving`; replaced `portal.financials.*` block with `portal.giving.*`; removed `client.tab.insurance`; added `offerings.*` and `topbar.offerings.*` key blocks
+- `apps/api/data/i18n/en.json` — renamed `nav.billing` → `nav.offerings`, `studio.tab.billing` → `studio.tab.offerings`, `portal.tab.financials` → `portal.tab.giving`; replaced `portal finanicals.*` block with `portal.giving.*`; removed `client.tab.insurance`; added `offerings.*` and `topbar.offerings.*` key blocks
 - `packages/telemetry/src/surfaces.js` — `billing` → `offerings`, `portal.financials` → `portal.giving`, removed `client.insurance`, `studio.billing` → `studio.offerings`
 - `apps/web/src/components/Sidebar.jsx` — `billing` → `offerings`
 - `apps/web/src/components/TopBar.jsx` — `billing` → `offerings` in viewKeyMap
