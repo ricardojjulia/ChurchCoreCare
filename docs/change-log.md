@@ -32,42 +32,24 @@ Expanded the Faith Workflows evaluation engine with 5 new rule dimensions and re
 - `ruleLongTermEngagement` (monitoring, priority 4) — fires after 18 months of active engagement with no formal continuation-of-care review note. Celebrates long-term growth and prompts formal review.
 - `ruleSpiritualAssessmentOverdue` (spiritual, priority 2) — fires when a client has faith integration opted in and has not completed a Spiritual Wellness Inventory in 90+ days (or never). Optional; surfaces as a gentle reminder only.
 
----
+## April 4, 2026 — Recurring Series Builder
 
-## April 5, 2026
-
-### feat: appointment composer — DateTimePicker with 55-minute auto-fill
-
-**Date:** April 5, 2026
-**Affected area:** `apps/web/src/components/SchedulingPage.jsx` — appointment composer modal
-
-The Start and End fields in the New/Edit Appointment modal now use Mantine `DateTimePicker` instead of a raw `datetime-local` text input. Picking a date opens a calendar popover; the time is set via a spinner. Format displayed: `MM/DD/YYYY hh:mm A`.
-
-When a start time is selected, the end time is automatically suggested as 55 minutes later. The auto-fill only overrides end if the user has not manually set it. Once the user edits the end time directly, subsequent start changes no longer override it.
-
----
-
-## April 5, 2026 — Month Picker Bug Fix (root cause)
-
-### fix(scheduling): month picker off-by-one due to Mantine v8 string format + UTC parsing
-
-**Date:** April 5, 2026
-**Affected area:** `apps/web/src/components/SchedulingPage.jsx` — month picker
-
-Fixed the root cause of the month picker off-by-one error. Mantine v8 `MonthPickerInput` passes `onChange` a `"YYYY-MM-DD"` string (not a `Date` object). The previous handler fell through to `toMonthKey()`, which called `new Date("YYYY-MM-DD")` — a date-only ISO string that JavaScript parses as UTC midnight. In negative-offset timezones (US Eastern, etc.) this shifts the local date to the previous month, causing picking May to store April. Fixed by slicing the string directly (`value.slice(0, 7)`) to extract `"YYYY-MM"` without any Date construction.
-
----
-
-## April 4, 2026 — Faithful Workflow Count Prop Sync
-
-### fix(workflows): keep the Faithful Workflows banner on the same canonical counts as the dashboard
+### fix(scheduling): replace raw recurrence syntax with a guided recurring-series builder
 
 **Date:** April 4, 2026
-**Affected area:** `apps/web/src/App.jsx`, `apps/web/src/components/FaithWorkflows/FaithWorkflowsPage.jsx`
+**Affected area:** `apps/web/src/components/SchedulingPage.jsx`
 
-The dashboard and Faithful Workflows page were both intended to show the same critical, moderate, and routine totals, but the workflow page could still drift when it fell back to its own local count derivation while the dashboard was already rendering the canonical metrics payload held in the app shell.
+Creating a recurring series still required staff to type raw RRULE syntax such as `FREQ=WEEKLY;BYDAY=MO`, which is technically correct but not friendly for counselors, schedulers, or other non-technical staff. The form also showed that raw syntax back in the series list, making the whole recurrence flow feel more technical than the rest of Scheduling.
 
-The app now passes the dashboard's `faithfulCounts` object directly into Faithful Workflows. The page banner prefers that canonical payload first, then only falls back to operations-summary or local derived counts when the canonical counts are unavailable. This keeps the visible dashboard panel and the Faithful Workflows summary banner aligned.
+The recurring-series modal now defaults to a guided recurrence builder:
+
+- readable cadence choices for weekly, every two weeks, or monthly repeats
+- weekday checkboxes for weekly and biweekly schedules
+- a live schedule preview that explains the rule in plain language
+- raw RRULE entry kept behind an explicit advanced toggle instead of as the primary field
+- existing series rows now show a friendly recurrence description first, with the raw stored rule preserved as a secondary label
+
+This is a UI-only workflow improvement. The API contract and stored recurrence rule format remain unchanged.
 
 ---
 

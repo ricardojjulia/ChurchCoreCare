@@ -1,8 +1,12 @@
 # Faith Counseling
 
-Faith Counseling is a web-first, faith-based Christian counseling practice management platform for solo counselors, group practices, and multi-location clinics.
+> *"Whatever you do, work at it with all your heart, as working for the Lord."* — Colossians 3:23
 
-It is built specifically for Christian counseling practices and supports daily end-to-end workflows including client management, scheduling, clinical charting, forms, portal interactions, offerings tracking, compliance-focused operations, and observability.
+Welcome to **Faith Counseling** — a practice management platform built from the ground up for Christian counseling organizations. Whether you run a solo ministry practice, a group clinic, or a multi-location operation, Faith Counseling is designed to feel like a tool made specifically for you.
+
+From the moment a new client submits a care request to the session note signed after their last appointment, every workflow in this platform carries your practice's values forward — with structured clinical support, faith-integrated care tools, and an operational foundation ready for Monday morning.
+
+📖 **New to the platform?** Start with the [User Manual →](docs/User%20Manual/README.md)
 
 ## Faith-Based Christian Practice Focus
 
@@ -21,19 +25,52 @@ It is built specifically for Christian counseling practices and supports daily e
 ## Core Capabilities
 
 - **Faithful Workflows:** counselor-facing recommendation workspace powered by 27 deterministic clinical rules across 8 care categories, with explainable rationale, trend analysis, three interchangeable canvas views (Classic List, Radial Hub, Priority Matrix), and shared operational urgency cues that keep banner counts and visible client severity aligned
-- **Clinical Chart:** session notes, internal notes, treatment plans, progress tracking, and homework, now with a chart summary header, session-status timeline, and visual assessment/progress cues
-- **Dashboard:** live daily operations summary with counselor workload, note-gap compliance watch, portal request tracking, configurable operational alerts, and 7-day trend context
+- **Clinical Chart:** session notes, internal notes, treatment plans, progress tracking, and homework
+- **Operations Dashboard:** live daily operations summary with counselor workload, note-gap compliance watch, portal request tracking, configurable operational alerts, and 7-day trend context
 - **Workspace Studio:** full-featured practice administration hub with tabs for Practice profile, Locations CRUD, Staff roster, Lifecycle caseload board, Appointments (service codes), Documents, Offerings, and Portal workflows
-- **Scheduling and operations workflows:** appointments, waitlists, reminders, and utilization visibility
+- **Scheduling and operations workflows:** appointments, waitlists, reminders, utilization visibility, and a guided recurring-series builder so staff can create repeat schedules without typing raw RRULE syntax
 - **Client portal workflows:** onboarding, forms, documents, and client self-service surfaces
 - **Monitoring and telemetry:** local monitoring + optional OpenTelemetry export
 - **Security and audit foundations:** role-aware access controls and structured audit event patterns
+
+## LATEST LOOK
+
+The latest look feels less like a generic admin console and more like a living counseling workspace. The home experience opens with calm, high-signal surfaces: a dashboard that tells staff what needs attention now, a Faithful Workflows space that turns raw status into visible care priorities, and scheduling screens that feel built for real week-to-week ministry instead of back-office data entry.
+
+<p align="center">
+  <img src="./ScreenShots/Screenshot%202026-04-05%20at%208.42.26%E2%80%AFPM.png" alt="Latest look screenshot 1" width="24%" />
+  <img src="./ScreenShots/Screenshot%202026-04-05%20at%208.42.36%E2%80%AFPM.png" alt="Latest look screenshot 2" width="24%" />
+  <img src="./ScreenShots/Screenshot%202026-04-05%20at%208.42.46%E2%80%AFPM.png" alt="Latest look screenshot 3" width="24%" />
+  <img src="./ScreenShots/Screenshot%202026-04-05%20at%208.42.51%E2%80%AFPM.png" alt="Latest look screenshot 4" width="24%" />
+</p>
+
+Client and counselor records now read like story-rich working spaces rather than flat database rows. Detail views surface clinical context, faith-aware care details, diagnoses, legal and insurance context, employment and credentialing data, and practical next actions without making the user dig through disconnected tabs. The result is a product that feels organized, confident, and deeply operational at the same time.
+
+<p align="center">
+  <img src="./ScreenShots/Screenshot%202026-04-05%20at%208.43.01%E2%80%AFPM.png" alt="Latest look screenshot 5" width="24%" />
+  <img src="./ScreenShots/Screenshot%202026-04-05%20at%208.43.10%E2%80%AFPM.png" alt="Latest look screenshot 6" width="24%" />
+  <img src="./ScreenShots/Screenshot%202026-04-05%20at%208.43.14%E2%80%AFPM.png" alt="Latest look screenshot 7" width="24%" />
+  <img src="./ScreenShots/Screenshot%202026-04-05%20at%208.43.17%E2%80%AFPM.png" alt="Latest look screenshot 8" width="24%" />
+</p>
+
+Workspace Studio gives the platform its control-room energy. Practice settings, locations, staff, lifecycle management, documents, offerings, appointments, and portal administration all sit inside a single administration hub that feels intentional instead of crowded. It looks like the kind of system that can run an actual counseling practice on Monday morning, not just survive a demo.
+
+<p align="center">
+  <img src="./ScreenShots/Screenshot%202026-04-05%20at%208.43.27%E2%80%AFPM.png" alt="Latest look screenshot 9" width="24%" />
+  <img src="./ScreenShots/Screenshot%202026-04-05%20at%208.43.39%E2%80%AFPM.png" alt="Latest look screenshot 10" width="24%" />
+  <img src="./ScreenShots/Screenshot%202026-04-05%20at%208.43.43%E2%80%AFPM.png" alt="Latest look screenshot 11" width="24%" />
+  <img src="./ScreenShots/Screenshot%202026-04-05%20at%208.43.51%E2%80%AFPM.png" alt="Latest look screenshot 12" width="24%" />
+</p>
+
+The portal, charting, and monitoring views complete the picture. The client-facing side feels warm and guided, the charting side feels focused and usable, and the monitoring surfaces make the whole platform feel observable and production-minded. Put together, the current product has range: part ministry operations center, part clinical workspace, part modern practice platform, and much closer to something people would want to use every day.
 
 The checked-in English runtime locale catalog also mirrors the current counselor-facing workspace labels so API-backed i18n does not drift back to older names like `Operations Dashboard` or `Portal`.
 
 The dashboard Faithful Workflows metric card also acts as a direct workspace handoff into the full Faithful Workflows page, matching the drill-down behavior already used by the other dashboard metric cards. The Faithful Workflows banner now also receives the same canonical count payload the dashboard renders, so both surfaces stay aligned even if the workflow page falls back to lighter local ranking data while loading.
 
 Encrypted DB reads now normalize Buffer-backed ciphertext values returned by MySQL before decrypting. That keeps authenticated workflow reads, including recurring scheduling series, stable even when legacy rows are hydrated as `Buffer` objects instead of plain strings.
+
+Recurring series creation in Scheduling now defaults to a guided builder with readable cadence options such as weekly, every two weeks, or monthly, plus weekday selection and a live schedule preview. Raw RRULE entry remains available as an advanced fallback instead of being the primary input.
 
 ## API Security And Compliance Baseline (v5.6.0)
 
@@ -96,17 +133,52 @@ The static public surfaces are meant to reflect the current product posture, not
 ## Architecture Diagram
 
 ```mermaid
-flowchart LR
-   U[Staff and Clients] --> WEB[apps/web\nReact + Mantine + Node server]
-   WEB --> API[apps/api\nNode.js API]
-   API --> DB[(MySQL)]
-   API --> WRK[apps/worker\nBackground processing]
+flowchart TB
+    subgraph users[" 👤  Who Uses It "]
+        STAFF["🏥 Staff\nCounselors · Admins · Schedulers · Billers"]
+        CLIENT["🙋 Clients\nSelf-Service Portal Users"]
+    end
 
-   WEB -. uses .-> I18N[packages/i18n]
-   WEB -. uses .-> TEL[packages/telemetry]
-   API -. uses .-> TEL
-   API -. uses .-> DOM[packages/domain]
-   WRK -. uses .-> TEL
+    subgraph frontend[" 🌐  Frontend — apps/web "]
+        WEB["React 18 + Mantine + Vite\nNode.js BFF · CSRF Protection · Session Proxy\nI18N Runtime · Surface Telemetry"]
+    end
+
+    subgraph backend[" 🔌  Backend — apps/api "]
+        API["Node.js ESM REST API\nAuth · RBAC · Tenant Isolation\nAudit Ledger · Encrypted PHI"]
+    end
+
+    subgraph worker[" ⚡  Background — apps/worker "]
+        WRK["Async Job Processing\nBackground Tasks"]
+    end
+
+    subgraph packages[" 📦  Shared Packages "]
+        DOM["@faith/domain\nContracts · Enums · Types"]
+        I18N["@faith/i18n\nLocale Catalogs · Runtime Translations"]
+        TEL["@faith/telemetry\nOTEL Signals · Local Monitoring"]
+    end
+
+    subgraph infra[" 🗄️  Data & Observability "]
+        DB[("MySQL\nEncrypted at Rest · Migrations")]
+        OTEL["🔭 OTEL Collector\n— optional export —"]
+        AGENT["🤖 Translation Guardian\nPython Agent · Docker"]
+    end
+
+    STAFF --> WEB
+    CLIENT --> WEB
+    WEB --> API
+    API --> DB
+    API --> WRK
+    WRK --> DB
+
+    WEB -. uses .-> I18N
+    WEB -. uses .-> TEL
+    WEB -. uses .-> DOM
+    API -. uses .-> TEL
+    API -. uses .-> DOM
+    WRK -. uses .-> TEL
+
+    TEL -.->|"export\n(optional)"| OTEL
+    AGENT -.->|"reviews"| I18N
 ```
 
 ## Tech Stack
@@ -240,9 +312,19 @@ pnpm test:launch-readiness
 ### Demo dataset workflows
 
 ```bash
+pnpm demo:sql:generate
+pnpm demo:sql:apply
+pnpm demo:sql:refresh
 pnpm demo:verify
 pnpm demo:finalize
 ```
+
+Generated SQL artifacts are written to `ops/demo-dataset/generated/`:
+
+- `demo-dataset.reset.sql`
+- `demo-dataset.seed.sql`
+- `demo-dataset.apply.sql`
+- `demo-dataset.meta.json`
 
 ### Translation Guardian agent
 
@@ -262,7 +344,17 @@ If `OTEL_EXPORTER_OTLP_ENDPOINT` is unset, telemetry remains local/console-only.
 
 ## Recent Updates
 
-Only the latest two entries are listed here. Full release history is in `docs/change-log.md`.
+Only the latest entries are listed here. Full release history is in `docs/change-log.md`.
+
+### User Manual (April 5, 2026)
+
+A full 13-section end-user practice manual is now live under `docs/User Manual/`. It covers every platform surface and is organized by role — counselor, admin, scheduler, and client. Includes Getting Started, Dashboard, Client Management, Scheduling, Clinical Chart, Faithful Workflows, Workspace Studio, Client Portal, Forms, Offerings, Monitoring, Security, and Troubleshooting.
+
+- Full manual: `docs/User Manual/README.md`
+
+### Month Picker Bug Fix (April 5, 2026)
+
+Fixed a bug in the Scheduling calendar where selecting a month in the month picker could select the wrong month (e.g., clicking May would select June). The picker now correctly selects the month you click.
 
 ### v5.6.0 (April 3, 2026)
 
@@ -274,12 +366,6 @@ Faithful Workflows visual upgrade: adds two new parallel canvas views (Radial Hu
 
 - Full summary: `docs/v5.5.2-RELEASE-SUMMARY.md`
 
-### Month Picker Bug Fix (April 5, 2026)
-
-- Fixed a bug in the Scheduling calendar where selecting a month in the month picker could select the wrong month (e.g., clicking May would select June and vice versa).
-- The month picker now correctly sets the selected month, matching the user's choice.
-- See `docs/change-log.md` for details.
-
 ## Change Log
 
 For the full release and maintenance history, see `docs/change-log.md`.
@@ -288,6 +374,7 @@ The change log summarizes completed work across releases and documents the detai
 
 ## Documentation Index
 
+- **User Manual:** `docs/User Manual/README.md` — full end-user guide covering all roles and platform surfaces
 - Product and planning overview: `docs/PRODUCT-PLANS-OVERVIEW.md`
 - Domain model: `docs/domain-model.md`
 - Faithful Workflows visual upgrade (v5.5.2): `docs/v5.5.2-RELEASE-SUMMARY.md`
