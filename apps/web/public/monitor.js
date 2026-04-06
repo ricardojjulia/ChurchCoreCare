@@ -442,35 +442,154 @@ function initDrillToggle() {
   });
 }
 
-// ─── OTEL settings ────────────────────────────────────────────────────────────
+// ─── Observability stack probe ────────────────────────────────────────────────
+
+async function probeEndpoint(url, cors = true) {
+  try {
+    await fetch(url, {
+      method: 'GET',
+      mode: cors ? 'cors' : 'no-cors',
+      credentials: 'omit',
+      signal: AbortSignal.timeout(3000),
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function setObsBadge(id, state) {
+  const el = $(id);
+  if (!el) return;
+  el.className = `obs-badge ${state}`;
+  el.textContent = state === 'up' ? 'Online' : state === 'down' ? 'Offline' : 'Checking…';
+}
+
+async function checkObsStack() {
+  const btn = $('checkStackBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '↻ Checking…'; }
+
+  ['jaegerBadge','promBadge','apiMetricsBadge','webMetricsBadge','workerMetricsBadge'].forEach(
+    id => setObsBadge(id, 'checking')
+  );
+  setText('obsStackTitle', 'Checking…');
+  setText('obsStackSub',   'Probing Jaeger, Prometheus, and metrics endpoints.');
+
+  // Same-origin probes: these work fine from the browser (no CSP restriction)
+  const [apiM, webM] = await Promise.all([
+    probeEndpoint('/api/metrics', true),   // faith-api routed via web proxy
+    probeEndpoint('/metrics',    true),    // faith-web (same origin)
+  ]);
+
+  // Cross-origin probes (Jaeger :16686, Prometheus :9090, worker :9465) are
+  // blocked by connect-src 'self' CSP, so we ask the API server to probe them.
+  let jaeger = false, prom = false, workerM = false;
+  try {
+    const obsRes = await fetch('/api/v1/monitoring/observability-stack', {
+      credentials: 'include',
+      signal: AbortSignal.timeout(8000),
+    });
+    if (obsRes.ok) {
+      const data = await obsRes.json();
+      jaeger  = data.jaeger?.up        ?? false;
+      prom    = data.prometheus?.up    ?? false;
+      workerM = data.workerMetrics?.up ?? false;
+    }
+  } catch { /* API unreachable — leave all false */ }
+
+  setObsBadge('jaegerBadge',        jaeger  ? 'up' : 'down');
+  setObsBadge('promBadge',          prom    ? 'up' : 'down');
+  setObsBadge('apiMetricsBadge',    apiM    ? 'up' : 'down');
+  setObsBadge('webMetricsBadge',    webM    ? 'up' : 'down');
+  setObsBadge('workerMetricsBadge', workerM ? 'up' : 'down');
+
+  const stackUp   = jaeger && prom;
+  const metricsUp = apiM && webM;
+  const anyUp     = jaeger || prom || apiM || webM || workerM;
+
+  const banner       = $('obsStackBanner');
+  const instructions = $('obsInstructions');
+  const shutdownHint = $('obsShutdownHint');
+
+  if (stackUp && metricsUp) {
+    banner.className = 'otel-status-banner active';
+    setText('obsStackIcon',  '🟢');
+    setText('obsStackTitle', 'Observability Stack Active');
+    setText('obsStackSub',   'Jaeger and Prometheus are running. All metrics endpoints are reachable.');
+    if (instructions)  instructions.style.display  = 'none';
+    if (shutdownHint)  shutdownHint.style.display   = 'block';
+  } else if (anyUp) {
+    banner.className = 'otel-status-banner active';
+    setText('obsStackIcon',  '🟡');
+    setText('obsStackTitle', 'Observability Stack Partially Active');
+    setText('obsStackSub',   'Some services are reachable. Check individual service status below.');
+    if (instructions)  instructions.style.display  = 'block';
+    if (shutdownHint)  shutdownHint.style.display   = 'none';
+  } else {
+    banner.className = 'otel-status-banner inactive';
+    setText('obsStackIcon',  '⭕');
+    setText('obsStackTitle', 'Observability Stack Inactive');
+    setText('obsStackSub',   'Jaeger and Prometheus are not running. Start the Docker stack to enable full observability.');
+    if (instructions)  instructions.style.display  = 'block';
+    if (shutdownHint)  shutdownHint.style.display   = 'none';
+  }
+
+  const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  setText('obsStackLastChecked', `checked ${now}`);
+
+  if (btn) { btn.disabled = false; btn.textContent = '↻ Check'; }
+}
+
+// ─── OTEL trace export banner (driven by API summary) ────────────────────────
 function updateOtelBanner(isActive) {
   const banner = $('otelBanner');
   if (isActive) {
     banner.className = 'otel-status-banner active';
-    setText('otelBannerTitle', 'OpenTelemetry Active');
-    setText('otelBannerSub',   'Traces and metrics are being exported to your configured OTLP endpoint.');
-    $('otelCurrentStatus').value = 'Exporting via OTLP';
+    setText('otelBannerTitle', 'Trace Export Active — sending to Jaeger');
+    setText('otelBannerSub',   'OTEL_EXPORTER_OTLP_TRACES_ENDPOINT is configured. Traces are flowing to Jaeger.');
+    $('otelCurrentStatus').value = 'Exporting traces via OTLP → Jaeger';
   } else {
     banner.className = 'otel-status-banner inactive';
-    setText('otelBannerTitle', 'OpenTelemetry Not Configured');
-    setText('otelBannerSub',   'Set OTEL_EXPORTER_OTLP_ENDPOINT in .env to enable trace and metric export.');
-    $('otelCurrentStatus').value = 'Not configured — OTEL_SDK_DISABLED or no endpoint set';
+    setText('otelBannerTitle', 'Trace Export Not Configured');
+    setText('otelBannerSub',   'Set OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://localhost:4318/v1/traces in .env and restart.');
+    $('otelCurrentStatus').value = 'Not configured — no OTLP traces endpoint set';
   }
 }
 
 function initOtelSettings() {
+  // Observability stack check button
+  const checkBtn = $('checkStackBtn');
+  if (checkBtn) checkBtn.addEventListener('click', () => checkObsStack());
+
+  // Copy-command buttons
+  const START_CMD = 'docker compose --profile observability up -d';
+  const STOP_CMD  = 'docker compose --profile observability down';
+
+  function copyText(text, label) {
+    navigator.clipboard?.writeText(text).then(
+      () => toast(`${label} copied to clipboard`),
+      () => toast('Copy failed — paste manually from the snippet below'),
+    );
+  }
+
+  const copyStart = $('copyStartCmd');
+  if (copyStart) copyStart.addEventListener('click', () => copyText(START_CMD, 'Start command'));
+
+  const copyStop = $('copyStopCmd');
+  if (copyStop) copyStop.addEventListener('click', () => copyText(STOP_CMD, 'Stop command'));
+
+  const copyStopActive = $('copyStopCmdActive');
+  if (copyStopActive) copyStopActive.addEventListener('click', () => copyText(STOP_CMD, 'Stop command'));
+
+  // Test Jaeger OTLP connection
   $('testOtelBtn').addEventListener('click', async () => {
-    const endpoint = $('otelEndpoint').value.trim() || $('otelTracesEndpoint').value.trim();
+    const endpoint = $('otelEndpoint').value.trim() || $('otelTracesEndpoint').value.trim()
+      || 'http://localhost:4318/v1/traces';
     const result = $('otelTestResult');
-    if (!endpoint) {
-      result.textContent = 'Enter an endpoint URL to test.';
-      result.className = 'otel-test-result visible fail';
-      return;
-    }
     $('testOtelBtn').disabled = true;
     $('testOtelBtn').textContent = 'Testing…';
     result.className = 'otel-test-result visible';
-    result.textContent = 'Sending test trace…';
+    result.textContent = 'Sending test trace to Jaeger…';
     try {
       const url = endpoint.replace(/\/$/, '') + (endpoint.includes('/v1/') ? '' : '/v1/traces');
       const res = await fetch(url, {
@@ -480,27 +599,28 @@ function initOtelSettings() {
         signal: AbortSignal.timeout(5000),
       });
       result.className = 'otel-test-result visible ok';
-      result.textContent = `✓ Endpoint responded with ${res.status}. OTEL collector is reachable.`;
+      result.textContent = `✓ Jaeger OTLP responded with ${res.status}. Traces will flow when OTEL_EXPORTER_OTLP_TRACES_ENDPOINT is set.`;
     } catch (err) {
       result.className = 'otel-test-result visible fail';
-      result.textContent = `✗ ${err.name === 'AbortError' ? 'Timed out (5s)' : err.message}. Check the endpoint URL and collector status.`;
+      result.textContent = `✗ ${err.name === 'AbortError' ? 'Timed out (5s)' : err.message}. Is Jaeger running? Try: docker compose --profile observability up -d`;
     } finally {
       $('testOtelBtn').disabled = false;
-      $('testOtelBtn').textContent = 'Test Connection';
+      $('testOtelBtn').textContent = 'Test Jaeger Connection';
     }
   });
 
   $('genEnvBtn').addEventListener('click', () => {
     const ep  = $('otelEndpoint').value.trim();
-    const tr  = $('otelTracesEndpoint').value.trim();
+    const tr  = $('otelTracesEndpoint').value.trim() || 'http://localhost:4318/v1/traces';
     const met = $('otelMetricsEndpoint').value.trim();
-    const svc = $('otelServiceName').value.trim() || 'faith-api';
+    const svc = $('otelServiceName').value.trim() || 'faith-counseling';
     const lines = [];
     if (ep)  lines.push(`OTEL_EXPORTER_OTLP_ENDPOINT=${ep}`);
-    if (tr)  lines.push(`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${tr}`);
+    lines.push(`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${tr}`);
     if (met) lines.push(`OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=${met}`);
     lines.push(`OTEL_SERVICE_NAME=${svc}`);
-    lines.push(`# Restart API after adding these to .env`);
+    lines.push(`WORKER_METRICS_PORT=9465`);
+    lines.push(`# Restart app after adding these to .env`);
     const snip = $('envSnippet');
     snip.textContent = lines.join('\n');
     snip.style.display = 'block';
@@ -717,4 +837,5 @@ $('refreshBtn').addEventListener('click', async () => {
 
 initDrillToggle();
 initOtelSettings();
+checkObsStack();
 doRefresh().then(() => { resetCountdown(); scheduleRefresh(); });

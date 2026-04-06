@@ -1,6 +1,7 @@
 import { metrics, trace } from '@opentelemetry/api';
 import autoInstrumentationsPkg from '@opentelemetry/auto-instrumentations-node';
 import metricExporterPkg from '@opentelemetry/exporter-metrics-otlp-http';
+import prometheusExporterPkg from '@opentelemetry/exporter-prometheus';
 import traceExporterPkg from '@opentelemetry/exporter-trace-otlp-http';
 import resourcesPkg from '@opentelemetry/resources';
 import sdkMetricsPkg from '@opentelemetry/sdk-metrics';
@@ -9,12 +10,25 @@ import semanticConventions from '@opentelemetry/semantic-conventions';
 
 const { getNodeAutoInstrumentations } = autoInstrumentationsPkg;
 const { OTLPMetricExporter } = metricExporterPkg;
+const { PrometheusExporter } = prometheusExporterPkg;
 const { OTLPTraceExporter } = traceExporterPkg;
 const { resourceFromAttributes } = resourcesPkg;
 const { PeriodicExportingMetricReader } = sdkMetricsPkg;
 const { NodeSDK } = sdkNodePkg;
-const { ATTR_DEPLOYMENT_ENVIRONMENT_NAME, ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } = semanticConventions;
+const { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } = semanticConventions;
 const FRONTEND_RECENT_ISSUE_WINDOW_MS = 15 * 60 * 1000;
+const ATTR_DEPLOYMENT_ENVIRONMENT_NAME = 'deployment.environment.name';
+
+// Module-level reference so callers can retrieve the exporter to serve /metrics.
+let _prometheusExporter = null;
+
+/**
+ * Returns the PrometheusExporter instance created during startNodeTelemetry.
+ * Returns null if telemetry was disabled or startNodeTelemetry has not run yet.
+ */
+export function getPrometheusExporter() {
+  return _prometheusExporter;
+}
 
 export async function startNodeTelemetry({ serviceName, serviceVersion = '1.6.0' }) {
   if (process.env.OTEL_SDK_DISABLED === 'true') {
@@ -22,15 +36,20 @@ export async function startNodeTelemetry({ serviceName, serviceVersion = '1.6.0'
   }
 
   const traceExporter = buildTraceExporter();
-  const metricReader = buildMetricReader();
+  const metricReaders = buildMetricReaders();
+
   const sdk = new NodeSDK({
+    // Pass serviceName explicitly so it overrides OTEL_SERVICE_NAME from env.
+    // Resource detectors run after the base resource is set, and envDetector
+    // would otherwise collapse every process to the shared env service name.
+    serviceName,
     resource: resourceFromAttributes({
       [ATTR_SERVICE_NAME]: serviceName,
       [ATTR_SERVICE_VERSION]: serviceVersion,
       [ATTR_DEPLOYMENT_ENVIRONMENT_NAME]: process.env.NODE_ENV ?? 'development',
     }),
     traceExporter,
-    metricReader,
+    metricReaders,
     instrumentations: [getNodeAutoInstrumentations()],
   });
 
@@ -106,6 +125,31 @@ export function createServiceTelemetry(serviceName) {
     description: 'Dependency health status where 0=unhealthy, 1=degraded, 2=healthy',
   });
 
+  // ── Database pool metrics ────────────────────────────────────────────────────
+  const dbPoolActiveGauge = meter.createObservableGauge('faith.db.pool.connections_active', {
+    description: 'MySQL pool active (in-use) connections',
+  });
+  const dbPoolIdleGauge = meter.createObservableGauge('faith.db.pool.connections_idle', {
+    description: 'MySQL pool idle (available) connections',
+  });
+  const dbPoolWaitingGauge = meter.createObservableGauge('faith.db.pool.connections_waiting', {
+    description: 'Requests currently waiting for a MySQL pool connection',
+  });
+
+  // ── Auth metrics ─────────────────────────────────────────────────────────────
+  const authLoginCounter = meter.createCounter('faith.auth.login.total', {
+    description: 'Authentication login attempts',
+  });
+
+  // ── Worker metrics ───────────────────────────────────────────────────────────
+  const workerPollDuration = meter.createHistogram('faith.worker.poll.duration', {
+    description: 'Background worker polling cycle duration in milliseconds',
+    unit: 'ms',
+  });
+  const workerPollCounter = meter.createCounter('faith.worker.poll.total', {
+    description: 'Background worker polling cycle count',
+  });
+
   const state = {
     activeRequests: 0,
     requestSamples: [],
@@ -121,6 +165,7 @@ export function createServiceTelemetry(serviceName) {
       checks: {},
       lastUpdatedAt: null,
     },
+    dbPool: { active: 0, idle: 0, waiting: 0 },
   };
 
   meter.addBatchObservableCallback((observableResult) => {
@@ -128,7 +173,10 @@ export function createServiceTelemetry(serviceName) {
     for (const [dependency, dependencyState] of Object.entries(state.health.dependencies)) {
       observableResult.observe(dependencyHealthGauge, dependencyState.status, { dependency });
     }
-  }, [serviceHealthGauge, dependencyHealthGauge]);
+    observableResult.observe(dbPoolActiveGauge, state.dbPool.active);
+    observableResult.observe(dbPoolIdleGauge, state.dbPool.idle);
+    observableResult.observe(dbPoolWaitingGauge, state.dbPool.waiting);
+  }, [serviceHealthGauge, dependencyHealthGauge, dbPoolActiveGauge, dbPoolIdleGauge, dbPoolWaitingGauge]);
 
   return {
     tracer,
@@ -191,6 +239,18 @@ export function createServiceTelemetry(serviceName) {
     recordHealthCheck(name, duration, status, attributes = {}) {
       healthCheckDuration.record(duration, { name, ...attributes });
       healthCheckCounter.add(1, { name, status, ...attributes });
+    },
+    recordAuthEvent(result, attributes = {}) {
+      authLoginCounter.add(1, { result, ...attributes });
+    },
+    recordWorkerPoll(durationMs, result = 'success') {
+      workerPollDuration.record(durationMs, { result });
+      workerPollCounter.add(1, { result });
+    },
+    updateDbPoolStats({ active = 0, idle = 0, waiting = 0 } = {}) {
+      state.dbPool.active = active;
+      state.dbPool.idle = idle;
+      state.dbPool.waiting = waiting;
     },
     updateHealth({ serviceStatus, dependencies = {}, checks = {} }) {
       state.health.serviceStatus = normalizeHealthValue(serviceStatus);
@@ -359,14 +419,25 @@ function buildTraceExporter() {
   return new OTLPTraceExporter({ url: endpoint });
 }
 
-function buildMetricReader() {
-  const endpoint = process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT ?? process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
-  if (!endpoint) return undefined;
+function buildMetricReaders() {
+  const readers = [];
 
-  return new PeriodicExportingMetricReader({
-    exporter: new OTLPMetricExporter({ url: endpoint }),
-    exportIntervalMillis: 10_000,
-  });
+  // Always add a Prometheus exporter so /metrics is always available.
+  // preventServerStart=true means we serve metrics ourselves via the app HTTP server.
+  const prometheusExporter = new PrometheusExporter({ preventServerStart: true });
+  _prometheusExporter = prometheusExporter;
+  readers.push(prometheusExporter);
+
+  // Optionally also push metrics to an OTLP endpoint (e.g. an OTEL Collector).
+  const endpoint = process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT ?? process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+  if (endpoint) {
+    readers.push(new PeriodicExportingMetricReader({
+      exporter: new OTLPMetricExporter({ url: endpoint }),
+      exportIntervalMillis: 10_000,
+    }));
+  }
+
+  return readers;
 }
 
 function trimSamples(samples, maxSamples = 50) {

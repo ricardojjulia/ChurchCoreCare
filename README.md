@@ -32,7 +32,7 @@ Want a fully loaded local tour instead of a blank shell? The repo now includes a
 - **Workspace Studio:** full-featured practice administration hub with tabs for Practice profile, Locations CRUD, Staff roster, Lifecycle caseload board, Appointments (service codes), Documents, Offerings, and Portal workflows
 - **Scheduling and operations workflows:** appointments, waitlists, reminders, utilization visibility, and a guided recurring-series builder so staff can create repeat schedules without typing raw RRULE syntax
 - **Client portal workflows:** onboarding, forms, documents, and client self-service surfaces
-- **Monitoring and telemetry:** local monitoring + optional OpenTelemetry export
+- **Monitoring and telemetry:** local monitoring page, Prometheus metrics scraping, Jaeger distributed tracing, and optional OTLP export
 - **Security and audit foundations:** role-aware access controls and structured audit event patterns
 
 ## LATEST LOOK
@@ -87,9 +87,9 @@ Reports are stored in [`docs/SecurityChecks/`](./docs/SecurityChecks/) as timest
 
 **Current status:** AppSec `MEDIUM` (12 medium — `Math.random()` in UI key generation, deferred), DB Security `CLEAN` (0 critical/high/medium/low, PHI coverage 100%).
 
-## API Security And Compliance Baseline (v5.6.0)
+## API Security And Compliance Baseline (v5.7.0)
 
-This repository now includes a versioned API security and compliance engineering baseline for high-trust environments where sensitive data may exist.
+This repository now includes a versioned API security and compliance engineering baseline for high-trust environments where sensitive data may exist. v5.7.0 additionally ships a full Jaeger + Prometheus observability stack.
 
 The baseline requires secure-by-design and privacy-by-design implementation patterns across all API work, including:
 
@@ -102,7 +102,8 @@ The baseline requires secure-by-design and privacy-by-design implementation patt
 
 Canonical reference:
 
-- `PLANS/FULL-SECURITY-AND-AUDITING.md` (includes the `v5.6.0 API Security And Compliance Engineering Standard` section)
+- `PLANS/FULL-SECURITY-AND-AUDITING.md` (includes the `v5.7.0 API Security And Compliance Engineering Standard` section)
+- `PLANS/JAEGER-PROMETHEUS-OBSERVABILITY.md` (Jaeger 2.17 + Prometheus observability stack architecture and configuration)
 
 This baseline supports HIPAA-oriented safeguards, GDPR-aligned privacy principles, SOC 2 control expectations, and PCI-conscious engineering practices.
 
@@ -145,7 +146,7 @@ The static public surfaces are meant to reflect the current product posture, not
 - `packages/i18n`: localization utilities and message catalogs
 - `packages/telemetry`: shared telemetry and monitoring utilities
 - `ops/demo-dataset`: reproducible SQL demo-data generation, apply, and verification workflow
-- `pnpm start`: canonical local launcher with env loading, DB preflight, migrations, and coordinated app startup
+- `pnpm start`: canonical local launcher with env loading, DB preflight, migrations, and coordinated API, web, and worker startup
 
 ## Architecture Diagram
 
@@ -181,7 +182,7 @@ flowchart TB
 
     subgraph infra[" 🗄️  Data & Observability "]
         DB[("MySQL\nEncrypted at Rest · Migrations")]
-        OTEL["🔭 OTEL Collector\n— optional export —"]
+        OTEL["🔭 Jaeger + Prometheus\nTraces · Metrics · optional"]
         AGENT["🤖 Translation Guardian\nPython Agent · Docker"]
     end
 
@@ -231,8 +232,8 @@ pnpm start
 - ensures `faith-mysql` is running
 - waits for MySQL readiness
 - runs API migration when DB is configured
-- starts API and web services
-- restarts existing repo-managed API and web processes on ports `3001` and `3002` so local changes are not served from stale long-running processes
+- starts API, web, and worker services
+- restarts existing repo-managed API, web, and worker processes on ports `3001`, `3002`, and `9465` so local changes are not served from stale long-running processes
 
 Avoid starting the app with `node start-servers.js` for normal development, because it does not apply the full startup preflight.
 
@@ -359,18 +360,46 @@ pnpm agent:translation:build
 pnpm agent:translation:run
 ```
 
-### Optional telemetry export (OpenTelemetry)
+### Optional telemetry export (OpenTelemetry + Jaeger + Prometheus)
 
-Set:
+All three services expose Prometheus-format `/metrics` endpoints and export traces via OTLP HTTP.
 
-- `OTEL_EXPORTER_OTLP_ENDPOINT`
-- `OTEL_SERVICE_NAME`
+**Start the optional observability stack (Jaeger 2.17 + Prometheus):**
 
-If `OTEL_EXPORTER_OTLP_ENDPOINT` is unset, telemetry remains local/console-only.
+```bash
+docker compose --profile observability up -d
+```
+
+Key ports when running:
+
+- Jaeger UI: `http://localhost:16686`
+- Prometheus: `http://localhost:9090`
+- API metrics: `http://localhost:3001/metrics`
+- Web metrics: `http://localhost:3002/metrics`
+- Worker metrics: `http://localhost:9465/metrics`
+
+Set the trace endpoint in `.env`:
+
+```bash
+OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://localhost:4318/v1/traces
+WORKER_METRICS_PORT=9465
+```
+
+The monitoring page (`/monitor`) includes an Observability Stack panel that shows live status for all five endpoints and provides one-line enable/disable commands.
+
+If `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` is unset, trace export is skipped and telemetry remains local/Prometheus-only.
 
 ## Recent Updates
 
 Only the latest entries are listed here. Full release history is in `docs/change-log.md`.
+
+### Jaeger + Prometheus Observability Stack (April 6, 2026 — v5.7.0)
+
+All three services now expose Prometheus-format `/metrics` endpoints and export distributed traces to Jaeger 2.17 via OTLP HTTP. A new `observability` Docker Compose profile starts Jaeger and Prometheus with a single command. W3C trace context (`traceparent`/`tracestate`) is forwarded through the web proxy so browser → web → API spans link in a single Jaeger trace tree. The monitoring page now includes a live Observability Stack status panel showing Jaeger, Prometheus, and all three metrics endpoints, with enable/disable commands inline.
+
+- Plan: `PLANS/JAEGER-PROMETHEUS-OBSERVABILITY.md`
+- Monitoring and governance: `docs/MONITORING-AND-GOVERNANCE-FOUNDATION.md`
+- Start: `docker compose --profile observability up -d`
 
 ### User Manual (April 5, 2026)
 
@@ -431,6 +460,8 @@ The change log summarizes completed work across releases and documents the detai
 - Security checks and nightly reports: `docs/SecurityChecks/`
 - Monitoring baseline: `PLANS/FULL-SURFACE-MONITORING.md`
 - Security and auditing baseline: `PLANS/FULL-SECURITY-AND-AUDITING.md`
+- Jaeger + Prometheus observability plan: `PLANS/JAEGER-PROMETHEUS-OBSERVABILITY.md`
+- Monitoring and governance foundation: `docs/MONITORING-AND-GOVERNANCE-FOUNDATION.md`
 - Database implementation details: `docs/DATABASE-IMPLEMENTATION.md`
 - Change log: `docs/change-log.md`
 

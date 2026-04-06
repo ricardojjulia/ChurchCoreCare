@@ -37,7 +37,7 @@ import {
   supervisionStatuses,
   treatmentPlanStatuses,
 } from '../../../packages/domain/src/index.js';
-import { createServiceTelemetry, startNodeTelemetry } from '../../../packages/telemetry/src/index.js';
+import { createServiceTelemetry, getPrometheusExporter, startNodeTelemetry } from '../../../packages/telemetry/src/index.js';
 import { createI18nStore } from './lib/i18n-store.js';
 import { featureFlags } from './lib/feature-flags.js';
 import { buildIntakePreview } from './lib/intake-preview.js';
@@ -212,6 +212,27 @@ telemetry.updateHealth({
     },
   },
 });
+
+// Sample MySQL pool stats every 30 seconds for Prometheus gauges.
+function sampleDbPoolStats() {
+  try {
+    const inner = pool.pool;
+    if (inner) {
+      telemetry.updateDbPoolStats({
+        active: inner._allConnections?.length ?? 0,
+        idle: inner._freeConnections?.length ?? 0,
+        waiting: inner._connectionQueue?.length ?? 0,
+      });
+    }
+  } catch {
+    // Pool stats sampling is best-effort; skip on any error.
+  }
+}
+
+if (process.env.DB_NAME) {
+  sampleDbPoolStats();
+  setInterval(sampleDbPoolStats, 30_000).unref();
+}
 
 const clients = [
   { id: 'c-001', tenantId: 'system', firstName: 'Sarah', lastName: 'Kim', status: 'active', faithBackground: 'Evangelical', highTouchpoint: true, primaryCounselorId: 's-001' },
@@ -1315,6 +1336,18 @@ export async function handleApiRequest(request, response) {
     // CORS — must come before rate-limit so preflight gets through cleanly
     if (handleCors(request, response)) return;
 
+    // Prometheus metrics — no auth required; restrict at network level in production
+    if (requestUrl.pathname === '/metrics' && request.method === 'GET') {
+      const prometheusExporter = getPrometheusExporter();
+      if (!prometheusExporter) {
+        response.writeHead(503, { 'content-type': 'text/plain; charset=utf-8' });
+        response.end('Metrics exporter not available');
+        return;
+      }
+      await prometheusExporter.getMetricsRequestHandler(request, response);
+      return;
+    }
+
     // Rate limiting
     if (checkRateLimit(request, response, route)) return;
 
@@ -1892,6 +1925,12 @@ export async function handleApiRequest(request, response) {
       return;
     }
 
+    if (requestUrl.pathname === '/v1/monitoring/observability-stack' && request.method === 'GET') {
+      if (requirePracticeAdmin(request, response, session)) return;
+      await handleObservabilityStackHealth(response);
+      return;
+    }
+
     if (requestUrl.pathname === '/v1/telemetry/summary' && request.method === 'GET') {
       if (requirePracticeAdmin(request, response, session)) return;
       writeJson(response, 200, {
@@ -1987,8 +2026,10 @@ async function handleAuthLogin(request, response) {
       profile.role === 'client' ? 'portal_account' : 'staff_account',
       profile.portalAccountId ?? profile.clientId ?? profile.staffId,
     );
+    telemetry.recordAuthEvent('success', { role: profile.role ?? 'unknown' });
     writeJson(response, 200, { profile });
   } catch (err) {
+    telemetry.recordAuthEvent('failure', { reason: err.code ?? 'error' });
     writeJson(response, err.statusCode || 500, { error: err.error || err.message });
   }
 }
@@ -13776,6 +13817,41 @@ function sanitizeStr(raw, maxLen = 200) {
   return cleaned.slice(0, maxLen);
 }
 
+async function handleObservabilityStackHealth(response) {
+  const jaegerHost   = process.env.JAEGER_HOST   || 'localhost';
+  const jaegerPort   = process.env.JAEGER_PORT   || '16686';
+  const promHost     = process.env.PROMETHEUS_HOST || 'localhost';
+  const promPort     = process.env.PROMETHEUS_PORT || '9090';
+  const workerPort   = process.env.WORKER_METRICS_PORT || '9465';
+
+  async function probeUrl(url) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
+      return { up: true, status: res.status };
+    } catch {
+      return { up: false };
+    }
+  }
+
+  const [jaeger, prometheus, workerMetrics] = await Promise.all([
+    probeUrl(`http://${jaegerHost}:${jaegerPort}`),
+    probeUrl(`http://${promHost}:${promPort}/-/healthy`),
+    probeUrl(`http://localhost:${workerPort}/metrics`),
+  ]);
+
+  writeJson(response, 200, {
+    collectedAt: new Date().toISOString(),
+    jaeger,
+    prometheus,
+    workerMetrics,
+    endpoints: {
+      jaegerUi:       `http://${jaegerHost}:${jaegerPort}`,
+      prometheusUi:   `http://${promHost}:${promPort}`,
+      workerMetrics:  `http://localhost:${workerPort}/metrics`,
+    },
+  });
+}
+
 async function handleMonitoringDb(response) {
   if (!process.env.DB_NAME) {
     writeJson(response, 200, { collectedAt: new Date().toISOString(), mode: 'unavailable', reason: 'DB_NAME not configured' });
@@ -13855,6 +13931,7 @@ async function handleMonitoringDb(response) {
 }
 
 function resolveRoute(pathname) {
+  if (pathname === '/metrics') return '/metrics';
   if (pathname === '/health' || pathname === '/health/live') return '/health/live';
   if (pathname === '/health/ready') return '/health/ready';
   if (pathname === '/openapi.yaml') return '/openapi.yaml';
@@ -13884,6 +13961,7 @@ function resolveRoute(pathname) {
   if (pathname === '/v1/operations/summary') return '/v1/operations/summary';
   if (pathname === '/v1/reference/dsm5-tr') return '/v1/reference/dsm5-tr';
   if (pathname === '/v1/monitoring/db') return '/v1/monitoring/db';
+  if (pathname === '/v1/monitoring/observability-stack') return '/v1/monitoring/observability-stack';
   if (pathname === '/v1/billing/service-codes') return '/v1/billing/service-codes';
   if (pathname === '/v1/billing/fee-schedules') return '/v1/billing/fee-schedules';
   if (pathname === '/v1/billing/invoices') return '/v1/billing/invoices';
