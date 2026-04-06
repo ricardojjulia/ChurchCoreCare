@@ -2,6 +2,17 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 5, 2026 — README Welcome And Architecture Refresh
+
+### feat: refresh README story, architecture, and recent-shipped highlights
+
+**Date:** April 5, 2026
+**Affected area:** `README.md`
+
+Refined the README so it better reflects the current state of the product after the user manual, screenshot tour, and demo-data SQL workflow landed. The top-of-file narrative is now more welcoming, the `LATEST LOOK` section closes with a cleaner product-story paragraph instead of stacked patch-note copy, and a new `Freshly Shipped` section highlights the most relevant recent accomplishments in a friendlier format.
+
+The architecture overview and Mermaid diagram were also updated to reflect the canonical `pnpm start` launch path and the new SQL demo-data tooling so the README better matches how the platform is actually started, seeded, and toured locally today.
+
 ## April 5, 2026 — User Manual
 
 ### feat: add docs/User Manual — full practice user manual
