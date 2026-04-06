@@ -1,45 +1,36 @@
 #!/usr/bin/env node
 
-// Start both API and web servers
-import { spawn } from 'child_process';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { spawn } from 'node:child_process';
+import path from 'node:path';
+import process from 'node:process';
+import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const node = process.execPath;
 
-// Start API server
-const apiServer = spawn('node', ['apps/api/src/index.js'], {
+console.log('[start-servers] Delegating to the canonical launcher: node --env-file=.env ops/start-all.mjs');
+
+const child = spawn(node, ['--env-file=.env', 'ops/start-all.mjs'], {
   cwd: __dirname,
+  env: process.env,
   stdio: 'inherit',
 });
 
-console.log('API server started (PID:', apiServer.pid, ')');
-
-// Wait a moment before starting web server
-setTimeout(() => {
-  const webServer = spawn('node', ['apps/web/server.js'], {
-    cwd: __dirname,
-    stdio: 'inherit',
-    env: {
-      ...process.env,
-      PORT: '3002',
-    },
-  });
-  
-  console.log('Web server started on port 3002 (PID:', webServer.pid, ')');
-  
-  webServer.on('exit', (code) => {
-    console.log('Web server exited with code', code);
-    process.exit(code);
-  });
-}, 1000);
-
-apiServer.on('exit', (code) => {
-  console.log('API server exited with code', code);
+child.on('exit', (code, signal) => {
+  if (signal) {
+    process.kill(process.pid, signal);
+    return;
+  }
+  process.exit(code ?? 0);
 });
 
-process.on('SIGINT', () => {
-  console.log('Shutting down servers...');
-  apiServer.kill();
-  process.exit(0);
+child.on('error', (error) => {
+  console.error(`[start-servers] Failed to start canonical launcher: ${error.message}`);
+  process.exit(1);
 });
+
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  process.on(signal, () => {
+    if (!child.killed) child.kill(signal);
+  });
+}

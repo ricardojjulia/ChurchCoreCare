@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createServiceTelemetry, startNodeTelemetry } from '../../packages/telemetry/src/index.js';
+import { createServiceTelemetry, getPrometheusExporter, startNodeTelemetry } from '../../packages/telemetry/src/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -160,6 +160,19 @@ const server = http.createServer(async (request, response) => {
     return;
   }
 
+  if (request.url === '/metrics' && request.method === 'GET') {
+    const prometheusExporter = getPrometheusExporter();
+    if (!prometheusExporter) {
+      response.writeHead(503, { 'content-type': 'text/plain; charset=utf-8' });
+      response.end('Metrics exporter not available');
+      requestScope.end(503);
+      return;
+    }
+    requestScope.end(200);
+    await prometheusExporter.getMetricsRequestHandler(request, response);
+    return;
+  }
+
   try {
     const url = resolvePublicUrl(request.url);
     const requestedPath = path.normalize(url).replace(/^\.\.(\/|\\|$)/, '');
@@ -237,14 +250,17 @@ async function proxyApiRequest(request, response) {
     const start = performance.now();
     const body = await readRequestBody(request);
 
-    // Forward session cookie and correlation headers to the API.
+    // Forward session cookie, correlation, and W3C trace context headers to the API.
     // Do NOT forward x-staff-role / x-tenant-id — identity comes from the session cookie.
     const forwardHeaders = {
       accept:         request.headers.accept ?? 'application/json',
       'content-type': request.headers['content-type'] ?? 'application/json; charset=utf-8',
     };
-    if (request.headers.cookie)       forwardHeaders.cookie       = request.headers.cookie;
+    if (request.headers.cookie)          forwardHeaders.cookie          = request.headers.cookie;
     if (request.headers['x-request-id']) forwardHeaders['x-request-id'] = request.headers['x-request-id'];
+    // W3C trace context — allows Jaeger to link browser spans → web → API in one trace
+    if (request.headers.traceparent)     forwardHeaders.traceparent     = request.headers.traceparent;
+    if (request.headers.tracestate)      forwardHeaders.tracestate      = request.headers.tracestate;
 
     const upstreamResponse = await fetch(upstreamUrl, {
       method: request.method,

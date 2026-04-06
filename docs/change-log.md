@@ -2,6 +2,50 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 6, 2026 — Jaeger + Prometheus Observability Stack (v5.7.0)
+
+### feat(observability): Jaeger distributed tracing, Prometheus metrics scraping, monitoring page stack panel
+
+**Date:** April 6, 2026
+**Affected area:** `packages/telemetry/`, `apps/api/`, `apps/web/`, `apps/worker/`, `docker-compose.yml`, `ops/observability/`, `apps/web/public/monitor.*`
+
+Added full production-grade observability infrastructure across all three services.
+
+**Jaeger distributed tracing:**
+
+- All three services (`faith-api`, `faith-web`, `reminder-worker`) export traces to Jaeger 2.17 via OTLP HTTP on port 4318
+- W3C `traceparent`/`tracestate` headers forwarded through the web proxy so browser → web → API spans link in one trace
+- `docker compose --profile observability up -d` starts Jaeger all-in-one; UI at [localhost:16686](http://localhost:16686)
+- Configured via `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://localhost:4318/v1/traces`
+
+**Prometheus metrics scraping:**
+
+- Added `@opentelemetry/exporter-prometheus` as an additional MetricReader in the telemetry package
+- `GET /metrics` exposed on `faith-api` (port 3001) and `faith-web` (port 3002) — unauthenticated, pre-rate-limit
+- `reminder-worker` runs a dedicated metrics HTTP server on `WORKER_METRICS_PORT` (default 9465)
+- Prometheus container in Docker under `observability` profile scrapes all three; UI at [localhost:9090](http://localhost:9090)
+- `ops/observability/prometheus.yml` defines the scrape configuration
+
+**New metrics:**
+
+- `faith.db.pool.connections_active/idle/waiting` — MySQL pool gauges, sampled every 30 seconds
+- `faith.auth.login.total{result, role/reason}` — auth login outcomes (success/failure)
+- `faith.worker.poll.duration{result}` — reminder polling cycle timing
+- `faith.worker.poll.total{result}` — polling cycle counter
+
+**Monitoring page observability panel:**
+
+- New "Observability Stack" card at the top of the Observability section
+- Live status banner: 🟢 Active / 🟡 Partially Active / ⭕ Inactive
+- Per-service badges for Jaeger, Prometheus, faith-api, faith-web, reminder-worker
+- "Open Jaeger UI" and "Open Prometheus" action links
+- "📋 Copy start command" / "Copy stop command" clipboard buttons
+- `.env` snippet showing required variables
+- Jaeger/Prometheus probed server-side (`GET /v1/monitoring/observability-stack`) to avoid browser CSP restrictions
+- API and web metrics probed same-origin directly
+
+**Version bumps:** `5.6.0 → 5.7.0` (apps), `5.3.1 → 5.4.0` (domain, i18n), `5.2.2 → 5.3.0` (telemetry)
+
 ## April 5, 2026 — README Welcome And Architecture Refresh
 
 ### feat: refresh README story, architecture, and recent-shipped highlights

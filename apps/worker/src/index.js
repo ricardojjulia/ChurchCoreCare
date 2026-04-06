@@ -1,9 +1,29 @@
+import http from 'node:http';
 import { createAuditEvent } from '../../../packages/domain/src/index.js';
-import { createServiceTelemetry, startNodeTelemetry } from '../../../packages/telemetry/src/index.js';
+import { createServiceTelemetry, getPrometheusExporter, startNodeTelemetry } from '../../../packages/telemetry/src/index.js';
 
 const workerName = 'reminder-worker';
 await startNodeTelemetry({ serviceName: workerName });
 const telemetry = createServiceTelemetry(workerName);
+
+// ── Prometheus metrics server ─────────────────────────────────────────────────
+// The worker has no app HTTP server, so we start a small dedicated server
+// solely to serve /metrics for Prometheus scraping.
+const metricsPort = Number(process.env.WORKER_METRICS_PORT || 9465);
+const prometheusExporter = getPrometheusExporter();
+if (prometheusExporter) {
+  const metricsServer = http.createServer(async (req, res) => {
+    if (req.url === '/metrics' && req.method === 'GET') {
+      await prometheusExporter.getMetricsRequestHandler(req, res);
+    } else {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not Found');
+    }
+  });
+  metricsServer.listen(metricsPort, () => {
+    console.log(`[${workerName}] Metrics server listening on port ${metricsPort} (GET /metrics)`);
+  });
+}
 
 const startupEvent = createAuditEvent({
   tenantId: 'system',
@@ -109,7 +129,14 @@ if (process.env.DB_NAME) {
   }
 
   async function poll() {
-    await Promise.all([processDueReminders(), expireStaleReminders()]);
+    const start = performance.now();
+    try {
+      await Promise.all([processDueReminders(), expireStaleReminders()]);
+      telemetry.recordWorkerPoll(performance.now() - start, 'success');
+    } catch (err) {
+      telemetry.recordWorkerPoll(performance.now() - start, 'error');
+      throw err;
+    }
   }
 
   // Run once immediately, then on a fixed interval.
