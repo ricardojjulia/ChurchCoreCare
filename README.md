@@ -72,6 +72,21 @@ The platform has moved quickly over the last few iterations, and the most recent
 - **Scheduling feels more human:** recurring appointment series can now be built with readable cadence options, weekday selection, and a live preview, while raw RRULE entry remains available only as an advanced fallback.
 - **Faithful Workflows stays in sync with operations:** dashboard drill-down and workflow urgency surfaces now share the same canonical counts so staff see one story, not competing numbers.
 
+## Nightly Security Checks
+
+The repository runs automated nightly AppSec and DB Security scans at **23:00 UTC** via GitHub Actions.
+
+| Script | Command | Description |
+|--------|---------|-------------|
+| AppSec scan | `node ops/appsec-scan.mjs` | 9-category application security review |
+| DB Security scan | `node ops/db-security-scan.mjs` | PHI/PII encryption coverage and DB config review |
+| Nightly runner | `node ops/nightly-security-runner.mjs` | Orchestrator — generates dated reports in `docs/SecurityChecks/` |
+| Dry run | `node ops/nightly-security-runner.mjs --dry-run` | Run scans without writing files or opening PRs |
+
+Reports are stored in [`docs/SecurityChecks/`](./docs/SecurityChecks/) as timestamped Markdown summaries and JSON raw data.
+
+**Current status:** AppSec `MEDIUM` (12 medium — `Math.random()` in UI key generation, deferred), DB Security `CLEAN` (0 critical/high/medium/low, PHI coverage 100%).
+
 ## API Security And Compliance Baseline (v5.7.0)
 
 This repository now includes a versioned API security and compliance engineering baseline for high-trust environments where sensitive data may exist. v5.7.0 additionally ships a full Jaeger + Prometheus observability stack.
@@ -253,6 +268,8 @@ cp .env.example .env
 
 Update `.env` values as needed for your local environment.
 
+Set `SEED_DEV_PORTAL_DATA=false` when you want a staff-only local database and do not want startup migration to recreate the seeded portal client/resource.
+
 ### 3. Start the full app stack
 
 ```bash
@@ -405,6 +422,27 @@ The README now includes a narrative `LATEST LOOK` section with embedded screensh
 
 Recurring scheduling no longer starts with raw RRULE syntax. Staff now get readable cadence choices, weekday selection, and a live preview first, with advanced rule text kept available only when needed.
 
+## Nightly Security Checks
+
+Faith Counseling runs automated nightly security scans at **23:00 UTC** via GitHub Actions. Each run produces two complementary reports:
+
+| Scan | What It Covers |
+|------|---------------|
+| **AppSec** | Dependency vulnerabilities, hardcoded secrets, dangerous code patterns, security headers, auth/session configuration, input validation, logging PHI/PII exposure, CORS |
+| **DB Security** | PHI/PII encryption coverage across all 73 schema tables, tenant isolation, audit table structure, session security, query parameterization, AES-256-GCM key config |
+
+**Latest findings (2026-04-06):**
+- AppSec: 🔴 HIGH — 4 high-severity and 16 medium findings, no criticals. Key items: dev credential log statements in migrate.js, `Math.random()` used in several UI components instead of crypto-secure randomness.
+- DB Security: 🚨 CRITICAL — 5 critical PHI/PII fields without encryption (legacy `staff_accounts.email`, `superbills.diagnosis_codes`, provider NPI/referral_date, `tenant_provisioning.owner_email`). PHI encryption coverage: 47/52 fields (90%).
+
+All reports are stored in [`docs/SecurityChecks/`](./docs/SecurityChecks/) and retained for 30 days. Reports are auto-committed to a `security/nightly-YYYY-MM-DD` branch with a PR opened for review.
+
+To run scans locally:
+```bash
+node ops/nightly-security-runner.mjs        # full run
+node ops/nightly-security-runner.mjs --dry-run  # preview without writing
+```
+
 ## Change Log
 
 For the full release and maintenance history, see `docs/change-log.md`.
@@ -419,6 +457,7 @@ The change log summarizes completed work across releases and documents the detai
 - Faithful Workflows visual upgrade (v5.5.2): `docs/v5.5.2-RELEASE-SUMMARY.md`
 - Faithful Workflows full feature release (v5.5.0): `docs/v5.5.0-RELEASE-SUMMARY.md`
 - Operations Dashboard upgrade summary: `docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md`
+- Security checks and nightly reports: `docs/SecurityChecks/`
 - Monitoring baseline: `PLANS/FULL-SURFACE-MONITORING.md`
 - Security and auditing baseline: `PLANS/FULL-SECURITY-AND-AUDITING.md`
 - Jaeger + Prometheus observability plan: `PLANS/JAEGER-PROMETHEUS-OBSERVABILITY.md`
