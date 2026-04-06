@@ -108,6 +108,32 @@ function checkDependencyVulnerabilities() {
         null, null,
         'Run pnpm audit in the project root to check for dependency vulnerabilities.'));
     } else if (auditData && auditData.metadata) {
+  try {
+    // pnpm audit outputs JSON with --reporter=json flag
+    const result = spawnSync(
+      'pnpm',
+      ['audit', '--reporter=json'],
+      { cwd: ROOT, encoding: 'utf8', timeout: 60_000 }
+    );
+
+    let auditData = null;
+    try {
+      auditData = JSON.parse(result.stdout || '{}');
+    } catch {
+      // pnpm audit might output non-JSON in some versions; fall back to npm audit
+      try {
+        const npmResult = spawnSync(
+          'npx',
+          ['--yes', 'better-npm-audit', 'audit', '--output-format', 'json'],
+          { cwd: ROOT, encoding: 'utf8', timeout: 60_000 }
+        );
+        auditData = JSON.parse(npmResult.stdout || '{}');
+      } catch {
+        auditData = null;
+      }
+    }
+
+    if (auditData && auditData.metadata) {
       const m = auditData.metadata;
       summary.critical = m.vulnerabilities?.critical ?? 0;
       summary.high      = m.vulnerabilities?.high ?? 0;
@@ -146,6 +172,18 @@ function checkDependencyVulnerabilities() {
         'Dependency audit returned warnings or could not parse structured output',
         null, null,
         'Run pnpm audit manually to review vulnerability details.'));
+    } else {
+      // Try plain text parsing for exit code
+      const exitCode = result.status;
+      if (exitCode === 0) {
+        issues.push(makeIssue('dependency-audit', 'info',
+          'Dependency audit completed with no vulnerabilities reported'));
+      } else {
+        issues.push(makeIssue('dependency-audit', 'medium',
+          'Dependency audit returned warnings or could not parse structured output',
+          null, null,
+          'Run pnpm audit manually to review vulnerability details.'));
+      }
     }
 
     // Capture advisories if present
@@ -309,6 +347,7 @@ const DANGEROUS_PATTERNS = [
     name: 'no-https-check',
     // Exclude localhost, loopback, and template literal patterns (e.g. new URL(req.url, `http://${host}`))
     pattern: /http:\/\/(?!localhost|127\.0\.0\.1|0\.0\.0\.0|\$\{)/g,
+    pattern: /http:\/\/(?!localhost|127\.0\.0\.1|0\.0\.0\.0)/g,
     level: 'low',
     recommendation: 'Ensure external URLs use HTTPS in production configurations.',
   },
@@ -424,6 +463,7 @@ function checkAuthConfig(sourceFiles) {
     // Check for secure cookie in production
     // Exclude ops/ scripts — they contain scanner patterns and dev tooling, not production cookie config
     if (source.includes('secure: false') && !rel.includes('test') && !rel.startsWith('ops/')) {
+    if (source.includes('secure: false') && !rel.includes('test')) {
       issues.push(makeIssue('cookie-not-secure', 'medium',
         'Cookie configured with secure: false',
         rel, null,

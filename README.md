@@ -39,30 +39,24 @@ Want a fully loaded local tour instead of a blank shell? The repo now includes a
 
 The latest look feels less like a generic admin console and more like a living counseling workspace. The home experience opens with calm, high-signal surfaces: a dashboard that tells staff what needs attention now, a Faithful Workflows space that turns raw status into visible care priorities, and scheduling screens that feel built for real week-to-week ministry instead of back-office data entry.
 
-<p align="center">
-  <img src="./ScreenShots/Screenshot%202026-04-05%20at%208.42.26%E2%80%AFPM.png" alt="Latest look screenshot 1" width="24%" />
-  <img src="./ScreenShots/Screenshot%202026-04-05%20at%208.42.36%E2%80%AFPM.png" alt="Latest look screenshot 2" width="24%" />
-  <img src="./ScreenShots/Screenshot%202026-04-05%20at%208.42.46%E2%80%AFPM.png" alt="Latest look screenshot 3" width="24%" />
-  <img src="./ScreenShots/Screenshot%202026-04-05%20at%208.42.51%E2%80%AFPM.png" alt="Latest look screenshot 4" width="24%" />
-</p>
+![Latest look screenshot 1](./ScreenShots/Screenshot%202026-04-05%20at%208.42.26%E2%80%AFPM.png)
+![Latest look screenshot 2](./ScreenShots/Screenshot%202026-04-05%20at%208.42.36%E2%80%AFPM.png)
+![Latest look screenshot 3](./ScreenShots/Screenshot%202026-04-05%20at%208.42.46%E2%80%AFPM.png)
+![Latest look screenshot 4](./ScreenShots/Screenshot%202026-04-05%20at%208.42.51%E2%80%AFPM.png)
 
 Client and counselor records now read like story-rich working spaces rather than flat database rows. Detail views surface clinical context, faith-aware care details, diagnoses, legal and insurance context, employment and credentialing data, and practical next actions without making the user dig through disconnected tabs. The result is a product that feels organized, confident, and deeply operational at the same time.
 
-<p align="center">
-  <img src="./ScreenShots/Screenshot%202026-04-05%20at%208.43.01%E2%80%AFPM.png" alt="Latest look screenshot 5" width="24%" />
-  <img src="./ScreenShots/Screenshot%202026-04-05%20at%208.43.10%E2%80%AFPM.png" alt="Latest look screenshot 6" width="24%" />
-  <img src="./ScreenShots/Screenshot%202026-04-05%20at%208.43.14%E2%80%AFPM.png" alt="Latest look screenshot 7" width="24%" />
-  <img src="./ScreenShots/Screenshot%202026-04-05%20at%208.43.17%E2%80%AFPM.png" alt="Latest look screenshot 8" width="24%" />
-</p>
+![Latest look screenshot 5](./ScreenShots/Screenshot%202026-04-05%20at%208.43.01%E2%80%AFPM.png)
+![Latest look screenshot 6](./ScreenShots/Screenshot%202026-04-05%20at%208.43.10%E2%80%AFPM.png)
+![Latest look screenshot 7](./ScreenShots/Screenshot%202026-04-05%20at%208.43.14%E2%80%AFPM.png)
+![Latest look screenshot 8](./ScreenShots/Screenshot%202026-04-05%20at%208.43.17%E2%80%AFPM.png)
 
 Workspace Studio gives the platform its control-room energy. Practice settings, locations, staff, lifecycle management, documents, offerings, appointments, and portal administration all sit inside a single administration hub that feels intentional instead of crowded. It looks like the kind of system that can run an actual counseling practice on Monday morning, not just survive a demo.
 
-<p align="center">
-  <img src="./ScreenShots/Screenshot%202026-04-05%20at%208.43.27%E2%80%AFPM.png" alt="Latest look screenshot 9" width="24%" />
-  <img src="./ScreenShots/Screenshot%202026-04-05%20at%208.43.39%E2%80%AFPM.png" alt="Latest look screenshot 10" width="24%" />
-  <img src="./ScreenShots/Screenshot%202026-04-05%20at%208.43.43%E2%80%AFPM.png" alt="Latest look screenshot 11" width="24%" />
-  <img src="./ScreenShots/Screenshot%202026-04-05%20at%208.43.51%E2%80%AFPM.png" alt="Latest look screenshot 12" width="24%" />
-</p>
+![Latest look screenshot 9](./ScreenShots/Screenshot%202026-04-05%20at%208.43.27%E2%80%AFPM.png)
+![Latest look screenshot 10](./ScreenShots/Screenshot%202026-04-05%20at%208.43.39%E2%80%AFPM.png)
+![Latest look screenshot 11](./ScreenShots/Screenshot%202026-04-05%20at%208.43.43%E2%80%AFPM.png)
+![Latest look screenshot 12](./ScreenShots/Screenshot%202026-04-05%20at%208.43.51%E2%80%AFPM.png)
 
 The portal, charting, and monitoring views complete the picture. The client-facing side feels warm and guided, the charting side feels focused and usable, and the monitoring surfaces make the whole platform feel observable and production-minded. Put together, the current product has range: part ministry operations center, part clinical workspace, part modern practice platform, and much closer to something people would want to use every day.
 
@@ -399,6 +393,27 @@ The README now includes a narrative `LATEST LOOK` section with embedded screensh
 
 Recurring scheduling no longer starts with raw RRULE syntax. Staff now get readable cadence choices, weekday selection, and a live preview first, with advanced rule text kept available only when needed.
 
+## Nightly Security Checks
+
+Faith Counseling runs automated nightly security scans at **23:00 UTC** via GitHub Actions. Each run produces two complementary reports:
+
+| Scan | What It Covers |
+|------|---------------|
+| **AppSec** | Dependency vulnerabilities, hardcoded secrets, dangerous code patterns, security headers, auth/session configuration, input validation, logging PHI/PII exposure, CORS |
+| **DB Security** | PHI/PII encryption coverage across all 73 schema tables, tenant isolation, audit table structure, session security, query parameterization, AES-256-GCM key config |
+
+**Latest findings (2026-04-06):**
+- AppSec: 🔴 HIGH — 4 high-severity and 16 medium findings, no criticals. Key items: dev credential log statements in migrate.js, `Math.random()` used in several UI components instead of crypto-secure randomness.
+- DB Security: 🚨 CRITICAL — 5 critical PHI/PII fields without encryption (legacy `staff_accounts.email`, `superbills.diagnosis_codes`, provider NPI/referral_date, `tenant_provisioning.owner_email`). PHI encryption coverage: 47/52 fields (90%).
+
+All reports are stored in [`docs/SecurityChecks/`](./docs/SecurityChecks/) and retained for 30 days. Reports are auto-committed to a `security/nightly-YYYY-MM-DD` branch with a PR opened for review.
+
+To run scans locally:
+```bash
+node ops/nightly-security-runner.mjs        # full run
+node ops/nightly-security-runner.mjs --dry-run  # preview without writing
+```
+
 ## Change Log
 
 For the full release and maintenance history, see `docs/change-log.md`.
@@ -413,6 +428,7 @@ The change log summarizes completed work across releases and documents the detai
 - Faithful Workflows visual upgrade (v5.5.2): `docs/v5.5.2-RELEASE-SUMMARY.md`
 - Faithful Workflows full feature release (v5.5.0): `docs/v5.5.0-RELEASE-SUMMARY.md`
 - Operations Dashboard upgrade summary: `docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md`
+- Security checks and nightly reports: `docs/SecurityChecks/`
 - Monitoring baseline: `PLANS/FULL-SURFACE-MONITORING.md`
 - Security and auditing baseline: `PLANS/FULL-SECURITY-AND-AUDITING.md`
 - Database implementation details: `docs/DATABASE-IMPLEMENTATION.md`

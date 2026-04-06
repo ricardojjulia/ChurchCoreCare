@@ -190,6 +190,8 @@ function checkPhiPiiCompliance(tables) {
       // Skip legacy plaintext columns that are being retained only for migration
       // compatibility — the encrypted _enc companion column is the canonical store.
       if (col.comment && col.comment.toLowerCase().includes('migration compatibility')) continue;
+      // Skip columns whose schema comment explicitly states non-PHI
+      if (col.comment && col.comment.toLowerCase().includes('non-phi')) continue;
       // Skip hash columns (one-way hashes are not PHI themselves)
       if (col.name.endsWith('_hash') || col.name.endsWith('_lookup_hash')) continue;
       // Skip boolean flag columns (TINYINT — not PHI content)
@@ -659,11 +661,15 @@ function checkPortalPublicSecurity(tables) {
   // to determine storage (tenant must be forced server-side)
   const publicReqTable = tables.find(t => t.name === 'portal_registration_requests' ||
                                           t.name === 'portal_public_requests' ||
+  // portal_public_requests is special: must NOT allow caller-supplied tenant_id
+  // to determine storage (tenant must be forced server-side)
+  const publicReqTable = tables.find(t => t.name === 'portal_public_requests' ||
                                           t.name === 'public_requests');
   if (!publicReqTable) {
     // This may be stored elsewhere — check if it's documented
     issues.push(makeIssue('portal-public-requests-not-found', 'low',
       'portal_registration_requests table not found in schema — verify public intake is stored securely',
+      'portal_public_requests table not found in schema — verify public intake is stored securely',
       null,
       'Ensure public intake requests cannot specify their own tenant_id.'));
   } else {
@@ -671,6 +677,7 @@ function checkPortalPublicSecurity(tables) {
     if (hasTenant) {
       issues.push(makeIssue('portal-public-requests-tenant', 'info',
         `${publicReqTable.name} table includes tenant_id — ensure server enforces tenant assignment`));
+        'portal_public_requests table includes tenant_id — ensure server enforces tenant assignment'));
     }
   }
 
