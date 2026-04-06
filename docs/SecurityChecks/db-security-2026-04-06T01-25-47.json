@@ -1,0 +1,610 @@
+{
+  "reportType": "db-security",
+  "reportVersion": "1.0.0",
+  "generatedAt": "2026-04-06T01:25:48.044Z",
+  "startedAt": "2026-04-06T01:25:48.029Z",
+  "schemaPath": "apps/api/src/db/schema.sql",
+  "tablesAnalyzed": 73,
+  "overallStatus": "CRITICAL",
+  "summary": {
+    "critical": 5,
+    "high": 1,
+    "medium": 0,
+    "low": 4,
+    "info": 12
+  },
+  "phiComplianceSummary": {
+    "totalPhiFields": 52,
+    "encryptedPhiFields": 47,
+    "unencryptedPhiFields": 5,
+    "encryptionCoverage": 90
+  },
+  "phiTablesAudited": [
+    {
+      "table": "locations",
+      "columns": [
+        {
+          "name": "address_enc",
+          "status": "encrypted",
+          "comment": "AES-256-GCM encrypted (iv:tag:ct base64)"
+        }
+      ]
+    },
+    {
+      "table": "staff_members",
+      "columns": [
+        {
+          "name": "first_name_enc",
+          "status": "encrypted",
+          "comment": "encrypted PHI"
+        },
+        {
+          "name": "last_name_enc",
+          "status": "encrypted",
+          "comment": "encrypted PHI"
+        },
+        {
+          "name": "license_number_enc",
+          "status": "encrypted",
+          "comment": "encrypted PHI"
+        },
+        {
+          "name": "bio_enc",
+          "status": "encrypted",
+          "comment": "encrypted PHI"
+        }
+      ]
+    },
+    {
+      "table": "staff_accounts",
+      "columns": [
+        {
+          "name": "email",
+          "status": "PLAINTEXT",
+          "comment": "legacy plaintext column retained only for migration compatibility"
+        },
+        {
+          "name": "email_enc",
+          "status": "encrypted",
+          "comment": "encrypted email address"
+        }
+      ]
+    },
+    {
+      "table": "clients",
+      "columns": [
+        {
+          "name": "first_name_enc",
+          "status": "encrypted",
+          "comment": "encrypted PHI"
+        },
+        {
+          "name": "last_name_enc",
+          "status": "encrypted",
+          "comment": "encrypted PHI"
+        },
+        {
+          "name": "middle_name_enc",
+          "status": "encrypted",
+          "comment": "encrypted PHI"
+        },
+        {
+          "name": "preferred_name_enc",
+          "status": "encrypted",
+          "comment": "encrypted PHI"
+        },
+        {
+          "name": "date_of_birth_enc",
+          "status": "encrypted",
+          "comment": "encrypted PHI (ISO 8601)"
+        },
+        {
+          "name": "ssn_last4_enc",
+          "status": "encrypted",
+          "comment": "encrypted PHI"
+        },
+        {
+          "name": "email_enc",
+          "status": "encrypted",
+          "comment": "encrypted PHI"
+        }
+      ]
+    },
+    {
+      "table": "client_lifecycles",
+      "columns": [
+        {
+          "name": "emergency_contact_enc",
+          "status": "encrypted",
+          "comment": "encrypted PHI (JSON blob)"
+        }
+      ]
+    },
+    {
+      "table": "treatment_plans",
+      "columns": [
+        {
+          "name": "goals_enc",
+          "status": "encrypted",
+          "comment": "encrypted PHI (JSON array)"
+        },
+        {
+          "name": "interventions_enc",
+          "status": "encrypted",
+          "comment": "encrypted PHI (JSON array)"
+        }
+      ]
+    },
+    {
+      "table": "progress_notes",
+      "columns": [
+        {
+          "name": "summary_enc",
+          "status": "encrypted",
+          "comment": "encrypted PHI"
+        },
+        {
+          "name": "interventions_enc",
+          "status": "encrypted",
+          "comment": "encrypted PHI (JSON array)"
+        }
+      ]
+    },
+    {
+      "table": "invoices",
+      "columns": [
+        {
+          "name": "insurance_enc",
+          "status": "encrypted",
+          "comment": "encrypted PHI (JSON)"
+        }
+      ]
+    },
+    {
+      "table": "superbills",
+      "columns": [
+        {
+          "name": "diagnosis_codes",
+          "status": "PLAINTEXT",
+          "comment": ""
+        }
+      ]
+    },
+    {
+      "table": "portal_accounts",
+      "columns": [
+        {
+          "name": "email_enc",
+          "status": "encrypted",
+          "comment": "encrypted PHI"
+        }
+      ]
+    },
+    {
+      "table": "portal_client_profiles",
+      "columns": [
+        {
+          "name": "preferred_name_enc",
+          "status": "encrypted",
+          "comment": "encrypted PII"
+        },
+        {
+          "name": "contact_email_enc",
+          "status": "encrypted",
+          "comment": "encrypted PII"
+        },
+        {
+          "name": "contact_phone_enc",
+          "status": "encrypted",
+          "comment": "encrypted PII"
+        }
+      ]
+    },
+    {
+      "table": "portal_settings",
+      "columns": [
+        {
+          "name": "support_email_enc",
+          "status": "encrypted",
+          "comment": "encrypted PII"
+        }
+      ]
+    },
+    {
+      "table": "client_addresses",
+      "columns": [
+        {
+          "name": "postal_enc",
+          "status": "encrypted",
+          "comment": "encrypted PHI"
+        }
+      ]
+    },
+    {
+      "table": "client_contacts",
+      "columns": [
+        {
+          "name": "phone_enc",
+          "status": "encrypted",
+          "comment": "encrypted PHI"
+        },
+        {
+          "name": "email_enc",
+          "status": "encrypted",
+          "comment": "encrypted PHI"
+        }
+      ]
+    },
+    {
+      "table": "client_insurance",
+      "columns": [
+        {
+          "name": "carrier_name_enc",
+          "status": "encrypted",
+          "comment": "encrypted PHI"
+        },
+        {
+          "name": "subscriber_dob_enc",
+          "status": "encrypted",
+          "comment": "encrypted PHI (ISO 8601)"
+        },
+        {
+          "name": "referral_number_enc",
+          "status": "encrypted",
+          "comment": "encrypted PHI"
+        }
+      ]
+    },
+    {
+      "table": "client_referring_providers",
+      "columns": [
+        {
+          "name": "npi",
+          "status": "PLAINTEXT",
+          "comment": "NOT PHI (public identifier)"
+        },
+        {
+          "name": "phone_enc",
+          "status": "encrypted",
+          "comment": "encrypted PHI"
+        },
+        {
+          "name": "address_enc",
+          "status": "encrypted",
+          "comment": "encrypted PHI (full address JSON)"
+        },
+        {
+          "name": "referral_date",
+          "status": "PLAINTEXT",
+          "comment": "NOT PHI"
+        },
+        {
+          "name": "referral_notes_enc",
+          "status": "encrypted",
+          "comment": "encrypted PHI"
+        }
+      ]
+    },
+    {
+      "table": "client_clinical_history",
+      "columns": [
+        {
+          "name": "pcp_phone_enc",
+          "status": "encrypted",
+          "comment": "encrypted PHI"
+        },
+        {
+          "name": "mh_prior_treatment_enc",
+          "status": "encrypted",
+          "comment": "encrypted PHI"
+        }
+      ]
+    },
+    {
+      "table": "client_legal",
+      "columns": [
+        {
+          "name": "guardian_phone_enc",
+          "status": "encrypted",
+          "comment": "encrypted PHI"
+        },
+        {
+          "name": "guardian_email_enc",
+          "status": "encrypted",
+          "comment": "encrypted PHI"
+        },
+        {
+          "name": "guardian_address_enc",
+          "status": "encrypted",
+          "comment": "encrypted PHI (JSON)"
+        }
+      ]
+    },
+    {
+      "table": "portal_registration_requests",
+      "columns": [
+        {
+          "name": "first_name_enc",
+          "status": "encrypted",
+          "comment": ""
+        },
+        {
+          "name": "last_name_enc",
+          "status": "encrypted",
+          "comment": ""
+        },
+        {
+          "name": "email_enc",
+          "status": "encrypted",
+          "comment": ""
+        },
+        {
+          "name": "phone_enc",
+          "status": "encrypted",
+          "comment": ""
+        }
+      ]
+    },
+    {
+      "table": "tenant_provisioning",
+      "columns": [
+        {
+          "name": "owner_email",
+          "status": "PLAINTEXT",
+          "comment": "legacy plaintext column retained only for migration compatibility"
+        },
+        {
+          "name": "owner_email_enc",
+          "status": "encrypted",
+          "comment": ""
+        }
+      ]
+    },
+    {
+      "table": "staff_licenses",
+      "columns": [
+        {
+          "name": "license_number_enc",
+          "status": "encrypted",
+          "comment": ""
+        }
+      ]
+    },
+    {
+      "table": "staff_employment",
+      "columns": [
+        {
+          "name": "npi_number_enc",
+          "status": "encrypted",
+          "comment": ""
+        },
+        {
+          "name": "malpractice_policy_enc",
+          "status": "encrypted",
+          "comment": ""
+        },
+        {
+          "name": "direct_phone_enc",
+          "status": "encrypted",
+          "comment": ""
+        }
+      ]
+    }
+  ],
+  "checks": [
+    {
+      "name": "phi-pii-compliance",
+      "issueCount": 6,
+      "issues": [
+        {
+          "check": "phi-encryption-coverage",
+          "level": "high",
+          "message": "PHI/PII encryption coverage: 47/52 fields encrypted (90%)",
+          "context": null,
+          "recommendation": "All PHI/PII fields must be encrypted at rest using AES-256-GCM."
+        },
+        {
+          "check": "phi-plaintext-column",
+          "level": "critical",
+          "message": "Table 'staff_accounts': column 'email' appears to contain PHI/PII but is NOT encrypted",
+          "context": "staff_accounts.email",
+          "recommendation": "Encrypt this column using AES-256-GCM and rename to 'email_enc'. Update all read/write queries."
+        },
+        {
+          "check": "phi-plaintext-column",
+          "level": "critical",
+          "message": "Table 'superbills': column 'diagnosis_codes' appears to contain PHI/PII but is NOT encrypted",
+          "context": "superbills.diagnosis_codes",
+          "recommendation": "Encrypt this column using AES-256-GCM and rename to 'diagnosis_codes_enc'. Update all read/write queries."
+        },
+        {
+          "check": "phi-plaintext-column",
+          "level": "critical",
+          "message": "Table 'client_referring_providers': column 'npi' appears to contain PHI/PII but is NOT encrypted",
+          "context": "client_referring_providers.npi",
+          "recommendation": "Encrypt this column using AES-256-GCM and rename to 'npi_enc'. Update all read/write queries."
+        },
+        {
+          "check": "phi-plaintext-column",
+          "level": "critical",
+          "message": "Table 'client_referring_providers': column 'referral_date' appears to contain PHI/PII but is NOT encrypted",
+          "context": "client_referring_providers.referral_date",
+          "recommendation": "Encrypt this column using AES-256-GCM and rename to 'referral_date_enc'. Update all read/write queries."
+        },
+        {
+          "check": "phi-plaintext-column",
+          "level": "critical",
+          "message": "Table 'tenant_provisioning': column 'owner_email' appears to contain PHI/PII but is NOT encrypted",
+          "context": "tenant_provisioning.owner_email",
+          "recommendation": "Encrypt this column using AES-256-GCM and rename to 'owner_email_enc'. Update all read/write queries."
+        }
+      ]
+    },
+    {
+      "name": "encryption-convention",
+      "issueCount": 3,
+      "issues": [
+        {
+          "check": "unencrypted-text-column",
+          "level": "low",
+          "message": "Table 'portal_settings': TEXT column 'welcome_message' not encrypted — review if it may contain sensitive data",
+          "context": "portal_settings.welcome_message",
+          "recommendation": "Review whether this field may contain free-text PHI/PII. If so, encrypt and suffix with _enc."
+        },
+        {
+          "check": "unencrypted-text-column",
+          "level": "low",
+          "message": "Table 'portal_settings': TEXT column 'help_message' not encrypted — review if it may contain sensitive data",
+          "context": "portal_settings.help_message",
+          "recommendation": "Review whether this field may contain free-text PHI/PII. If so, encrypt and suffix with _enc."
+        },
+        {
+          "check": "unencrypted-text-column",
+          "level": "low",
+          "message": "Table 'portal_settings': TEXT column 'offering_ministry_note' not encrypted — review if it may contain sensitive data",
+          "context": "portal_settings.offering_ministry_note",
+          "recommendation": "Review whether this field may contain free-text PHI/PII. If so, encrypt and suffix with _enc."
+        }
+      ]
+    },
+    {
+      "name": "tenant-isolation",
+      "issueCount": 0,
+      "issues": [
+        {
+          "check": "tenant-isolation",
+          "level": "info",
+          "message": "All reviewed tables include tenant_id for row-level tenant isolation",
+          "context": null,
+          "recommendation": null
+        }
+      ]
+    },
+    {
+      "name": "audit-table",
+      "issueCount": 0,
+      "issues": [
+        {
+          "check": "audit-phi-clean",
+          "level": "info",
+          "message": "audit_events table does not appear to contain unencrypted PHI columns",
+          "context": null,
+          "recommendation": null
+        },
+        {
+          "check": "audit-table",
+          "level": "info",
+          "message": "audit_events table structure meets security requirements",
+          "context": null,
+          "recommendation": null
+        }
+      ]
+    },
+    {
+      "name": "session-table",
+      "issueCount": 0,
+      "issues": [
+        {
+          "check": "session-table",
+          "level": "info",
+          "message": "sessions table structure meets security requirements",
+          "context": null,
+          "recommendation": null
+        }
+      ]
+    },
+    {
+      "name": "query-parameterization",
+      "issueCount": 0,
+      "issues": [
+        {
+          "check": "query-parameterization",
+          "level": "info",
+          "message": "All reviewed queries appear to use parameterized form",
+          "context": null,
+          "recommendation": null
+        }
+      ]
+    },
+    {
+      "name": "encryption-key-config",
+      "issueCount": 0,
+      "issues": [
+        {
+          "check": "encryption-key-env",
+          "level": "info",
+          "message": "Encryption key correctly read from environment variable",
+          "context": null,
+          "recommendation": null
+        },
+        {
+          "check": "encryption-algorithm",
+          "level": "info",
+          "message": "AES-256-GCM encryption algorithm confirmed in use",
+          "context": null,
+          "recommendation": null
+        },
+        {
+          "check": "encryption-iv",
+          "level": "info",
+          "message": "Random IV generation confirmed in encryption module",
+          "context": null,
+          "recommendation": null
+        },
+        {
+          "check": "encryption-auth-tag",
+          "level": "info",
+          "message": "GCM authentication tag usage confirmed",
+          "context": null,
+          "recommendation": null
+        }
+      ]
+    },
+    {
+      "name": "db-connection-security",
+      "issueCount": 0,
+      "issues": [
+        {
+          "check": "db-ssl-configured",
+          "level": "info",
+          "message": "Database SSL configuration is present in connection pool",
+          "context": null,
+          "recommendation": null
+        },
+        {
+          "check": "db-env-credentials",
+          "level": "info",
+          "message": "Database credentials appear to be loaded from environment variables",
+          "context": null,
+          "recommendation": null
+        }
+      ]
+    },
+    {
+      "name": "sensitive-columns",
+      "issueCount": 0,
+      "issues": [
+        {
+          "check": "sensitive-columns",
+          "level": "info",
+          "message": "No unprotected sensitive columns (passwords, tokens, secrets) found",
+          "context": null,
+          "recommendation": null
+        }
+      ]
+    },
+    {
+      "name": "portal-public-security",
+      "issueCount": 1,
+      "issues": [
+        {
+          "check": "portal-public-requests-not-found",
+          "level": "low",
+          "message": "portal_public_requests table not found in schema — verify public intake is stored securely",
+          "context": null,
+          "recommendation": "Ensure public intake requests cannot specify their own tenant_id."
+        }
+      ]
+    }
+  ]
+}

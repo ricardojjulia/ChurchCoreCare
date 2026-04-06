@@ -378,6 +378,27 @@ The README now includes a narrative `LATEST LOOK` section with embedded screensh
 
 Recurring scheduling no longer starts with raw RRULE syntax. Staff now get readable cadence choices, weekday selection, and a live preview first, with advanced rule text kept available only when needed.
 
+## Nightly Security Checks
+
+Faith Counseling runs automated nightly security scans at **23:00 UTC** via GitHub Actions. Each run produces two complementary reports:
+
+| Scan | What It Covers |
+|------|---------------|
+| **AppSec** | Dependency vulnerabilities, hardcoded secrets, dangerous code patterns, security headers, auth/session configuration, input validation, logging PHI/PII exposure, CORS |
+| **DB Security** | PHI/PII encryption coverage across all 73 schema tables, tenant isolation, audit table structure, session security, query parameterization, AES-256-GCM key config |
+
+**Latest findings (2026-04-06):**
+- AppSec: 🔴 HIGH — 4 high-severity and 16 medium findings, no criticals. Key items: dev credential log statements in migrate.js, `Math.random()` used in several UI components instead of crypto-secure randomness.
+- DB Security: 🚨 CRITICAL — 5 critical PHI/PII fields without encryption (legacy `staff_accounts.email`, `superbills.diagnosis_codes`, provider NPI/referral_date, `tenant_provisioning.owner_email`). PHI encryption coverage: 47/52 fields (90%).
+
+All reports are stored in [`docs/SecurityChecks/`](./docs/SecurityChecks/) and retained for 30 days. Reports are auto-committed to a `security/nightly-YYYY-MM-DD` branch with a PR opened for review.
+
+To run scans locally:
+```bash
+node ops/nightly-security-runner.mjs        # full run
+node ops/nightly-security-runner.mjs --dry-run  # preview without writing
+```
+
 ## Change Log
 
 For the full release and maintenance history, see `docs/change-log.md`.
@@ -392,6 +413,7 @@ The change log summarizes completed work across releases and documents the detai
 - Faithful Workflows visual upgrade (v5.5.2): `docs/v5.5.2-RELEASE-SUMMARY.md`
 - Faithful Workflows full feature release (v5.5.0): `docs/v5.5.0-RELEASE-SUMMARY.md`
 - Operations Dashboard upgrade summary: `docs/OPERATIONS-DASHBOARD-UPGRADE-SUMMARY.md`
+- Security checks and nightly reports: `docs/SecurityChecks/`
 - Monitoring baseline: `PLANS/FULL-SURFACE-MONITORING.md`
 - Security and auditing baseline: `PLANS/FULL-SECURITY-AND-AUDITING.md`
 - Database implementation details: `docs/DATABASE-IMPLEMENTATION.md`
