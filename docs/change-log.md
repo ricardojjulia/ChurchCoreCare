@@ -2,6 +2,31 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 6, 2026 — Nightly Security Checks
+
+### feat: automated nightly AppSec and DB Security scanning
+
+**Date:** April 6, 2026
+**Affected area:** `ops/`, `.github/workflows/`, `docs/SecurityChecks/`, `README.md`
+
+Implemented a comprehensive nightly security check system that runs automatically at **23:00 UTC** via GitHub Actions. The system consists of:
+
+- **`ops/appsec-scan.mjs`** — Application Security (AppSec) scanner covering 9 check categories: dependency vulnerabilities (pnpm audit), hardcoded secrets, dangerous code patterns (eval, innerHTML, SQL injection, path traversal, weak crypto), security headers, auth/session configuration (argon2id, cookie flags), input validation, logging PHI/PII exposure, CORS configuration, and dependency version pinning.
+
+- **`ops/db-security-scan.mjs`** — Database Security scanner covering 10 check categories: PHI/PII encryption compliance across all 73 schema tables (AES-256-GCM `_enc` convention), encryption naming convention, tenant isolation (`tenant_id` presence), audit table structure, session table security, query parameterization, encryption key configuration, DB connection security, sensitive column review, and portal public request security.
+
+- **`ops/nightly-security-runner.mjs`** — Orchestrator that runs both scans, generates timestamped JSON reports and a human-readable Markdown summary in `docs/SecurityChecks/`, and prunes reports older than 30 days.
+
+- **`.github/workflows/nightly-security-check.yml`** — GitHub Actions workflow that runs the full suite at 23:00 UTC, commits reports to a `security/nightly-YYYY-MM-DD` branch, opens a PR for review, and uploads raw scan artifacts.
+
+- **`docs/SecurityChecks/README.md`** — Documentation of the scan system, coverage, severity levels, and manual run instructions.
+
+**Initial findings (2026-04-06):**
+- AppSec: HIGH status — dev credential logging in migrate.js, Math.random() in UI components
+- DB Security: CRITICAL status — 5 PHI/PII fields without encryption (90% coverage)
+
+README updated with "Nightly Checks" section linking to reports.
+
 ## April 5, 2026 — README Latest Look Narrative
 
 ### feat: add a new LATEST LOOK section to the README

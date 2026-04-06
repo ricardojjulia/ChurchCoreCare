@@ -1,0 +1,295 @@
+{
+  "reportType": "appsec",
+  "reportVersion": "1.0.0",
+  "generatedAt": "2026-04-06T01:25:47.990Z",
+  "startedAt": "2026-04-06T01:25:47.813Z",
+  "repositoryRoot": "/home/runner/work/FaithCounseling/FaithCounseling",
+  "sourceFilesScanned": 205,
+  "overallStatus": "HIGH",
+  "summary": {
+    "critical": 0,
+    "high": 4,
+    "medium": 16,
+    "low": 1,
+    "info": 7
+  },
+  "checks": [
+    {
+      "name": "dependency-vulnerabilities",
+      "issueCount": 1,
+      "issues": [
+        {
+          "check": "dependency-audit",
+          "level": "medium",
+          "message": "Dependency audit returned warnings or could not parse structured output",
+          "file": null,
+          "line": null,
+          "recommendation": "Run pnpm audit manually to review vulnerability details."
+        }
+      ]
+    },
+    {
+      "name": "hardcoded-secrets",
+      "issueCount": 0,
+      "issues": []
+    },
+    {
+      "name": "dangerous-code-patterns",
+      "issueCount": 19,
+      "issues": [
+        {
+          "check": "debug-console-log-phi",
+          "level": "high",
+          "message": "debug-console-log-phi detected: console.log('  Email",
+          "file": "apps/api/src/db/migrate.js",
+          "line": 433,
+          "recommendation": "Never log PHI or PII. Remove or replace with safe identifiers before production."
+        },
+        {
+          "check": "debug-console-log-phi",
+          "level": "high",
+          "message": "debug-console-log-phi detected: console.log('  Password",
+          "file": "apps/api/src/db/migrate.js",
+          "line": 434,
+          "recommendation": "Never log PHI or PII. Remove or replace with safe identifiers before production."
+        },
+        {
+          "check": "debug-console-log-phi",
+          "level": "high",
+          "message": "debug-console-log-phi detected: console.log('  Client portal email",
+          "file": "apps/api/src/db/migrate.js",
+          "line": 435,
+          "recommendation": "Never log PHI or PII. Remove or replace with safe identifiers before production."
+        },
+        {
+          "check": "debug-console-log-phi",
+          "level": "high",
+          "message": "debug-console-log-phi detected: console.log('  Client portal password",
+          "file": "apps/api/src/db/migrate.js",
+          "line": 436,
+          "recommendation": "Never log PHI or PII. Remove or replace with safe identifiers before production."
+        },
+        {
+          "check": "random-math",
+          "level": "medium",
+          "message": "random-math detected: Math.random()",
+          "file": "apps/api/src/index.js",
+          "line": 11669,
+          "recommendation": "Use crypto.randomBytes() or crypto.getRandomValues() for security-sensitive randomness."
+        },
+        {
+          "check": "no-https-check",
+          "level": "low",
+          "message": "no-https-check detected: http://",
+          "file": "apps/api/src/index.js",
+          "line": 1289,
+          "recommendation": "Ensure external URLs use HTTPS in production configurations."
+        },
+        {
+          "check": "random-math",
+          "level": "medium",
+          "message": "random-math detected: Math.random()",
+          "file": "apps/api/test/portal-public-request-conversion.test.mjs",
+          "line": 61,
+          "recommendation": "Use crypto.randomBytes() or crypto.getRandomValues() for security-sensitive randomness."
+        },
+        {
+          "check": "random-math",
+          "level": "medium",
+          "message": "random-math detected: Math.random()",
+          "file": "apps/web/src/components/ClientDetail/tabs/ContactsTab.jsx",
+          "line": 10,
+          "recommendation": "Use crypto.randomBytes() or crypto.getRandomValues() for security-sensitive randomness."
+        },
+        {
+          "check": "random-math",
+          "level": "medium",
+          "message": "random-math detected: Math.random()",
+          "file": "apps/web/src/components/ClientDetail/tabs/ContactsTab.jsx",
+          "line": 79,
+          "recommendation": "Use crypto.randomBytes() or crypto.getRandomValues() for security-sensitive randomness."
+        },
+        {
+          "check": "random-math",
+          "level": "medium",
+          "message": "random-math detected: Math.random()",
+          "file": "apps/web/src/components/ClientDetail/tabs/DemographicsTab.jsx",
+          "line": 67,
+          "recommendation": "Use crypto.randomBytes() or crypto.getRandomValues() for security-sensitive randomness."
+        },
+        {
+          "check": "random-math",
+          "level": "medium",
+          "message": "random-math detected: Math.random()",
+          "file": "apps/web/src/components/ClientDetail/tabs/DemographicsTab.jsx",
+          "line": 72,
+          "recommendation": "Use crypto.randomBytes() or crypto.getRandomValues() for security-sensitive randomness."
+        },
+        {
+          "check": "random-math",
+          "level": "medium",
+          "message": "random-math detected: Math.random()",
+          "file": "apps/web/src/components/ClientDetail/tabs/DemographicsTab.jsx",
+          "line": 147,
+          "recommendation": "Use crypto.randomBytes() or crypto.getRandomValues() for security-sensitive randomness."
+        },
+        {
+          "check": "random-math",
+          "level": "medium",
+          "message": "random-math detected: Math.random()",
+          "file": "apps/web/src/components/ClientDetail/tabs/DemographicsTab.jsx",
+          "line": 169,
+          "recommendation": "Use crypto.randomBytes() or crypto.getRandomValues() for security-sensitive randomness."
+        },
+        {
+          "check": "random-math",
+          "level": "medium",
+          "message": "random-math detected: Math.random()",
+          "file": "apps/web/src/components/ClientDetail/tabs/DiagnosesTab.jsx",
+          "line": 41,
+          "recommendation": "Use crypto.randomBytes() or crypto.getRandomValues() for security-sensitive randomness."
+        },
+        {
+          "check": "random-math",
+          "level": "medium",
+          "message": "random-math detected: Math.random()",
+          "file": "apps/web/src/components/ClientDetail/tabs/DiagnosesTab.jsx",
+          "line": 335,
+          "recommendation": "Use crypto.randomBytes() or crypto.getRandomValues() for security-sensitive randomness."
+        },
+        {
+          "check": "random-math",
+          "level": "medium",
+          "message": "random-math detected: Math.random()",
+          "file": "apps/web/src/components/ClientDetail/tabs/DiagnosesTab.jsx",
+          "line": 341,
+          "recommendation": "Use crypto.randomBytes() or crypto.getRandomValues() for security-sensitive randomness."
+        },
+        {
+          "check": "random-math",
+          "level": "medium",
+          "message": "random-math detected: Math.random()",
+          "file": "apps/web/src/components/ClientDetail/tabs/DiagnosesTab.jsx",
+          "line": 407,
+          "recommendation": "Use crypto.randomBytes() or crypto.getRandomValues() for security-sensitive randomness."
+        },
+        {
+          "check": "random-math",
+          "level": "medium",
+          "message": "random-math detected: Math.random()",
+          "file": "apps/web/src/components/ClientDetail/tabs/DiagnosesTab.jsx",
+          "line": 413,
+          "recommendation": "Use crypto.randomBytes() or crypto.getRandomValues() for security-sensitive randomness."
+        },
+        {
+          "check": "random-math",
+          "level": "medium",
+          "message": "random-math detected: Math.random()",
+          "file": "ops/security-regression.mjs",
+          "line": 71,
+          "recommendation": "Use crypto.randomBytes() or crypto.getRandomValues() for security-sensitive randomness."
+        }
+      ]
+    },
+    {
+      "name": "security-headers",
+      "issueCount": 0,
+      "issues": [
+        {
+          "check": "security-headers",
+          "level": "info",
+          "message": "All required security header references found in codebase",
+          "file": null,
+          "line": null,
+          "recommendation": null
+        }
+      ]
+    },
+    {
+      "name": "auth-session-config",
+      "issueCount": 1,
+      "issues": [
+        {
+          "check": "cookie-not-secure",
+          "level": "medium",
+          "message": "Cookie configured with secure: false",
+          "file": "ops/appsec-scan.mjs",
+          "line": null,
+          "recommendation": "Set secure: true for production cookies. Gate on NODE_ENV check if needed."
+        },
+        {
+          "check": "password-hashing",
+          "level": "info",
+          "message": "Password hashing uses argon2 — recommended algorithm confirmed",
+          "file": null,
+          "line": null,
+          "recommendation": null
+        },
+        {
+          "check": "session-policy",
+          "level": "info",
+          "message": "Session security policy document exists",
+          "file": null,
+          "line": null,
+          "recommendation": null
+        }
+      ]
+    },
+    {
+      "name": "input-validation",
+      "issueCount": 0,
+      "issues": [
+        {
+          "check": "input-validation",
+          "level": "info",
+          "message": "Input validation patterns appear present in API handlers",
+          "file": null,
+          "line": null,
+          "recommendation": null
+        }
+      ]
+    },
+    {
+      "name": "logging-phi-exposure",
+      "issueCount": 0,
+      "issues": [
+        {
+          "check": "logging-phi-exposure",
+          "level": "info",
+          "message": "No obvious PHI/PII identifiers found in logging statements",
+          "file": null,
+          "line": null,
+          "recommendation": null
+        }
+      ]
+    },
+    {
+      "name": "cors-config",
+      "issueCount": 0,
+      "issues": [
+        {
+          "check": "cors-origin-allowlist",
+          "level": "info",
+          "message": "CORS origin controlled via ALLOWED_ORIGINS environment variable — good practice",
+          "file": "apps/api/src/lib/security.js",
+          "line": null,
+          "recommendation": null
+        }
+      ]
+    },
+    {
+      "name": "dependency-versions",
+      "issueCount": 0,
+      "issues": [
+        {
+          "check": "dependency-versions",
+          "level": "info",
+          "message": "All reviewed dependencies use pinned version ranges",
+          "file": null,
+          "line": null,
+          "recommendation": null
+        }
+      ]
+    }
+  ]
+}
