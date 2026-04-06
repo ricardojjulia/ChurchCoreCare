@@ -2,6 +2,105 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 4, 2026 — Recurring Series Builder
+
+### fix(scheduling): replace raw recurrence syntax with a guided recurring-series builder
+
+**Date:** April 4, 2026
+**Affected area:** `apps/web/src/components/SchedulingPage.jsx`
+
+Creating a recurring series still required staff to type raw RRULE syntax such as `FREQ=WEEKLY;BYDAY=MO`, which is technically correct but not friendly for counselors, schedulers, or other non-technical staff. The form also showed that raw syntax back in the series list, making the whole recurrence flow feel more technical than the rest of Scheduling.
+
+The recurring-series modal now defaults to a guided recurrence builder:
+
+- readable cadence choices for weekly, every two weeks, or monthly repeats
+- weekday checkboxes for weekly and biweekly schedules
+- a live schedule preview that explains the rule in plain language
+- raw RRULE entry kept behind an explicit advanced toggle instead of as the primary field
+- existing series rows now show a friendly recurrence description first, with the raw stored rule preserved as a secondary label
+
+This is a UI-only workflow improvement. The API contract and stored recurrence rule format remain unchanged.
+
+---
+
+## April 4, 2026 — Encrypted Buffer Read Fix
+
+### fix(api): accept Buffer-backed ciphertext during decrypt
+
+**Date:** April 4, 2026
+**Affected area:** `apps/api/src/lib/encrypt.js`
+
+Recurring series creation could appear to fail even after the insert succeeded. The actual crash happened on the refresh read immediately afterward: older `appointment_series` rows were returning encrypted name fields from MySQL as `Buffer` objects, but the shared `decrypt()` helper only handled strings and crashed on `stored.split(...)`.
+
+The shared decrypt helper now normalizes `Buffer` values to UTF-8 strings before parsing the encrypted payload format. This fixes recurring-series refresh reads and hardens any other API read path that encounters buffer-backed encrypted columns.
+
+---
+
+## April 4, 2026 — Dashboard Faithful Workflows Navigation
+
+### fix(dashboard): make the Faithful Workflows metric card open the workflow workspace
+
+**Date:** April 4, 2026
+**Affected area:** `apps/web/src/components/Metrics.jsx`, `apps/web/src/App.jsx`
+
+The dashboard already let staff drill from the session and appointment metric cards into deeper workflow views, but the `Faithful Workflows` panel was still a static summary tile. That made the panel look interactive without actually helping the user move into the workflow.
+
+The Faithful Workflows metric card now uses the same clickable metric treatment as the other dashboard cards and routes directly into the Faithful Workflows page through the existing `faith` workspace view.
+
+---
+
+## April 4, 2026 — Runtime Label Catalog Sync
+
+### fix(i18n): align English runtime labels with current workspace names
+
+**Date:** April 4, 2026
+**Affected area:** `apps/api/data/i18n/en.json`
+
+The shared frontend label catalog had already been updated to use `Dashboard`, `Client Scheduling`, `Documents`, and `Client Portal`, but the API-backed English locale file was still overriding some of those values with older strings like `Operations Dashboard` and `Portal`.
+
+The English runtime catalog now matches the active workspace naming so the side menu and top bar render the same labels whether they come from base frontend messages or the API locale payload.
+
+---
+
+## April 4, 2026 — Navigation Label Cleanup
+
+### fix(nav): simplify top-level workspace labels
+
+**Date:** April 4, 2026
+**Affected area:** `packages/i18n/src/index.js`
+
+Staff-facing workspace names were still carrying heavier operational wording than necessary in the main navigation and top bar. The underlying surfaces were correct, but labels like `Operations Dashboard`, `Scheduling Workspace`, and `Documents Workspace` made the shell feel more technical than it needed to.
+
+The shared label catalog now uses:
+
+- `Dashboard` instead of `Operations Dashboard`
+- `Client Scheduling` instead of `Scheduling Workspace`
+- `Documents` instead of `Documents Workspace`
+- `Client Portal` in the side navigation instead of `Portal`
+
+This change only updates user-facing copy. Surface IDs, routes, telemetry, and monitoring mappings remain unchanged.
+
+---
+
+## April 4, 2026 — Clinical Chart Experience Refresh
+
+### feat(chart): add summary visuals and functional graphics to Clinical Chart
+
+**Date:** April 4, 2026
+**Affected area:** `apps/web/src/components/ClinicalChart/*`
+
+The Clinical Chart surface was structurally complete but visually flat. It opened as a title, client picker, and raw tab stack, which made the page feel colder and less informative than the rest of the application.
+
+The chart now opens with a richer summary layer and functional visual cues:
+
+- new chart summary header with session rhythm, note readiness, treatment-plan health, and latest assessment signal
+- session-status timeline in Session Notes so counselors can see draft, signed, due, cancelled, and upcoming sessions at a glance
+- mini trend graphics and delta indicators in Progress for scored assessments
+- treatment-plan overview cards for plan status, goal coverage, and review rhythm
+- stronger tab-shell treatment so the page feels like a distinct clinical workspace rather than a plain form stack
+
+The change keeps the existing chart surfaces and telemetry IDs intact, so no surface-registry update was required. Documentation was updated in `README.md` and `apps/web/README.md`.
+
 ## April 4, 2026 — Faithful Workflow Count Sync
 
 ### fix(workflows): keep Faithful Workflows banner counts aligned with dashboard metrics

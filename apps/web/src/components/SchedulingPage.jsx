@@ -13,6 +13,7 @@ import {
   Loader,
   Modal,
   Paper,
+  Pill,
   Select,
   SimpleGrid,
   Stack,
@@ -210,6 +211,113 @@ function resolveCounselorId(counselors, appointmentOrUser) {
 function resolveCounselorDisplayName(counselors, counselorId, fallbackName = '') {
   const counselor = counselors.find((staff) => staff.id === counselorId);
   return counselor ? resolveStaffName(counselor) : fallbackName;
+}
+
+const SERIES_RECURRENCE_DEFAULT_RULE = 'FREQ=WEEKLY;BYDAY=MO';
+const SERIES_WEEKDAY_OPTIONS = [
+  { value: 'MO', label: 'Mon' },
+  { value: 'TU', label: 'Tue' },
+  { value: 'WE', label: 'Wed' },
+  { value: 'TH', label: 'Thu' },
+  { value: 'FR', label: 'Fri' },
+  { value: 'SA', label: 'Sat' },
+  { value: 'SU', label: 'Sun' },
+];
+const SERIES_WEEKDAY_ORDER = SERIES_WEEKDAY_OPTIONS.map((option) => option.value);
+const SERIES_RECURRENCE_PATTERN_OPTIONS = [
+  { value: 'weekly', label: 'Every week' },
+  { value: 'biweekly', label: 'Every 2 weeks' },
+  { value: 'monthly', label: 'Every month' },
+];
+
+function sortSeriesWeekdays(days) {
+  const values = Array.isArray(days) ? days : [];
+  return [...new Set(values.filter((day) => SERIES_WEEKDAY_ORDER.includes(day)))]
+    .sort((left, right) => SERIES_WEEKDAY_ORDER.indexOf(left) - SERIES_WEEKDAY_ORDER.indexOf(right));
+}
+
+function getSeriesWeekdayForDate(day) {
+  if (!day) return 'MO';
+  const date = new Date(`${day}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return 'MO';
+  return ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'][date.getDay()] || 'MO';
+}
+
+function getSeriesMonthDay(day) {
+  if (!day) return 1;
+  const date = new Date(`${day}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return 1;
+  return date.getDate();
+}
+
+function getSeriesDefaultWeekdays(startDate) {
+  return [getSeriesWeekdayForDate(startDate)];
+}
+
+function parseSeriesRecurrenceParts(rule) {
+  const entries = String(rule || '')
+    .split(';')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      const [key, ...rest] = part.split('=');
+      return [key?.toUpperCase(), rest.join('=')];
+    })
+    .filter(([key, value]) => key && value);
+  return Object.fromEntries(entries);
+}
+
+function parseSeriesRecurrenceRule(rule, startDate = '') {
+  const parts = parseSeriesRecurrenceParts(rule);
+  const fallbackDays = getSeriesDefaultWeekdays(startDate);
+  const freq = parts.FREQ?.toUpperCase();
+  if (freq === 'WEEKLY') {
+    const parsedDays = sortSeriesWeekdays((parts.BYDAY || '').split(','));
+    return {
+      supported: true,
+      pattern: parts.INTERVAL === '2' ? 'biweekly' : 'weekly',
+      days: parsedDays.length > 0 ? parsedDays : fallbackDays,
+      monthDay: getSeriesMonthDay(startDate),
+    };
+  }
+  if (freq === 'MONTHLY') {
+    const parsedMonthDay = Number.parseInt(parts.BYMONTHDAY, 10);
+    return {
+      supported: Number.isInteger(parsedMonthDay) || !parts.BYMONTHDAY,
+      pattern: 'monthly',
+      days: fallbackDays,
+      monthDay: Number.isInteger(parsedMonthDay) ? parsedMonthDay : getSeriesMonthDay(startDate),
+    };
+  }
+  return {
+    supported: false,
+    pattern: 'weekly',
+    days: fallbackDays,
+    monthDay: getSeriesMonthDay(startDate),
+  };
+}
+
+function buildSeriesRecurrenceRule(pattern, days, startDate = '') {
+  if (pattern === 'monthly') {
+    return `FREQ=MONTHLY;BYMONTHDAY=${getSeriesMonthDay(startDate)}`;
+  }
+  const orderedDays = sortSeriesWeekdays(days);
+  const normalizedDays = orderedDays.length > 0 ? orderedDays : getSeriesDefaultWeekdays(startDate);
+  const interval = pattern === 'biweekly' ? ';INTERVAL=2' : '';
+  return `FREQ=WEEKLY${interval};BYDAY=${normalizedDays.join(',')}`;
+}
+
+function formatSeriesRecurrenceRule(rule, startDate = '') {
+  if (!rule) return 'No recurrence configured';
+  const parsed = parseSeriesRecurrenceRule(rule, startDate);
+  if (!parsed.supported) return rule;
+  if (parsed.pattern === 'monthly') {
+    return `Every month on day ${parsed.monthDay}`;
+  }
+  const weekdayLabels = sortSeriesWeekdays(parsed.days)
+    .map((day) => SERIES_WEEKDAY_OPTIONS.find((option) => option.value === day)?.label || day);
+  const cadence = parsed.pattern === 'biweekly' ? 'Every 2 weeks' : 'Every week';
+  return `${cadence} on ${weekdayLabels.join(', ')}`;
 }
 
 function AppointmentComposer({
@@ -990,14 +1098,14 @@ function SeriesPanel({ staff, clients }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [creatorOpen, setCreatorOpen] = useState(false);
-  const [viewingSeries, setViewingSeries] = useState(null);
-  const [seriesAppts, setSeriesAppts] = useState([]);
-  const [seriesApptsLoading, setSeriesApptsLoading] = useState(false);
+  const [recurrenceMode, setRecurrenceMode] = useState('guided');
+  const [recurrencePattern, setRecurrencePattern] = useState('weekly');
+  const [recurrenceDays, setRecurrenceDays] = useState(['MO']);
   const form = useForm({
     initialValues: {
       counselorId: '',
       clientId: '',
-      recurrenceRule: 'FREQ=WEEKLY;BYDAY=MO',
+      recurrenceRule: SERIES_RECURRENCE_DEFAULT_RULE,
       startDate: '',
       endDate: '',
       startTime: '09:00',
@@ -1022,18 +1130,40 @@ function SeriesPanel({ staff, clients }) {
 
   useEffect(() => { load(); }, []);
 
-  const handleViewSeries = async (seriesItem) => {
-    setViewingSeries(seriesItem);
-    setSeriesAppts([]);
-    setSeriesApptsLoading(true);
-    try {
-      const data = await fetchSeriesAppointments(seriesItem.id);
-      setSeriesAppts(Array.isArray(data?.items) ? data.items : []);
-    } catch {
-      setSeriesAppts([]);
-    } finally {
-      setSeriesApptsLoading(false);
+  useEffect(() => {
+    if (recurrenceMode !== 'guided') return;
+    form.setFieldValue('recurrenceRule', buildSeriesRecurrenceRule(recurrencePattern, recurrenceDays, form.values.startDate));
+  }, [form, recurrenceDays, recurrenceMode, recurrencePattern, form.values.startDate]);
+
+  const resetCreator = () => {
+    form.reset();
+    const parsed = parseSeriesRecurrenceRule(SERIES_RECURRENCE_DEFAULT_RULE);
+    setRecurrenceMode('guided');
+    setRecurrencePattern(parsed.pattern);
+    setRecurrenceDays(parsed.days);
+  };
+
+  const openCreator = () => {
+    resetCreator();
+    setCreatorOpen(true);
+  };
+
+  const closeCreator = () => {
+    setCreatorOpen(false);
+    resetCreator();
+  };
+
+  const handleToggleRecurrenceMode = () => {
+    if (recurrenceMode === 'guided') {
+      setRecurrenceMode('advanced');
+      return;
     }
+    const parsed = parseSeriesRecurrenceRule(form.values.recurrenceRule, form.values.startDate);
+    if (parsed.supported) {
+      setRecurrencePattern(parsed.pattern);
+      setRecurrenceDays(parsed.days);
+    }
+    setRecurrenceMode('guided');
   };
 
   const handleCreate = async (values) => {
@@ -1046,13 +1176,8 @@ function SeriesPanel({ staff, clients }) {
         counselorName: counselor ? [counselor.firstName, counselor.lastName].filter(Boolean).join(' ') : '',
         clientName: client ? [client.firstName, client.lastName].filter(Boolean).join(' ') : '',
       });
-      if (result?.generationError) {
-        notifications.show({ title: 'Series created — appointment error', message: `Generated ${result.generatedCount ?? 0} appointments. Error: ${result.generationError}`, color: 'orange' });
-      } else {
-        notifications.show({ title: 'Series created', message: `Recurring series saved — ${result?.generatedCount ?? 0} appointments scheduled.`, color: 'green' });
-      }
-      setCreatorOpen(false);
-      form.reset();
+      notifications.show({ title: 'Series created', message: 'Recurring series saved.', color: 'green' });
+      closeCreator();
       await load();
     } catch (err) {
       notifications.show({ title: 'Create failed', message: err.message, color: 'red' });
@@ -1090,16 +1215,75 @@ function SeriesPanel({ staff, clients }) {
         <Text c="dimmed" fz="sm">Manage recurring appointment series for ongoing client relationships.</Text>
         <Group gap="xs">
           <Button variant="default" size="xs" onClick={load}>Refresh</Button>
-          <Button size="xs" onClick={() => setCreatorOpen(true)}>New Series</Button>
+          <Button size="xs" onClick={openCreator}>New Series</Button>
         </Group>
       </Group>
 
-      <Modal opened={creatorOpen} onClose={() => setCreatorOpen(false)} title="New Recurring Series" size="md">
+      <Modal opened={creatorOpen} onClose={closeCreator} title="New Recurring Series" size="md">
         <form onSubmit={form.onSubmit(handleCreate)}>
           <Stack gap="sm">
             <Select label="Counselor" placeholder="Select counselor" data={staffOptions} searchable required {...form.getInputProps('counselorId')} />
             <Select label="Client" placeholder="Select client" data={clientOptions} searchable required {...form.getInputProps('clientId')} />
-            <TextInput label="Recurrence Rule" placeholder="FREQ=WEEKLY;BYDAY=MO" required {...form.getInputProps('recurrenceRule')} />
+            <Paper withBorder radius="md" p="md">
+              <Stack gap="sm">
+                <Group justify="space-between" align="flex-start">
+                  <Box>
+                    <Text fw={600}>Recurrence</Text>
+                    <Text c="dimmed" fz="sm">
+                      Build a readable schedule instead of typing calendar syntax.
+                    </Text>
+                  </Box>
+                  <Button type="button" variant="subtle" size="compact-sm" onClick={handleToggleRecurrenceMode}>
+                    {recurrenceMode === 'guided' ? 'Edit raw rule' : 'Use guided builder'}
+                  </Button>
+                </Group>
+
+                {recurrenceMode === 'guided' ? (
+                  <>
+                    <Select
+                      label="Repeat"
+                      data={SERIES_RECURRENCE_PATTERN_OPTIONS}
+                      value={recurrencePattern}
+                      onChange={(value) => setRecurrencePattern(value || 'weekly')}
+                      allowDeselect={false}
+                    />
+                    {recurrencePattern === 'monthly' ? (
+                      <Alert color="indigo" variant="light" title="Monthly schedule">
+                        This series will repeat every month on day {getSeriesMonthDay(form.values.startDate)} based on the start date.
+                      </Alert>
+                    ) : (
+                      <Checkbox.Group
+                        label="Repeat on"
+                        value={recurrenceDays}
+                        onChange={setRecurrenceDays}
+                      >
+                        <Group gap="xs" mt="xs">
+                          {SERIES_WEEKDAY_OPTIONS.map((option) => (
+                            <Checkbox
+                              key={option.value}
+                              value={option.value}
+                              label={option.label}
+                            />
+                          ))}
+                        </Group>
+                      </Checkbox.Group>
+                    )}
+                  </>
+                ) : (
+                  <TextInput
+                    label="Recurrence Rule"
+                    description="Use raw RRULE syntax only if the guided builder cannot express the schedule."
+                    placeholder={SERIES_RECURRENCE_DEFAULT_RULE}
+                    required
+                    {...form.getInputProps('recurrenceRule')}
+                  />
+                )}
+
+                <Alert color="gray" variant="light" title="Schedule preview">
+                  {formatSeriesRecurrenceRule(form.values.recurrenceRule, form.values.startDate)}
+                </Alert>
+              </Stack>
+            </Paper>
             <Group grow>
               <TextInput label="Start Date" type="date" required {...form.getInputProps('startDate')} />
               <TextInput label="End Date" type="date" {...form.getInputProps('endDate')} />
@@ -1118,7 +1302,7 @@ function SeriesPanel({ staff, clients }) {
             <TextInput label="Appointment Type" placeholder="Individual Therapy" {...form.getInputProps('appointmentType')} />
             <Checkbox label="Remote session" {...form.getInputProps('remoteSession', { type: 'checkbox' })} />
             <Group justify="flex-end" mt="sm">
-              <Button variant="default" onClick={() => setCreatorOpen(false)}>Cancel</Button>
+              <Button type="button" variant="default" onClick={closeCreator}>Cancel</Button>
               <Button type="submit">Create</Button>
             </Group>
           </Stack>
@@ -1191,7 +1375,14 @@ function SeriesPanel({ staff, clients }) {
                 >
                   <Table.Td>{item.clientName || item.clientId}</Table.Td>
                   <Table.Td>{item.counselorName || item.counselorId}</Table.Td>
-                  <Table.Td><Text fz="xs" ff="monospace">{item.recurrenceRule}</Text></Table.Td>
+                  <Table.Td>
+                    <Stack gap={4}>
+                      <Text fz="sm">{formatSeriesRecurrenceRule(item.recurrenceRule, item.startDate)}</Text>
+                      <Group gap={6}>
+                        <Pill withRemoveButton={false}>{item.recurrenceRule}</Pill>
+                      </Group>
+                    </Stack>
+                  </Table.Td>
                   <Table.Td>{item.startDate}</Table.Td>
                   <Table.Td>{item.endDate || '—'}</Table.Td>
                   <Table.Td><Badge color={seriesStatusColor(item.status)}>{item.status}</Badge></Table.Td>

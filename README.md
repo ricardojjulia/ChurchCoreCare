@@ -24,7 +24,7 @@ It is built specifically for Christian counseling practices and supports daily e
 - **Clinical Chart:** session notes, internal notes, treatment plans, progress tracking, and homework
 - **Operations Dashboard:** live daily operations summary with counselor workload, note-gap compliance watch, portal request tracking, configurable operational alerts, and 7-day trend context
 - **Workspace Studio:** full-featured practice administration hub with tabs for Practice profile, Locations CRUD, Staff roster, Lifecycle caseload board, Appointments (service codes), Documents, Offerings, and Portal workflows
-- **Scheduling and operations workflows:** appointments, waitlists, reminders, and utilization visibility
+- **Scheduling and operations workflows:** appointments, waitlists, reminders, utilization visibility, and a guided recurring-series builder so staff can create repeat schedules without typing raw RRULE syntax
 - **Client portal workflows:** onboarding, forms, documents, and client self-service surfaces
 - **Monitoring and telemetry:** local monitoring + optional OpenTelemetry export
 - **Security and audit foundations:** role-aware access controls and structured audit event patterns
@@ -34,6 +34,8 @@ The checked-in English runtime locale catalog also mirrors the current counselor
 The dashboard Faithful Workflows metric card also acts as a direct workspace handoff into the full Faithful Workflows page, matching the drill-down behavior already used by the other dashboard metric cards. The Faithful Workflows banner now also receives the same canonical count payload the dashboard renders, so both surfaces stay aligned even if the workflow page falls back to lighter local ranking data while loading.
 
 Encrypted DB reads now normalize Buffer-backed ciphertext values returned by MySQL before decrypting. That keeps authenticated workflow reads, including recurring scheduling series, stable even when legacy rows are hydrated as `Buffer` objects instead of plain strings.
+
+Recurring series creation in Scheduling now defaults to a guided builder with readable cadence options such as weekly, every two weeks, or monthly, plus weekday selection and a live schedule preview. Raw RRULE entry remains available as an advanced fallback instead of being the primary input.
 
 ## API Security And Compliance Baseline (v5.6.0)
 
