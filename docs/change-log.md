@@ -2,6 +2,62 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 6, 2026 — Humanized UI Language Pass
+
+### feat(ux): replace cold/operational language with counseling-practice-appropriate copy
+
+**Date:** April 6, 2026
+**Affected area:** `packages/i18n/src/index.js`, `apps/web/src/components/ClientForm.jsx`, `apps/web/public/operations.html`
+
+Audited every screen title, page subtitle, navigation label, tab label, dashboard panel heading, and key empty-state message across the application. Replaced terminology that read like enterprise IT or SaaS back-office software with language natural to a Christian counseling practice. All route keys and i18n keys were left untouched — only display values changed, so no navigation behavior was affected.
+
+**Navigation labels:**
+
+- `Home` → `My Day` (counselor sidebar)
+- `Dashboard` → `Today's Overview` (admin sidebar)
+- `Tasks` → `My Tasks` (counselor sidebar)
+- `Users` → `Staff` (admin sidebar)
+- `Faith Workflows` → `Faithful Workflows` (now matches the page title it already carried)
+- `Operations Studio` → `Practice Operations` (sidebar + standalone page header and title)
+
+**Page titles and subtitles:**
+
+- `Counselor Home` → `My Day`
+- `Counselor Tasks` → `My Tasks`
+- `User Workspace` → `Staff Accounts`; subtitle: "Manage staff accounts, permissions, password resets, and user lifecycle actions." → "Create and manage staff accounts, permissions, and access for your practice team."
+- `Counselor Workspace` → `Counselors`; subtitle rewritten to remove "from one place" filler
+- `Client Workspace` → `Clients`; subtitle removed "without leaving the client operations surface"
+- `Client Scheduling` → `Scheduling`; subtitle rewritten
+- `Faith Workflows` title → `Faithful Workflows`; subtitle: "Counselor-facing care recommendations — review before acting" → "Care guidance and recommendations — review each suggestion with your own clinical judgment."
+- Sign-in screen: `Sign in to workspace` → `Welcome to Faith Counseling`
+- Brand subtitle: `Practice Workspace` → `Faith-Centered Counseling`
+
+**Dashboard panel headings:**
+
+- `Priority Queue` → `Needs Attention`
+- `Compliance Watch` → `Documentation Watch`
+- `Operations Studio` (panel) → `Practice Tools`
+- `Telemetry & Experience` → `System Health`
+- `Practice Operations` (panel) → `Practice Activity`
+
+**Workspace Studio tab labels:**
+
+- `Lifecycle` → `Caseload`
+- `Chart` → `Charting`
+- `Documents & Inventories` → `Forms & Documents`
+
+**Client portal tab:** `Data Rights` → `Privacy & Data`
+
+**Empty state and inline copy:**
+
+- `chart.plan.noPlan`: removed "structured goal-oriented care" in favor of plain language
+- High-touchpoint checkbox description: removed "Operations Dashboard Priority Queue" reference; updated to "Needs Attention panel"
+- Counselor home section: "Documentation and assigned work" → "Documentation & Tasks"; "Clients needing follow-up" → "Clients to Follow Up With"
+
+Public web bundle rebuilt and committed.
+
+---
+
 ## April 6, 2026 — Jaeger + Prometheus Observability Stack (v5.7.0)
 
 ### feat(observability): Jaeger distributed tracing, Prometheus metrics scraping, monitoring page stack panel
