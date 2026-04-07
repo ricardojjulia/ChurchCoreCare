@@ -58,6 +58,24 @@ Public web bundle rebuilt and committed.
 
 ---
 
+## April 6, 2026 — Security Findings Remediation
+
+### fix(security): mitigate all six findings from the 2026-04-06 manual security review
+
+**Date:** April 6, 2026
+**Affected areas:** `apps/api/src/lib/auth.js`, `apps/api/src/lib/encrypt.js`, `apps/api/src/index.js`, `apps/worker/src/index.js`, `docs/SecurityChecks/findings.md`, `README.md`
+
+Addressed all findings from the manual security review (F-001 through F-006):
+
+- **F-001 (Critical → Fixed):** Removed `temporaryPassword` from every API response body — public portal signup (instant_activation), admin portal account creation, staff provisioning, and staff password reset. Credentials must now be delivered out-of-band.
+- **F-002 (High → Fixed):** `requestPortalPasswordReset()` never returns the raw reset token in any environment. The HTTP handler no longer serialises any `resetToken` field.
+- **F-003 (Medium → Mitigated):** Portal login now blocks session creation if `mfa_enabled=true` (prevents silent bypass). Setting `mfaEnabled: true` via the portal accounts API returns HTTP 400. Full TOTP/WebAuthn is a planned follow-up.
+- **F-004 (Medium → Fixed):** Worker no longer dumps raw audit-event JSON or user-linked identifiers (`appointment_id`, `client_id`) to stdout. `createAuditEvent` import removed.
+- **F-005 (Medium → Mitigated):** Portal upload handler now enforces a file-extension allowlist, a MIME-type allowlist, and magic-bytes signature verification. Active-content formats are blocked. Malware scanning remains a future infrastructure item.
+- **F-006 (Low → Fixed):** `encrypt.js` loads a dedicated HMAC key (`DB_ENCRYPTION_HMAC_KEY`) for `deriveLookupHash()` when set, separating it from the AES-256-GCM encryption key. Falls back to the main key for backward compatibility.
+
+---
+
 ## April 6, 2026 — Manual Security Review Refresh
 
 ### fix: publish strict manual security findings and remediation documents

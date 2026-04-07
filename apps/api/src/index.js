@@ -162,6 +162,48 @@ const openApiSpecPath = path.resolve(currentDirPath, '../../../docs/api/openapi.
 const openApiSpecYaml = await readFile(openApiSpecPath, 'utf8');
 const standaloneHint = 'If the shared dev stack is already running, use `pnpm start:api:standalone`.';
 
+// ─── Portal upload allowlist (F-005) ──────────────────────────────────────────
+// Only safe document types that a counseling practice legitimately needs.
+const UPLOAD_ALLOWED_MIME_TYPES = new Set([
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/tiff',
+  'text/plain',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/msword',
+]);
+
+// Allowed file extensions (lower-case, including leading dot).
+const UPLOAD_ALLOWED_EXTENSIONS = new Set([
+  '.pdf', '.jpg', '.jpeg', '.png', '.gif', '.tiff', '.tif',
+  '.txt', '.docx', '.doc',
+]);
+
+// Known file-signature (magic bytes) checks for common document types.
+// Each entry maps a byte-sequence prefix to a MIME-type prefix string so that
+// we can confirm the declared type is consistent with the actual content.
+const UPLOAD_FILE_SIGNATURES = [
+  { magic: [0x25, 0x50, 0x44, 0x46], mimePrefix: 'application/pdf' },                   // %PDF
+  { magic: [0xFF, 0xD8, 0xFF],        mimePrefix: 'image/jpeg' },                        // JPEG
+  { magic: [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A], mimePrefix: 'image/png' }, // PNG
+  { magic: [0x47, 0x49, 0x46, 0x38],  mimePrefix: 'image/gif' },                         // GIF8
+  { magic: [0x49, 0x49, 0x2A, 0x00],  mimePrefix: 'image/tiff' },                        // TIFF LE
+  { magic: [0x4D, 0x4D, 0x00, 0x2A],  mimePrefix: 'image/tiff' },                        // TIFF BE
+  { magic: [0x50, 0x4B, 0x03, 0x04],  mimePrefix: 'application/vnd' },                   // ZIP/DOCX
+  { magic: [0xD0, 0xCF, 0x11, 0xE0],  mimePrefix: 'application/msword' },                // Legacy DOC
+];
+
+function detectUploadFileSignature(buffer) {
+  for (const sig of UPLOAD_FILE_SIGNATURES) {
+    if (buffer.length >= sig.magic.length && sig.magic.every((byte, i) => buffer[i] === byte)) {
+      return sig.mimePrefix;
+    }
+  }
+  return null; // no known signature — allow through (e.g. plain text)
+}
+
 await startNodeTelemetry({ serviceName: 'faith-api' });
 const telemetry = createServiceTelemetry('faith-api');
 const i18nStore = await createI18nStore();
@@ -2113,8 +2155,8 @@ async function handlePortalPasswordResetRequest(request, response) {
     writeJson(response, 202, {
       ok: true,
       notice: 'If the portal account exists, a reset code has been issued.',
-      resetToken: result.resetToken,
-      expiresAt: result.expiresAt,
+      // resetToken is intentionally omitted — it must be delivered out-of-band
+      expiresAt: result.issued ? result.expiresAt : undefined,
     });
   } catch (err) {
     writeJson(response, err.statusCode || 500, { error: err.error || err.message });
@@ -4898,7 +4940,8 @@ async function activatePortalSignupRequest({ tenantId, requestRecord, actorId = 
     status: 'active',
     email: normalizedEmail,
     mfaEnabled: false,
-    temporaryPassword,
+    // temporaryPassword is NOT stored — the caller strips it from the API
+    // response and must deliver it via a secure out-of-band channel.
     lastLoginAt: null,
     invitedAt: new Date().toISOString(),
   };
@@ -5204,7 +5247,9 @@ async function handlePortalPublicRequests(request, response, requestUrl, session
         : null;
       telemetry.recordMutation('portal.public_request.update');
       emitAudit(request, 'portal.public_request.update', 'portal_registration_request', requestId, session);
-      writeJson(response, 200, { item, activation });
+      // Strip temporaryPassword before serialising — credentials must not travel in API responses.
+      const safeActivation = activation ? { ...activation, temporaryPassword: undefined } : null;
+      writeJson(response, 200, { item, activation: safeActivation });
       return;
     }
 
@@ -5224,7 +5269,9 @@ async function handlePortalPublicRequests(request, response, requestUrl, session
       : null;
     telemetry.recordMutation('portal.public_request.update');
     emitAudit(request, 'portal.public_request.update', 'portal_registration_request', requestId, session);
-    writeJson(response, 200, { item, activation });
+    // Strip temporaryPassword before serialising — credentials must not travel in API responses.
+    const safeActivationMem = activation ? { ...activation, temporaryPassword: undefined } : null;
+    writeJson(response, 200, { item, activation: safeActivationMem });
     return;
   }
 
@@ -5327,7 +5374,9 @@ async function handlePortalPublicRequests(request, response, requestUrl, session
     }
     telemetry.recordMutation('portal.public_request.create');
     emitAudit(request, 'portal.public_request.create', 'portal_registration_request', id, session);
-    writeJson(response, 201, { item: { id, status }, activation });
+    // Strip temporaryPassword — the public endpoint must never return authentication secrets.
+    const safeActivationDb = activation ? { ...activation, temporaryPassword: undefined } : null;
+    writeJson(response, 201, { item: { id, status }, activation: safeActivationDb });
     return;
   }
 
@@ -5365,7 +5414,9 @@ async function handlePortalPublicRequests(request, response, requestUrl, session
   }
   telemetry.recordMutation('portal.public_request.create');
   emitAudit(request, 'portal.public_request.create', 'portal_registration_request', item.id);
-  writeJson(response, 201, { item: { id: item.id, status: item.status }, activation });
+  // Strip temporaryPassword — the public endpoint must never return authentication secrets.
+  const safeActivationMem = activation ? { ...activation, temporaryPassword: undefined } : null;
+  writeJson(response, 201, { item: { id: item.id, status: item.status }, activation: safeActivationMem });
 }
 
 async function handleAppointmentsCollection(request, response, session) {
@@ -7731,6 +7782,11 @@ async function handlePortalAccounts(request, response, requestUrl, session) {
         writeJson(response, 400, { error: 'status must be valid' });
         return;
       }
+      // Block enabling MFA until full enforcement is implemented (F-003).
+      if (payload.mfaEnabled === true) {
+        writeJson(response, 400, { error: 'Multi-factor authentication is not yet available. Leave mfaEnabled unset or false.' });
+        return;
+      }
       const temporaryPassword = sanitizeStr(payload.temporaryPassword, 128) ?? generateTemporaryPassword();
       const passwordError = validatePasswordStrength(temporaryPassword);
       if (passwordError) {
@@ -7750,7 +7806,7 @@ async function handlePortalAccounts(request, response, requestUrl, session) {
         email: sanitizeStr(payload.email, 200) ?? '',
         passwordHash,
         status,
-        mfaEnabled: Boolean(payload.mfaEnabled),
+        mfaEnabled: false,
       });
       const assignedForms = await autoAssignStandardSignupForms({
         tenantId,
@@ -7759,13 +7815,20 @@ async function handlePortalAccounts(request, response, requestUrl, session) {
       });
       telemetry.recordMutation('portal.account.create');
       emitAudit(request, 'portal.account.create', 'portal_account', item.id, session);
-      writeJson(response, 201, { item, assignedForms, temporaryPassword });
+      // temporaryPassword is intentionally excluded — deliver it through a secure
+      // out-of-band channel (e.g. encrypted email or direct communication).
+      writeJson(response, 201, { item, assignedForms });
       return;
     }
 
     const status = typeof payload.status === 'string' ? normalizePortalAccountStatus(payload.status) : undefined;
     if (typeof payload.status === 'string' && !status) {
       writeJson(response, 400, { error: 'status must be valid' });
+      return;
+    }
+    // Block enabling MFA until full enforcement is implemented (F-003).
+    if (payload.mfaEnabled === true) {
+      writeJson(response, 400, { error: 'Multi-factor authentication is not yet available. Leave mfaEnabled unset or false.' });
       return;
     }
     const temporaryPassword = typeof payload.temporaryPassword === 'string'
@@ -7789,7 +7852,7 @@ async function handlePortalAccounts(request, response, requestUrl, session) {
           parallelism: 1,
         })
         : undefined,
-      mfaEnabled: payload.mfaEnabled !== undefined ? Boolean(payload.mfaEnabled) : undefined,
+      mfaEnabled: undefined,
     });
     if (!item) {
       writeJson(response, 404, { error: 'Portal account not found' });
@@ -7820,6 +7883,12 @@ async function handlePortalAccounts(request, response, requestUrl, session) {
       return;
     }
 
+    // Block enabling MFA until full enforcement is implemented (F-003).
+    if (payload.mfaEnabled === true) {
+      writeJson(response, 400, { error: 'Multi-factor authentication is not yet available. Leave mfaEnabled unset or false.' });
+      return;
+    }
+
     const temporaryPassword = sanitizeStr(payload.temporaryPassword, 128) ?? generateTemporaryPassword();
     const item = {
       id: createId('pa', portalAccounts),
@@ -7827,8 +7896,7 @@ async function handlePortalAccounts(request, response, requestUrl, session) {
       clientId: client.id,
       status,
       email: sanitizeStr(payload.email, 200) ?? '',
-      mfaEnabled: Boolean(payload.mfaEnabled),
-      temporaryPassword,
+      mfaEnabled: false,
       lastLoginAt: null,
       invitedAt: new Date().toISOString(),
     };
@@ -7841,7 +7909,8 @@ async function handlePortalAccounts(request, response, requestUrl, session) {
     });
     telemetry.recordMutation('portal.account.create');
     emitAudit(request, 'portal.account.create', 'portal_account', item.id);
-    writeJson(response, 201, { item, assignedForms, temporaryPassword });
+    // temporaryPassword is intentionally excluded from the response body.
+    writeJson(response, 201, { item, assignedForms });
     return;
   }
 
@@ -8424,8 +8493,29 @@ async function handlePortalUploads(request, response, requestUrl, session) {
     return;
   }
 
+  // ── File type validation (F-005) ─────────────────────────────────────────
+  const fileExt = path.extname(fileName).toLowerCase();
+  if (!UPLOAD_ALLOWED_EXTENSIONS.has(fileExt)) {
+    writeJson(response, 400, { error: 'File type not allowed. Accepted formats: PDF, JPEG, PNG, GIF, TIFF, DOCX, DOC, TXT.' });
+    return;
+  }
+
+  const mimeType = sanitizeStr(payload.mimeType, 128) ?? '';
+  if (!mimeType || !UPLOAD_ALLOWED_MIME_TYPES.has(mimeType)) {
+    writeJson(response, 400, { error: 'A valid mimeType is required. Accepted formats: PDF, JPEG, PNG, GIF, TIFF, DOCX, DOC, TXT.' });
+    return;
+  }
+
+  // Verify the file signature is consistent with the declared MIME type.
+  const detectedPrefix = detectUploadFileSignature(buffer);
+  if (detectedPrefix && !mimeType.startsWith(detectedPrefix)) {
+    writeJson(response, 400, { error: 'File content does not match the declared file type.' });
+    return;
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   const category = sanitizeStr(payload.category, 64) ?? 'supporting_document';
-  const mimeType = sanitizeStr(payload.mimeType, 128) ?? 'application/octet-stream';
+  // mimeType already resolved above; notes read below.
   const notes = sanitizeStr(payload.notes, 1000) ?? '';
   const uploadedByRole = callerRole(request, session) || 'client';
 
@@ -10848,7 +10938,8 @@ async function handleStaffCollection(request, response, session) {
       });
       accountProvisioning = {
         email: account.email,
-        temporaryPassword: initialPassword ? null : temporaryPassword,
+        // temporaryPassword intentionally excluded — deliver through a secure
+        // out-of-band channel (e.g. encrypted email or direct communication).
       };
     }
 
@@ -11128,7 +11219,8 @@ async function handleStaffAccountActions(request, response, requestUrl, session)
     await emitAudit(request, 'staff.password_reset', 'staff_account', staffId, session);
     writeJson(response, 200, {
       ok: true,
-      generatedTemporaryPassword: providedPassword ? null : generatedPassword,
+      // generatedTemporaryPassword intentionally excluded — deliver through a
+      // secure out-of-band channel.
     });
     return;
   }

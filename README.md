@@ -95,7 +95,7 @@ A strict manual repository review is now tracked in:
 - [`docs/SecurityChecks/findings.md`](./docs/SecurityChecks/findings.md)
 - [`docs/SecurityChecks/recommendations.md`](./docs/SecurityChecks/recommendations.md)
 
-Current manual review posture: **High risk**. The highest-priority issues are authentication secret disclosure in portal flows, non-production reset-token exposure, worker log leakage of sensitive identifiers, and missing upload hardening.
+Current manual review posture: **Medium risk** (reduced from High after 2026-04-06 remediation pass). The critical credential-disclosure and high reset-token exposure issues have been fixed. MFA enforcement is partially mitigated pending full TOTP/WebAuthn implementation. See the findings document for detail on open items.
 
 ## API Security And Compliance Baseline (v5.7.0)
 
