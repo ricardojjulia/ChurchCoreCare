@@ -1101,6 +1101,25 @@ function SeriesPanel({ staff, clients }) {
   const [recurrenceMode, setRecurrenceMode] = useState('guided');
   const [recurrencePattern, setRecurrencePattern] = useState('weekly');
   const [recurrenceDays, setRecurrenceDays] = useState(['MO']);
+  const [viewingSeries, setViewingSeries] = useState(null);
+  const [seriesApptsLoading, setSeriesApptsLoading] = useState(false);
+  const [seriesAppts, setSeriesAppts] = useState([]);
+
+  // Show series details modal
+  const handleViewSeries = async (series) => {
+    setViewingSeries(series);
+    setSeriesAppts([]);
+    setSeriesApptsLoading(true);
+    try {
+      const appts = await fetchSeriesAppointments(series.id);
+      setSeriesAppts(Array.isArray(appts?.items) ? appts.items : []);
+    } catch (err) {
+      setSeriesAppts([]);
+    } finally {
+      setSeriesApptsLoading(false);
+    }
+  };
+
   const form = useForm({
     initialValues: {
       counselorId: '',
