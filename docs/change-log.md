@@ -1603,7 +1603,30 @@ Updated package versions from `4.6.0` to `4.7.0`:
 - `packages/i18n/package.json`
 - `packages/telemetry/package.json`
 
-## v4.6.0 — CRITICAL FIX: Complete Logout Session Invalidation
+
+## v4.7.0 — SchedulingPage Recurring Series Modal Fix
+
+**Date:** April 6, 2026
+**Type:** Bug fix
+
+### Summary
+
+Fixes a ReferenceError (`seriesApptsLoading is not defined`) in the SchedulingPage recurring series modal. The SeriesPanel now correctly manages loading state and fetches series appointments asynchronously when the modal opens. This resolves modal crashes and ensures recurring appointment series are displayed reliably.
+
+### Fixed
+
+- Added missing `seriesApptsLoading` and `seriesAppts` state to SeriesPanel in SchedulingPage.jsx
+- Updated recurring series modal logic to load appointments asynchronously and show loading state
+- Rebuilt public assets to ensure latest code is served
+
+### Validation
+
+- `pnpm --filter @faith/web build` — passed
+- `pnpm lint` — passed
+- `pnpm test:e2e` — passed
+
+---
+
 
 **Date:** March 29, 2026
 **Type:** Critical fix

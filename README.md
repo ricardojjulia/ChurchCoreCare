@@ -131,9 +131,12 @@ Workspace Studio is the practice administration hub, accessible from the main na
 Client Detail now includes a direct header action to open documents for the active client. The action routes staff into the Client Portal Documents tab with that client preselected, so records can be viewed and document tasks can be assigned without manually switching surfaces or reselecting the client.
 The checked-in public web bundle includes this shortcut so environments serving `apps/web/public` render the button without requiring local source recompilation.
 
+
 ## Public Web Build Artifacts
 
 The `apps/web/public/assets` bundle files may be refreshed and committed when shipping UI workflow updates so the checked-in public web surface stays aligned with the latest source behavior.
+
+**Note:** After UI or workflow changes (such as the SchedulingPage recurring series modal fix in v4.7.0), always rebuild the public assets with `pnpm --filter @faith/web build` and commit the updated bundle. This ensures that all users receive the latest code and prevents stale JavaScript errors from cached or outdated bundles.
 
 ## Standalone Product Pages
 
