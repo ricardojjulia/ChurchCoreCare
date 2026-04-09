@@ -42,3 +42,4 @@ Last evaluated: April 2, 2026
 |---|---|
 | [FULL-SECURITY-AND-AUDITING.md](FULL-SECURITY-AND-AUDITING.md) | Canonical API security and compliance baseline — updated as standards evolve |
 | [FULL-SURFACE-MONITORING.md](FULL-SURFACE-MONITORING.md) | Monitoring baseline — updated as observability surfaces expand |
+| [CHURCH-MANAGEMENT-MINISTRY-INTEGRATION.md](CHURCH-MANAGEMENT-MINISTRY-INTEGRATION.md) | Future integration boundary for Church Management systems such as ChurchForge |

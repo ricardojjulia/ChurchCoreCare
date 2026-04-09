@@ -2,6 +2,23 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 9, 2026 — Future Ministry Integration Readiness
+
+### feat(docs): add Church Management integration-readiness plan for ChurchForge-style ministry platforms
+
+**Date:** April 9, 2026
+**Affected area:** `PLANS/CHURCH-MANAGEMENT-MINISTRY-INTEGRATION.md`, `PLANS/PLAN-TRACKER.md`, `README.md`
+
+Added a dedicated planning artifact that defines how a future Church Management product should integrate with Faith Counseling without collapsing system boundaries or forcing immediate implementation.
+
+**What changed:**
+
+- New `PLANS/CHURCH-MANAGEMENT-MINISTRY-INTEGRATION.md` establishes Faith Counseling as a separate protected ministry system for future Church Management integration
+- Added a ChurchForge-aligned section that can be reused upstream as a `Future Ministry Integration Readiness` source section
+- Defined architectural, consent, access, audit, telemetry, AI, and UX guardrails for future cross-system work
+- Added a README cross-reference so the integration posture is visible from the main project documentation
+- Added the new plan to `PLANS/PLAN-TRACKER.md` as a living document
+
 ## April 7, 2026 — v6.0.0: Full API Documentation, AI Audit Observations, Idle Session Timeout
 
 ### feat(docs): regenerate OpenAPI spec to full implementation coverage (v2.0.0)

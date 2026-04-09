@@ -206,6 +206,18 @@ The static public surfaces are meant to reflect the current product posture, not
 - `ops/demo-dataset`: reproducible SQL demo-data generation, apply, and verification workflow
 - `pnpm start`: canonical local launcher with env loading, DB preflight, migrations, and coordinated API, web, and worker startup
 
+## Future Ministry Integration Readiness
+
+Faith Counseling now includes a dedicated planning artifact for future Church Management integration posture: [PLANS/CHURCH-MANAGEMENT-MINISTRY-INTEGRATION.md](PLANS/CHURCH-MANAGEMENT-MINISTRY-INTEGRATION.md).
+
+That plan establishes the expected boundary for any upstream ministry platform, including ChurchForge:
+
+- Faith Counseling remains a separate protected ministry system, not an internal module.
+- Future integration must use APIs, webhooks, or adapters rather than direct database coupling.
+- Member-to-client linkage must be consent-aware, tenant-scoped, revocable, and minimum-necessary.
+- Church-side users should receive ministry-safe coordination data by default, not clinical record detail.
+- AI and telemetry must treat counseling data as restricted, with audit and monitoring kept privacy-safe and separate.
+
 ## Architecture Diagram
 
 ```mermaid
