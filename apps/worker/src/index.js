@@ -1,5 +1,4 @@
 import http from 'node:http';
-import { createAuditEvent } from '../../../packages/domain/src/index.js';
 import { createServiceTelemetry, getPrometheusExporter, startNodeTelemetry } from '../../../packages/telemetry/src/index.js';
 
 const workerName = 'reminder-worker';
@@ -25,18 +24,10 @@ if (prometheusExporter) {
   });
 }
 
-const startupEvent = createAuditEvent({
-  tenantId: 'system',
-  action: 'worker.start',
-  targetType: 'worker',
-  targetId: workerName,
-  occurredAt: new Date().toISOString(),
-});
-
 telemetry.recordMutation('worker.start');
 
+// Log a minimal operational message — never emit raw audit payloads to stdout.
 console.log(`${workerName} initialized`);
-console.log(JSON.stringify(startupEvent, null, 2));
 
 // ---------------------------------------------------------------------------
 // Reminder polling — only runs when DB_NAME is configured
@@ -80,16 +71,17 @@ if (process.env.DB_NAME) {
           [row.id, row.tenant_id]
         );
         if (!fresh || fresh.status !== 'pending') {
-          console.log(`[${workerName}] Skipping reminder ${row.id} (status=${fresh?.status ?? 'gone'})`);
+          // Log without the raw reminder ID to avoid emitting user-linked identifiers.
+          console.log(`[${workerName}] Skipping reminder (status=${fresh?.status ?? 'gone'})`);
           continue;
         }
 
         // In a production system this would dispatch an email/SMS via a
         // notification provider.  For now we log the intent and mark sent.
+        // Do NOT log appointment_id or client_id — those are user-linked identifiers.
         console.log(
           `[${workerName}] Sending ${row.delivery_channel} reminder ` +
-          `(type=${row.reminder_type}) for appointment ${row.appointment_id} ` +
-          `to client ${row.client_id}`
+          `(type=${row.reminder_type})`
         );
 
         await pool.query(
@@ -98,15 +90,8 @@ if (process.env.DB_NAME) {
         );
 
         telemetry.recordMutation('reminder.sent');
-
-        const auditEvent = createAuditEvent({
-          tenantId: row.tenant_id,
-          action: 'reminder.sent',
-          targetType: 'reminder',
-          targetId: row.id,
-          occurredAt: new Date().toISOString(),
-        });
-        console.log(JSON.stringify(auditEvent));
+        // Audit events must be written to the audit table, not to stdout.
+        // Telemetry above captures the operational signal.
       } catch (err) {
         console.error(`[${workerName}] Failed to process reminder ${row.id}:`, err.message);
       }
