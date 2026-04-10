@@ -1760,6 +1760,13 @@ export async function handleApiRequest(request, response) {
     }
 
     if (requestUrl.pathname === '/v1/faith/language-preferences') {
+      // 301 → canonical name; keep old route working for one release cycle
+      response.writeHead(301, { Location: '/v1/faith/pastoral-register' });
+      response.end();
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/faith/pastoral-register') {
       await handleFaithLanguagePreferences(request, response, requestUrl);
       return;
     }
@@ -1890,7 +1897,12 @@ export async function handleApiRequest(request, response) {
     }
 
     if (requestUrl.pathname === '/v1/i18n/locales') {
-      await handleLocales(request, response);
+      await handleLocales(request, response, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/i18n/status') {
+      await handleI18nStatus(request, response, session);
       return;
     }
 
@@ -1899,8 +1911,12 @@ export async function handleApiRequest(request, response) {
         writeJson(response, 405, { error: 'Method not allowed' });
         return;
       }
+      writeJson(response, 200, i18nStore.getCatalog(requestUrl.searchParams.get('locale') ?? 'en-US'));
+      return;
+    }
 
-      writeJson(response, 200, i18nStore.getCatalog(requestUrl.searchParams.get('locale') ?? 'en'));
+    if (requestUrl.pathname.startsWith('/v1/i18n/locales/')) {
+      await handleDeleteLocale(request, response, requestUrl, session);
       return;
     }
 
@@ -12097,28 +12113,59 @@ async function handleStaffFaithProfile(request, response, requestUrl, session) {
   writeJson(response, 503, { error: 'Database not configured' });
 }
 
-async function handleLocales(request, response) {
+async function handleLocales(request, response, session) {
   if (request.method === 'GET') {
     writeJson(response, 200, { items: i18nStore.listLocales() });
     return;
   }
 
-  if (request.method !== 'POST') {
-    writeJson(response, 405, { error: 'Method not allowed' });
+  if (request.method === 'POST') {
+    if (requirePracticeAdmin(request, response, session)) return;
+    const payload = await readJsonBody(request);
+    const locale = (payload.locale ?? '').trim();
+    const label = (payload.label ?? '').trim();
+    if (!locale) {
+      writeJson(response, 400, { error: 'locale is required' });
+      return;
+    }
+    const catalog = await i18nStore.ensureLocale(locale, label);
+    telemetry.recordMutation('i18n.locale.create');
+    writeJson(response, 201, catalog);
     return;
   }
 
-  const payload = await readJsonBody(request);
-  const locale = (payload.locale ?? '').trim().toLowerCase();
-  const label = (payload.label ?? '').trim();
+  // DELETE /v1/i18n/locales/:locale handled via the startsWith route below;
+  // bare /v1/i18n/locales only supports GET and POST.
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+async function handleI18nStatus(request, response, session) {
+  if (request.method !== 'GET') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+  if (requirePracticeAdmin(request, response, session)) return;
+  writeJson(response, 200, i18nStore.getStatus());
+}
+
+async function handleDeleteLocale(request, response, requestUrl, session) {
+  if (request.method !== 'DELETE') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+  if (requirePracticeAdmin(request, response, session)) return;
+  const locale = requestUrl.pathname.replace('/v1/i18n/locales/', '').trim();
   if (!locale) {
     writeJson(response, 400, { error: 'locale is required' });
     return;
   }
-
-  const catalog = await i18nStore.ensureLocale(locale, label);
-  telemetry.recordMutation('i18n.locale.create');
-  writeJson(response, 201, catalog);
+  try {
+    await i18nStore.deleteLocale(locale);
+    telemetry.recordMutation('i18n.locale.delete');
+    writeJson(response, 200, { deleted: locale });
+  } catch (err) {
+    writeJson(response, 409, { error: err.message });
+  }
 }
 
 async function handleCatalogByLocale(request, response, requestUrl) {
@@ -12141,19 +12188,20 @@ async function handleAutoTranslate(request, response) {
   }
 
   const payload = await readJsonBody(request);
-  const locale = (payload.locale ?? '').trim().toLowerCase();
+  const locale = (payload.locale ?? '').trim();
+  const scope  = (payload.scope  ?? 'missing');
   if (!locale) {
     writeJson(response, 400, { error: 'locale is required' });
     return;
   }
 
-  const catalog = await i18nStore.autoTranslate(locale, translateMessages);
+  const catalog = await i18nStore.autoTranslate(locale, translateMessages, { scope });
   telemetry.recordMutation('i18n.catalog.auto_translate');
   writeJson(response, 200, catalog);
 }
 
 async function handleTranslationSettingsByLocale(request, response, requestUrl) {
-  const locale = requestUrl.pathname.replace('/v1/i18n/settings/', '').trim().toLowerCase();
+  const locale = requestUrl.pathname.replace('/v1/i18n/settings/', '').trim();
   if (!locale) {
     writeJson(response, 400, { error: 'locale is required' });
     return;

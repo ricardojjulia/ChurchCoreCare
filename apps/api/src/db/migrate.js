@@ -290,6 +290,45 @@ async function applyColumnMigrations(conn) {
     console.log(`  ~ migrated ${superbillRows.length} superbill diagnosis_codes rows to encrypted form`);
   }
 
+  // ── i18n Phase 1 migrations ──────────────────────────────────────────────
+  // Rename language_preference → content_language (what language the person speaks)
+  await addColumnIfMissing('clients', 'content_language', "VARCHAR(35) NULL DEFAULT 'en'");
+  // Per-user UI locale (BCP 47 tag, e.g. 'en-US', 'es-MX')
+  await addColumnIfMissing('clients', 'preferred_ui_locale', 'VARCHAR(35) NULL DEFAULT NULL');
+  await addColumnIfMissing('staff_members', 'preferred_ui_locale', 'VARCHAR(35) NULL DEFAULT NULL');
+  // Tenant-level default UI locale
+  await addColumnIfMissing('tenants', 'default_ui_locale', "VARCHAR(35) NOT NULL DEFAULT 'en-US'");
+  // Practice-level default content language
+  await addColumnIfMissing('practices', 'default_content_language', "VARCHAR(35) NOT NULL DEFAULT 'en'");
+
+  // Create faith_pastoral_registers as the rename of faith_language_preferences
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS \`faith_pastoral_registers\` (
+      \`id\`                      VARCHAR(64)   NOT NULL,
+      \`tenant_id\`               VARCHAR(64)   NOT NULL,
+      \`practice_id\`             VARCHAR(64)   NULL,
+      \`integration_level\`       VARCHAR(64)   NOT NULL DEFAULT 'moderate',
+      \`explicit_faith_language\`  TINYINT(1)   NOT NULL DEFAULT 1,
+      \`include_prayer_language\`  TINYINT(1)   NOT NULL DEFAULT 1,
+      \`include_scripture_refs\`   TINYINT(1)   NOT NULL DEFAULT 1,
+      \`preferred_terminology\`    VARCHAR(255)  NULL,
+      \`updated_at\`               TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (\`id\`),
+      INDEX \`idx_faith_pastoral_register_tenant\` (\`tenant_id\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+  // Copy existing rows from the old table (idempotent via INSERT IGNORE)
+  await conn.query(`
+    INSERT IGNORE INTO \`faith_pastoral_registers\`
+      (\`id\`, \`tenant_id\`, \`practice_id\`, \`integration_level\`,
+       \`explicit_faith_language\`, \`include_prayer_language\`, \`include_scripture_refs\`,
+       \`preferred_terminology\`, \`updated_at\`)
+    SELECT \`id\`, \`tenant_id\`, \`practice_id\`, \`integration_level\`,
+           \`explicit_faith_language\`, \`include_prayer_language\`, \`include_scripture_refs\`,
+           \`preferred_terminology\`, \`updated_at\`
+    FROM \`faith_language_preferences\`
+  `).catch(() => { /* old table may not exist in fresh installs — ignore */ });
+
   console.log('Column migrations done.');
 }
 
