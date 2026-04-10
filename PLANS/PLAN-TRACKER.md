@@ -1,6 +1,6 @@
 # Plan Tracker
 
-Last evaluated: April 2, 2026
+Last evaluated: April 9, 2026
 
 ---
 
@@ -33,6 +33,14 @@ Last evaluated: April 2, 2026
 | Plan | Remaining Work |
 |---|---|
 | [PROJECT-CLEANUP.md](PROJECT-CLEANUP.md) | `__pycache__` in agents/translation_guardian, stale `.github/agents/translation_guardian/` copy, `.venv/` duplicate, test-results artifacts |
+
+---
+
+## 🗂 Planning
+
+| Plan | Summary |
+| ---- | ------- |
+| [I18N-REWRITE.md](I18N-REWRITE.md) | Full i18n system rewrite: BCP 47 locale codes, plural support, Intl.* formatting, `/translate-locale` Claude Code skill, 6 phases |
 
 ---
 
