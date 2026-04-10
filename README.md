@@ -82,7 +82,7 @@ The platform has moved quickly over the last few iterations, and the most recent
 The repository runs automated nightly AppSec and DB Security scans at **23:00 UTC** via GitHub Actions.
 
 | Script | Command | Description |
-|--------|---------|-------------|
+| ------ | ------- | ----------- |
 | AppSec scan | `node ops/appsec-scan.mjs` | 9-category application security review |
 | DB Security scan | `node ops/db-security-scan.mjs` | PHI/PII encryption coverage and DB config review |
 | Nightly runner | `node ops/nightly-security-runner.mjs` | Orchestrator — generates dated reports in `docs/SecurityChecks/` |
@@ -513,7 +513,7 @@ Recurring scheduling no longer starts with raw RRULE syntax. Staff now get reada
 Faith Counseling runs automated nightly security scans at **23:00 UTC** via GitHub Actions. Each run produces two complementary reports:
 
 | Scan | What It Covers |
-|------|---------------|
+| ---- | -------------- |
 | **AppSec** | Dependency vulnerabilities, hardcoded secrets, dangerous code patterns, security headers, auth/session configuration, input validation, logging PHI/PII exposure, CORS |
 | **DB Security** | PHI/PII encryption coverage across all 73 schema tables, tenant isolation, audit table structure, session security, query parameterization, AES-256-GCM key config |
 
