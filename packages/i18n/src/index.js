@@ -1,4 +1,4 @@
-export { DEFAULT_LOCALE as defaultLocale, localeLabels, SUPPORTED_LOCALES, LOCALE_MAP, LEGACY_ALIASES, resolveLocaleCode } from './locales.js';
+export { DEFAULT_LOCALE, DEFAULT_LOCALE as defaultLocale, localeLabels, SUPPORTED_LOCALES, LOCALE_MAP, LEGACY_ALIASES, resolveLocaleCode } from './locales.js';
 
 export const baseMessages = Object.freeze({
   'app.name': 'Faith Counseling',

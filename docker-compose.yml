@@ -68,7 +68,7 @@ services:
       context: .
       dockerfile: agents/translation_guardian/Dockerfile
     container_name: faith-translation-guardian
-    restart: unless-stopped
+    restart: on-failure
     env_file:
       - .env
     environment:
