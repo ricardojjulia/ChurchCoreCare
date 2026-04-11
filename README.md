@@ -550,6 +550,7 @@ The change log summarizes completed work across releases and documents the detai
 
 - **API Documentation:** `docs/api/openapi.yaml` — OpenAPI 3.1 spec (v2.0.0), 150+ endpoints; interactive via `http://localhost:3002/api/docs`
 - **User Manual:** `docs/User Manual/README.md` — full end-user guide covering all roles and platform surfaces
+- Locale status docs: `docs/i18n/` — generated per-locale translation coverage and review readiness snapshots
 - Product and planning overview: `docs/PRODUCT-PLANS-OVERVIEW.md`
 - Domain model: `docs/domain-model.md`
 - Faithful Workflows visual upgrade (v5.5.2): `docs/v5.5.2-RELEASE-SUMMARY.md`

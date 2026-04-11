@@ -2,6 +2,25 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 11, 2026 — Bundle and Locale Status Sync
+
+### fix: commit referenced public web bundle artifacts and publish the latest es-MX locale status
+
+**Date:** April 11, 2026
+**Affected area:** `apps/web/public/assets/*`, `docs/i18n/es-MX-status.md`, `README.md`
+
+Corrected the checked-out repository state so the committed public HTML shell points at bundle files that are actually present in the worktree, and added the latest generated Spanish locale status snapshot to the documentation set.
+
+**What changed:**
+
+- Added the current web bundle chunk set under `apps/web/public/assets/` so the hashed entry bundle referenced by `apps/web/public/index.html` is present after checkout
+- Published `docs/i18n/es-MX-status.md` with the latest generated translation status summary for the Spanish locale
+- Added the `docs/i18n/` status docs location to the README documentation index so maintainers can find locale readiness snapshots directly
+
+**Why:**
+
+The repository had a committed HTML entrypoint that referenced an untracked hashed web bundle, which left the local checked-out app state incomplete. Committing the active bundle artifacts and the matching locale status documentation restores a consistent local baseline and preserves the latest i18n review output.
+
 ## April 9, 2026 — v6.1.0: Deterministic Audit Observations Engine
 
 ### refactor(audit): replace AI-based audit observations with 75 deterministic rules
