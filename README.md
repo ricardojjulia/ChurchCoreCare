@@ -66,8 +66,8 @@ Behind that presentation, the recent work has made the platform easier to trust 
 
 The platform has moved quickly over the last few iterations, and the most recent work is aimed at making Faith Counseling easier to explore, easier to operate, and easier to present with confidence.
 
-- **Full API documentation is live (v6.0.0):** The OpenAPI spec has been fully regenerated from the actual implementation — growing from 12 documented endpoints to 150+, fixing the security scheme from Bearer JWT to the correct HttpOnly session cookie, removing phantom paths, and adding every surface: auth, clients and all sub-resources, scheduling, billing, portal, faith features, audit intelligence (including the new AI observations endpoint), platform admin, i18n, telemetry, and monitoring. Browsable at `http://localhost:3002/api/docs`.
-- **AI-powered Audit Intelligence observations:** The Audit Intelligence tab in Practice Operations now generates AI-powered insights after every query. Claude analyzes the time window, top actions, activity breakdown, and event log and returns 4–6 specific, data-driven observations for the practice administrator. Requires `ANTHROPIC_API_KEY` in `.env`.
+- **Full API documentation is live (v6.0.0):** The OpenAPI spec has been fully regenerated from the actual implementation — growing from 12 documented endpoints to 150+, fixing the security scheme from Bearer JWT to the correct HttpOnly session cookie, removing phantom paths, and adding every surface: auth, clients and all sub-resources, scheduling, billing, portal, faith features, audit intelligence, platform admin, i18n, telemetry, and monitoring. Browsable at `http://localhost:3002/api/docs`.
+- **Deterministic Audit Intelligence observations (v6.1.0):** The Audit Intelligence tab in Practice Operations now generates instant, rule-based callouts after every query — no AI dependency required. A 75-rule engine evaluates volume patterns, denial and error rates, authentication anomalies, PHI access concentration, admin actions, actor behavior, action distribution, and data quality gaps. Results are severity-tiered (critical → warning → info) and always available without an `ANTHROPIC_API_KEY`.
 - **3-minute browser idle session timeout:** Any open browser tab now automatically invalidates the session after 3 minutes of inactivity. A dismissible warning appears at 30 seconds remaining. The server-side idle timeout has been tightened to match, providing defense in depth for PHI protection.
 - **Browser error sweep is now clean:** a Playwright-driven UI scan now walks public, admin, and client surfaces against the local app, and the latest pass cleared public CSP script violations, signed-out auth noise, protected-monitoring 401s, and the Scheduling recurring-series runtime loop so the sweep finishes at `0` public, `0` admin, and `0` client errors.
 - **The platform speaks like a counseling practice:** every screen title, nav label, dashboard panel, and key empty state was audited and rewritten — `My Day`, `My Tasks`, `Needs Attention`, `Caseload`, `Forms & Documents`, `Privacy & Data`, and `Welcome to Faith Counseling` at sign-in, among others.
@@ -82,7 +82,7 @@ The platform has moved quickly over the last few iterations, and the most recent
 The repository runs automated nightly AppSec and DB Security scans at **23:00 UTC** via GitHub Actions.
 
 | Script | Command | Description |
-|--------|---------|-------------|
+| ------ | ------- | ----------- |
 | AppSec scan | `node ops/appsec-scan.mjs` | 9-category application security review |
 | DB Security scan | `node ops/db-security-scan.mjs` | PHI/PII encryption coverage and DB config review |
 | Nightly runner | `node ops/nightly-security-runner.mjs` | Orchestrator — generates dated reports in `docs/SecurityChecks/` |
@@ -101,8 +101,7 @@ A strict manual repository review is now tracked in:
 
 Current manual review posture: **Medium risk** (reduced from High after 2026-04-06 remediation pass). The critical credential-disclosure and high reset-token exposure issues have been fixed. MFA enforcement is partially mitigated pending full TOTP/WebAuthn implementation. See the findings document for detail on open items.
 
-## API Security And Compliance Baseline (v5.7.0)
-## API Security And Compliance Baseline (v6.0.0)
+## API Security And Compliance Baseline (v6.1.0)
 
 This repository now includes a versioned API security and compliance engineering baseline for high-trust environments where sensitive data may exist. v5.7.0 additionally ships a full Jaeger + Prometheus observability stack.
 
@@ -194,7 +193,6 @@ Workspace Studio is the practice administration hub, accessible from the main na
 Client Detail now includes a direct header action to open documents for the active client. The action routes staff into the Client Portal Documents tab with that client preselected, so records can be viewed and document tasks can be assigned without manually switching surfaces or reselecting the client.
 The checked-in public web bundle includes this shortcut so environments serving `apps/web/public` render the button without requiring local source recompilation.
 
-
 ## Public Web Build Artifacts
 
 The `apps/web/public/assets` bundle files may be refreshed and committed when shipping UI workflow updates so the checked-in public web surface stays aligned with the latest source behavior.
@@ -215,6 +213,18 @@ The static public surfaces are meant to reflect the current product posture, not
 - `packages/telemetry`: shared telemetry and monitoring utilities
 - `ops/demo-dataset`: reproducible SQL demo-data generation, apply, and verification workflow
 - `pnpm start`: canonical local launcher with env loading, DB preflight, migrations, and coordinated API, web, and worker startup
+
+## Future Ministry Integration Readiness
+
+Faith Counseling now includes a dedicated planning artifact for future Church Management integration posture: [PLANS/CHURCH-MANAGEMENT-MINISTRY-INTEGRATION.md](PLANS/CHURCH-MANAGEMENT-MINISTRY-INTEGRATION.md).
+
+That plan establishes the expected boundary for any upstream ministry platform, including ChurchForge:
+
+- Faith Counseling remains a separate protected ministry system, not an internal module.
+- Future integration must use APIs, webhooks, or adapters rather than direct database coupling.
+- Member-to-client linkage must be consent-aware, tenant-scoped, revocable, and minimum-necessary.
+- Church-side users should receive ministry-safe coordination data by default, not clinical record detail.
+- AI and telemetry must treat counseling data as restricted, with audit and monitoring kept privacy-safe and separate.
 
 ## Architecture Diagram
 
@@ -512,17 +522,19 @@ Recurring scheduling no longer starts with raw RRULE syntax. Staff now get reada
 Faith Counseling runs automated nightly security scans at **23:00 UTC** via GitHub Actions. Each run produces two complementary reports:
 
 | Scan | What It Covers |
-|------|---------------|
+| ---- | -------------- |
 | **AppSec** | Dependency vulnerabilities, hardcoded secrets, dangerous code patterns, security headers, auth/session configuration, input validation, logging PHI/PII exposure, CORS |
 | **DB Security** | PHI/PII encryption coverage across all 73 schema tables, tenant isolation, audit table structure, session security, query parameterization, AES-256-GCM key config |
 
 **Latest findings (2026-04-06):**
+
 - AppSec: 🔴 HIGH — 4 high-severity and 16 medium findings, no criticals. Key items: dev credential log statements in migrate.js, `Math.random()` used in several UI components instead of crypto-secure randomness.
 - DB Security: 🚨 CRITICAL — 5 critical PHI/PII fields without encryption (legacy `staff_accounts.email`, `superbills.diagnosis_codes`, provider NPI/referral_date, `tenant_provisioning.owner_email`). PHI encryption coverage: 47/52 fields (90%).
 
 All reports are stored in [`docs/SecurityChecks/`](./docs/SecurityChecks/) and retained for 30 days. Reports are auto-committed to a `security/nightly-YYYY-MM-DD` branch with a PR opened for review.
 
 To run scans locally:
+
 ```bash
 node ops/nightly-security-runner.mjs        # full run
 node ops/nightly-security-runner.mjs --dry-run  # preview without writing

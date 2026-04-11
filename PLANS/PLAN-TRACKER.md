@@ -1,6 +1,6 @@
 # Plan Tracker
 
-Last evaluated: April 2, 2026
+Last evaluated: April 9, 2026
 
 ---
 
@@ -36,9 +36,18 @@ Last evaluated: April 2, 2026
 
 ---
 
+## 🗂 Planning
+
+| Plan | Summary |
+| ---- | ------- |
+| [I18N-REWRITE.md](I18N-REWRITE.md) | Full i18n system rewrite: BCP 47 locale codes, plural support, Intl.* formatting, `/translate-locale` Claude Code skill, 6 phases |
+
+---
+
 ## 📋 Living Documents (no done state)
 
 | Plan | Purpose |
 |---|---|
 | [FULL-SECURITY-AND-AUDITING.md](FULL-SECURITY-AND-AUDITING.md) | Canonical API security and compliance baseline — updated as standards evolve |
 | [FULL-SURFACE-MONITORING.md](FULL-SURFACE-MONITORING.md) | Monitoring baseline — updated as observability surfaces expand |
+| [CHURCH-MANAGEMENT-MINISTRY-INTEGRATION.md](CHURCH-MANAGEMENT-MINISTRY-INTEGRATION.md) | Future integration boundary for Church Management systems such as ChurchForge |
