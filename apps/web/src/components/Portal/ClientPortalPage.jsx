@@ -36,20 +36,7 @@ import {
   updatePortalIntakePacket,
   updatePortalProfile,
 } from '../../lib/clientApi.js';
-import { frontendTelemetry } from '../../lib/frontendTelemetry.js';
-import { useSurfaceTelemetry } from '../../lib/useSurfaceTelemetry.js';
 import { useI18n } from '../../lib/i18nContext.jsx';
-
-const PORTAL_TAB_SURFACES = {
-  dashboard: 'portal.dashboard',
-  profile: 'portal.profile',
-  appointments: 'portal.appointments',
-  documents: 'portal.documents',
-  counselor: 'portal.counselor',
-  financials: 'portal.giving',
-  resources: 'portal.resources',
-  dataRights: 'portal.data_rights',
-};
 
 const EDUCATION_LEVELS = [
   { value: '', label: 'Not specified' },
@@ -261,7 +248,6 @@ export default function ClientPortalPage({
 
   const previewClients = Array.isArray(clients) ? clients : [];
   const effectiveClientId = isClientRole ? null : selectedClientId;
-  const activeSurfaceId = PORTAL_TAB_SURFACES[activeTab] ?? 'portal.dashboard';
   const overview = portalData.overview;
   const profile = portalData.profile;
 
@@ -274,11 +260,6 @@ export default function ClientPortalPage({
     if (!initialClientId) return;
     setSelectedClientId(initialClientId);
   }, [initialClientId, isClientRole]);
-
-  useSurfaceTelemetry(activeSurfaceId, {
-    surfaceKind: 'tab',
-    workflow: 'portal',
-  });
 
   useEffect(() => {
     if (isClientRole) return;
@@ -326,10 +307,6 @@ export default function ClientPortalPage({
       } catch (err) {
         if (cancelled) return;
         setError(err.message || 'Unable to load portal data.');
-        frontendTelemetry.trackUiError('portal', 'load_failure', {
-          workflow: 'portal',
-          statusClass: err.statusClass ?? '5xx',
-        });
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -406,18 +383,11 @@ export default function ClientPortalPage({
         message: 'Your portal profile preferences were updated.',
         color: 'green',
       });
-      frontendTelemetry.trackAction('portal.profile', 'save_profile', 'success', {
-        workflow: 'portal_profile',
-      });
     } catch (err) {
       notifications.show({
         title: 'Save failed',
         message: err.message || 'Unable to save portal profile.',
         color: 'red',
-      });
-      frontendTelemetry.trackAction('portal.profile', 'save_profile', 'failure', {
-        workflow: 'portal_profile',
-        statusClass: err.statusClass ?? '4xx',
       });
     } finally {
       setSavingProfile(false);
@@ -431,9 +401,6 @@ export default function ClientPortalPage({
         message: 'Enter your current password and confirm the new one.',
         color: 'yellow',
       });
-      frontendTelemetry.trackValidationError('portal.profile', 'portal_password_change', {
-        action: 'change_password',
-      });
       return;
     }
 
@@ -442,9 +409,6 @@ export default function ClientPortalPage({
         title: 'Passwords do not match',
         message: 'The new password and confirmation must match.',
         color: 'yellow',
-      });
-      frontendTelemetry.trackValidationError('portal.profile', 'portal_password_change', {
-        action: 'change_password',
       });
       return;
     }
@@ -460,9 +424,6 @@ export default function ClientPortalPage({
         message: 'Sign in again with your new portal password.',
         color: 'green',
       });
-      frontendTelemetry.trackAction('portal.profile', 'change_password', 'success', {
-        workflow: 'portal_password_change',
-      });
       setPasswordDraft({
         currentPassword: '',
         newPassword: '',
@@ -477,10 +438,6 @@ export default function ClientPortalPage({
         message: err.message || 'Unable to change the portal password.',
         color: 'red',
       });
-      frontendTelemetry.trackAction('portal.profile', 'change_password', 'failure', {
-        workflow: 'portal_password_change',
-        statusClass: err.statusClass ?? '4xx',
-      });
     } finally {
       setChangingPassword(false);
     }
@@ -488,9 +445,6 @@ export default function ClientPortalPage({
 
   async function handleAppointmentRequestSubmit() {
     if (!requestDraft.preferredStartAt || !requestDraft.preferredEndAt) {
-      frontendTelemetry.trackValidationError('portal.appointments', 'portal_appointment_request', {
-        action: 'submit_request',
-      });
       notifications.show({
         title: 'Missing times',
         message: 'Choose a preferred start and end time before submitting.',
@@ -515,18 +469,11 @@ export default function ClientPortalPage({
         message: 'Your appointment request was sent to the practice.',
         color: 'green',
       });
-      frontendTelemetry.trackAction('portal.appointments', 'submit_request', 'success', {
-        workflow: 'portal_appointment_request',
-      });
     } catch (err) {
       notifications.show({
         title: 'Request failed',
         message: err.message || 'Unable to submit appointment request.',
         color: 'red',
-      });
-      frontendTelemetry.trackAction('portal.appointments', 'submit_request', 'failure', {
-        workflow: 'portal_appointment_request',
-        statusClass: err.statusClass ?? '4xx',
       });
     } finally {
       setSubmittingRequest(false);
@@ -547,18 +494,11 @@ export default function ClientPortalPage({
         message: `Document marked as ${nextStatus}.`,
         color: 'green',
       });
-      frontendTelemetry.trackAction('portal.documents', 'update_document', 'success', {
-        workflow: 'portal_documents',
-      });
     } catch (err) {
       notifications.show({
         title: 'Update failed',
         message: err.message || 'Unable to update the document.',
         color: 'red',
-      });
-      frontendTelemetry.trackAction('portal.documents', 'update_document', 'failure', {
-        workflow: 'portal_documents',
-        statusClass: err.statusClass ?? '4xx',
       });
     } finally {
       setActingDocumentId('');
@@ -579,18 +519,11 @@ export default function ClientPortalPage({
         message: 'The practice has been notified that your packet is complete.',
         color: 'green',
       });
-      frontendTelemetry.trackAction('portal.documents', 'complete_intake', 'success', {
-        workflow: 'portal_documents',
-      });
     } catch (err) {
       notifications.show({
         title: 'Submission failed',
         message: err.message || 'Unable to complete the intake packet.',
         color: 'red',
-      });
-      frontendTelemetry.trackAction('portal.documents', 'complete_intake', 'failure', {
-        workflow: 'portal_documents',
-        statusClass: err.statusClass ?? '4xx',
       });
     } finally {
       setActingIntakePacketId('');
@@ -604,9 +537,6 @@ export default function ClientPortalPage({
         message: 'Select a file before uploading.',
         color: 'yellow',
       });
-      frontendTelemetry.trackValidationError('portal.documents', 'portal_upload', {
-        action: 'upload_file',
-      });
       return;
     }
 
@@ -615,9 +545,6 @@ export default function ClientPortalPage({
         title: 'File too large',
         message: 'Portal uploads must be 2 MB or smaller.',
         color: 'red',
-      });
-      frontendTelemetry.trackValidationError('portal.documents', 'portal_upload', {
-        action: 'upload_file',
       });
       return;
     }
@@ -640,18 +567,11 @@ export default function ClientPortalPage({
         message: 'Your file was added to the portal for staff review.',
         color: 'green',
       });
-      frontendTelemetry.trackAction('portal.documents', 'upload_file', 'success', {
-        workflow: 'portal_upload',
-      });
     } catch (err) {
       notifications.show({
         title: 'Upload failed',
         message: err.message || 'Unable to upload the file.',
         color: 'red',
-      });
-      frontendTelemetry.trackAction('portal.documents', 'upload_file', 'failure', {
-        workflow: 'portal_upload',
-        statusClass: err.statusClass ?? '4xx',
       });
     } finally {
       setUploading(false);
@@ -671,18 +591,11 @@ export default function ClientPortalPage({
         message: 'A JSON export of your data has been downloaded.',
         color: 'green',
       });
-      frontendTelemetry.trackAction('portal.data_rights', 'export_data', 'success', {
-        workflow: 'portal_data_rights',
-      });
     } catch (err) {
       notifications.show({
         title: 'Export failed',
         message: err.message || 'Unable to create your data export.',
         color: 'red',
-      });
-      frontendTelemetry.trackAction('portal.data_rights', 'export_data', 'failure', {
-        workflow: 'portal_data_rights',
-        statusClass: err.statusClass ?? '4xx',
       });
     } finally {
       setExportingData(false);
@@ -703,18 +616,11 @@ export default function ClientPortalPage({
         color: response.item?.status === 'restricted' ? 'yellow' : 'green',
       });
       setDeletionNotes('');
-      frontendTelemetry.trackAction('portal.data_rights', 'request_deletion', 'success', {
-        workflow: 'portal_data_rights',
-      });
     } catch (err) {
       notifications.show({
         title: 'Request failed',
         message: err.message || 'Unable to create the deletion request.',
         color: 'red',
-      });
-      frontendTelemetry.trackAction('portal.data_rights', 'request_deletion', 'failure', {
-        workflow: 'portal_data_rights',
-        statusClass: err.statusClass ?? '4xx',
       });
     } finally {
       setRequestingDeletion(false);

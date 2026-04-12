@@ -6,7 +6,6 @@ import {
 import { notifications } from '@mantine/notifications';
 import { useI18n } from '../../../lib/i18nContext.jsx';
 import { csrfHeaders } from '../../../lib/csrf.js';
-import { frontendTelemetry } from '../../../lib/frontendTelemetry.js';
 
 const STATUS_OPTIONS = [
   { value: 'draft',     label: 'Draft' },
@@ -116,10 +115,8 @@ export default function TreatmentPlanTab({ clientId }) {
         });
       }
       setDirty(false);
-      frontendTelemetry.trackSurfaceLoad('chart.treatment_plan', 'success');
     } catch (err) {
       setLoadError(err.message);
-      frontendTelemetry.trackSurfaceLoad('chart.treatment_plan', 'error');
     } finally {
       setLoading(false);
     }
@@ -154,10 +151,8 @@ export default function TreatmentPlanTab({ clientId }) {
       });
       await load();
       notifications.show({ title: 'Saved', message: 'Treatment plan updated.', color: 'green' });
-      frontendTelemetry.trackAction('chart.treatment_plan', 'save_plan', 'success', { workflow: 'clinical_chart' });
     } catch (err) {
       notifications.show({ title: 'Error', message: err.message, color: 'red' });
-      frontendTelemetry.trackAction('chart.treatment_plan', 'save_plan', 'failure', { workflow: 'clinical_chart' });
     } finally {
       setSaving(false);
     }

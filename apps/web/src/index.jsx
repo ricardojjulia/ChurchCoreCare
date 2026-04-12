@@ -5,14 +5,11 @@ import { Notifications } from '@mantine/notifications';
 import { DatesProvider } from '@mantine/dates';
 import App from './App';
 import { theme } from './theme';
-import { frontendTelemetry } from './lib/frontendTelemetry.js';
 import { I18nProvider, useI18n } from './lib/i18nContext.jsx';
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
 import '@mantine/dates/styles.css';
 import './index.css';
-
-frontendTelemetry.start();
 
 const colorSchemeManager = localStorageColorSchemeManager({ key: 'faith.colorScheme' });
 

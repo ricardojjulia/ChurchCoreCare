@@ -1,8 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { ActionIcon, Alert, Box, Group, Loader, Stack, Text, Title, Tooltip } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { useSurfaceTelemetry } from '../../lib/useSurfaceTelemetry.js';
-import { frontendTelemetry } from '../../lib/frontendTelemetry.js';
 import { useI18n } from '../../lib/i18nContext.jsx';
 import SafetyBanner from './SafetyBanner.jsx';
 import ClientRankList from './ClientRankList.jsx';
@@ -198,7 +196,6 @@ async function persistStateChange(clientId, ruleId, status, deferredUntil = null
  */
 export default function FaithWorkflowsPage({ clients = [], currentUser, sharedOperationsSummary = null }) {
   const { t } = useI18n();
-  useSurfaceTelemetry('faith_workflows', { surfaceKind: 'view', workflow: 'faith_workflows' });
   const demoModeEnabled = useMemo(() => isFaithWorkflowDemoEnabled(), []);
 
   // ─── Canvas view variant ─────────────────────────────────────────────────
@@ -361,42 +358,21 @@ export default function FaithWorkflowsPage({ clients = [], currentUser, sharedOp
     if (lastSurfacedRef.current === key) return;
     lastSurfacedRef.current = key;
 
-    const safetyCount = recommendations.filter((r) => r.category === 'safety').length;
-    frontendTelemetry.trackAction(
-      'faith_workflows',
-      'recommendations_surfaced',
-      'success',
-      {
-        workflow: 'faith_workflows',
-        // statusClass carries the count band — no PHI, no IDs
-        statusClass: safetyCount > 0 ? 'with_safety' : 'no_safety',
-      },
-    );
   }, [selectedClientId, recommendations]);
 
   // ─── Handlers ─────────────────────────────────────────────────────────────
   const handleSelectClient = useCallback((clientId) => {
-    frontendTelemetry.trackInteraction('faith_workflows', 'client_selected', 0, { workflow: 'faith_workflows' });
     setSelectedClientId(clientId);
     setSelectedRec(null);
     closeDrawer();
   }, [closeDrawer]);
 
   const handleSelectRec = useCallback((rec) => {
-    frontendTelemetry.trackInteraction('faith_workflows', 'recommendation_opened', 0, {
-      workflow: 'faith_workflows',
-      // category only — no client ID, no personal data
-      statusClass: rec?.category ?? 'unknown',
-    });
     setSelectedRec(rec);
     openDrawer();
   }, [openDrawer]);
 
   const handleStatusChange = useCallback((rec, status, deferredUntil = null) => {
-    frontendTelemetry.trackAction('faith_workflows', `recommendation_${status}`, 'success', {
-      workflow: 'faith_workflows',
-      statusClass: rec?.category ?? 'unknown',
-    });
     // Optimistic UI update
     setPersistedStates((prev) => ({
       ...prev,
@@ -416,10 +392,6 @@ export default function FaithWorkflowsPage({ clients = [], currentUser, sharedOp
   }, [selectedRec, closeDrawer, selectedClientId]);
 
   const handleAction = useCallback((rec, actionType) => {
-    frontendTelemetry.trackAction('faith_workflows', `action_${actionType}`, 'success', {
-      workflow: 'faith_workflows',
-      statusClass: rec?.category ?? 'unknown',
-    });
     if (actionType === 'mark_complete') {
       handleStatusChange(rec, 'complete');
     } else if (actionType === 'hide') {
@@ -431,22 +403,10 @@ export default function FaithWorkflowsPage({ clients = [], currentUser, sharedOp
     }
   }, [handleStatusChange, openDrawer]);
 
-  const handleShowMoreClients = useCallback(({ remaining = 0, total = 0 } = {}) => {
-    frontendTelemetry.trackAction('faith_workflows', 'show_more_clients', 'success', {
-      workflow: 'faith_workflows',
-      statusClass: classifyCountBand(total),
-    });
-    frontendTelemetry.trackInteraction('faith_workflows', 'client_list_growth', 0, {
-      workflow: 'faith_workflows',
-      statusClass: remaining > 0 ? 'partial' : 'complete',
-    });
+  const handleShowMoreClients = useCallback(() => {
   }, []);
 
-  const handleToggleCategory = useCallback((category, expanded) => {
-    frontendTelemetry.trackAction('faith_workflows', expanded ? 'category_expanded' : 'category_collapsed', 'success', {
-      workflow: 'faith_workflows',
-      statusClass: String(category || 'unknown').slice(0, 40).toLowerCase(),
-    });
+  const handleToggleCategory = useCallback(() => {
   }, []);
 
   const isLoadingSelected = selectedClientId && loadingSet.has(selectedClientId);

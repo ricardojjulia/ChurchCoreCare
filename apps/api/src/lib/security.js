@@ -219,7 +219,7 @@ const PUBLIC_ROUTES = new Set([
 const WRITE_ROLES = new Set(['platform_admin', 'practice_owner', 'practice_admin', 'counselor']);
 
 // Routes restricted to admin-level roles only
-const ADMIN_ROUTES = ['/v1/i18n/settings/', '/v1/i18n/translate', '/v1/monitoring/db', '/v1/telemetry/summary', '/v1/portal/data-rights/review'];
+const ADMIN_ROUTES = ['/v1/i18n/settings/', '/v1/i18n/translate', '/v1/monitoring/db', '/v1/portal/data-rights/review'];
 
 const ADMIN_ROLES = new Set(['platform_admin', 'practice_owner', 'practice_admin']);
 const CLIENT_ALLOWED_ROUTE_PREFIXES = ['/v1/portal/'];
@@ -250,11 +250,6 @@ export function enforceRbac(request, response, route, session = null) {
   if (route === '/v1/auth/portal-password-reset') return false;
   if (route === '/v1/portal/public-requests' && request.method === 'POST') return false;
   if (route === '/v1/portal/public-config' && request.method === 'GET') return false;
-
-  // Telemetry endpoints accept any authenticated caller; vitals ingestion is
-  // also allowed from browser without role (it carries no PHI).
-  if (route === '/v1/telemetry/events') return false;
-  if (route === '/v1/telemetry/vitals') return false;
 
   // Derive role: prefer verified session; fall back to header in dev only.
   let role;

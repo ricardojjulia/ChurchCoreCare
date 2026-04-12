@@ -8,7 +8,6 @@ import {
   Text,
   Title,
 } from '@mantine/core';
-import { frontendTelemetry } from '../lib/frontendTelemetry.js';
 import { useI18n } from '../lib/i18nContext.jsx';
 
 function resolveClientFullName(client) {
@@ -54,9 +53,6 @@ function ActionButton({ action, onClick, children }) {
     <Button
       variant="default"
       onClick={() => {
-        frontendTelemetry.trackAction('counselor_home', action, 'success', {
-          workflow: 'counselor_home',
-        });
         onClick?.();
       }}
     >
@@ -248,9 +244,6 @@ export default function CounselorHomePage({
                     size="compact-sm"
                     variant="subtle"
                     onClick={() => {
-                      frontendTelemetry.trackAction('counselor_home', 'open_intake_preview', 'success', {
-                        workflow: 'counselor_home',
-                      });
                       onOpenClient?.({ clientId: item.clientId, initialTab: 'intakePreview' });
                     }}
                   >
@@ -292,9 +285,6 @@ export default function CounselorHomePage({
                       size="compact-sm"
                       variant="subtle"
                       onClick={() => {
-                        frontendTelemetry.trackAction('counselor_home', 'schedule_follow_up_client', 'success', {
-                          workflow: 'counselor_home',
-                        });
                         onOpenScheduling?.(client.clientId);
                       }}
                     >
@@ -308,9 +298,6 @@ export default function CounselorHomePage({
             <Button
               variant="light"
               onClick={() => {
-                frontendTelemetry.trackAction('counselor_home', 'review_clients', 'success', {
-                  workflow: 'counselor_home',
-                });
                 onOpenClients?.();
               }}
             >
@@ -347,9 +334,6 @@ export default function CounselorHomePage({
               <Button
                 variant="default"
                 onClick={() => {
-                  frontendTelemetry.trackAction('counselor_home', 'open_charting', 'success', {
-                    workflow: 'counselor_home',
-                  });
                   onOpenClinicalChart?.(noteGapChartTarget);
                 }}
               >
@@ -358,9 +342,6 @@ export default function CounselorHomePage({
               <Button
                 variant="default"
                 onClick={() => {
-                  frontendTelemetry.trackAction('counselor_home', 'open_documents', 'success', {
-                    workflow: 'counselor_home',
-                  });
                   onOpenDocuments?.();
                 }}
               >

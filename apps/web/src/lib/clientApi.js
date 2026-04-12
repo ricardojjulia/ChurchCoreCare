@@ -1,25 +1,21 @@
 import { csrfHeaders } from './csrf.js';
-import { frontendTelemetry } from './frontendTelemetry.js';
 
 async function apiFetch(url, options = {}) {
-  const method = options.method ?? 'GET';
-  return frontendTelemetry.instrumentRequest(url, method, async () => {
-    const response = await fetch(url, options);
-    if (!response.ok) {
-      let message = `Request failed: ${response.status}`;
-      try {
-        const body = await response.json();
-        message = body.error || body.message || message;
-      } catch (_) {
-        // ignore parse error
-      }
-      const error = new Error(message);
-      error.status = response.status;
-      error.statusClass = `${Math.floor(response.status / 100)}xx`;
-      throw error;
+  const response = await fetch(url, options);
+  if (!response.ok) {
+    let message = `Request failed: ${response.status}`;
+    try {
+      const body = await response.json();
+      message = body.error || body.message || message;
+    } catch (_) {
+      // ignore parse error
     }
-    return response.json();
-  });
+    const error = new Error(message);
+    error.status = response.status;
+    error.statusClass = `${Math.floor(response.status / 100)}xx`;
+    throw error;
+  }
+  return response.json();
 }
 
 function withClientId(baseUrl, clientId) {
@@ -668,55 +664,41 @@ export function fetchSchedulingCalendar({ day, timezone, counselorId, counselorN
 }
 
 export async function createAppointmentRecord(data) {
-  return frontendTelemetry.instrumentRequest('/api/v1/appointments', 'POST', async () => {
-    const response = await fetch('/api/v1/appointments', {
-      method: 'POST',
-      headers: csrfHeaders(),
-      body: JSON.stringify(data),
-    });
-
-    if (!response.ok) {
-      let payload = null;
-      try {
-        payload = await response.json();
-      } catch (_) {
-        payload = null;
-      }
-      const error = new Error(payload?.error || payload?.message || `Request failed: ${response.status}`);
-      error.status = response.status;
-      error.statusClass = `${Math.floor(response.status / 100)}xx`;
-      if (payload?.conflicts) error.conflicts = payload.conflicts;
-      throw error;
-    }
-
-    return response.json();
+  const response = await fetch('/api/v1/appointments', {
+    method: 'POST',
+    headers: csrfHeaders(),
+    body: JSON.stringify(data),
   });
+
+  if (!response.ok) {
+    let payload = null;
+    try { payload = await response.json(); } catch (_) { payload = null; }
+    const error = new Error(payload?.error || payload?.message || `Request failed: ${response.status}`);
+    error.status = response.status;
+    error.statusClass = `${Math.floor(response.status / 100)}xx`;
+    if (payload?.conflicts) error.conflicts = payload.conflicts;
+    throw error;
+  }
+  return response.json();
 }
 
 export async function updateAppointmentRecord(appointmentId, data) {
-  return frontendTelemetry.instrumentRequest(`/api/v1/appointments/${appointmentId}`, 'PATCH', async () => {
-    const response = await fetch(`/api/v1/appointments/${appointmentId}`, {
-      method: 'PATCH',
-      headers: csrfHeaders(),
-      body: JSON.stringify(data),
-    });
-
-    if (!response.ok) {
-      let payload = null;
-      try {
-        payload = await response.json();
-      } catch (_) {
-        payload = null;
-      }
-      const error = new Error(payload?.error || payload?.message || `Request failed: ${response.status}`);
-      error.status = response.status;
-      error.statusClass = `${Math.floor(response.status / 100)}xx`;
-      if (payload?.conflicts) error.conflicts = payload.conflicts;
-      throw error;
-    }
-
-    return response.json();
+  const response = await fetch(`/api/v1/appointments/${appointmentId}`, {
+    method: 'PATCH',
+    headers: csrfHeaders(),
+    body: JSON.stringify(data),
   });
+
+  if (!response.ok) {
+    let payload = null;
+    try { payload = await response.json(); } catch (_) { payload = null; }
+    const error = new Error(payload?.error || payload?.message || `Request failed: ${response.status}`);
+    error.status = response.status;
+    error.statusClass = `${Math.floor(response.status / 100)}xx`;
+    if (payload?.conflicts) error.conflicts = payload.conflicts;
+    throw error;
+  }
+  return response.json();
 }
 
 export async function deleteAppointmentRecord(appointmentId) {

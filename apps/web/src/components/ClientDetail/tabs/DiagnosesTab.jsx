@@ -11,7 +11,6 @@ import {
   createClientAllergy,    updateClientAllergy,    deleteClientAllergy,
   fetchDsm5TrLookup,
 } from '../../../lib/clientApi.js';
-import { frontendTelemetry } from '../../../lib/frontendTelemetry.js';
 import { useI18n } from '../../../lib/i18nContext.jsx';
 
 function strToDate(s) { if (!s) return null; const d = new Date(s); return isNaN(d) ? null : d; }
@@ -77,14 +76,6 @@ function buildDiagnosisLookupValue(code, description) {
   return code && description ? `${code}::${description}` : null;
 }
 
-function trackDiagnosisAction(action, result = 'success', extras = {}) {
-  frontendTelemetry.trackAction('client.diagnoses', action, result, {
-    workflow: 'client_detail',
-    surfaceKind: 'tab',
-    ...extras,
-  });
-}
-
 function DiagnosisLookupField({ row, onSelect, t }) {
   const [search, setSearch] = useState('');
   const [options, setOptions] = useState([]);
@@ -120,20 +111,10 @@ function DiagnosisLookupField({ row, onSelect, t }) {
           description: item.description,
         })));
         setError(null);
-        trackDiagnosisAction('dsm_lookup_search');
-        if (items.length === 0) {
-          frontendTelemetry.trackEmptyState('client.diagnoses', 'dsm_lookup_no_match', {
-            workflow: 'client_detail',
-            surfaceKind: 'tab',
-          });
-        }
       } catch (err) {
         if (cancelled) return;
         setOptions([]);
         setError(err.message || 'Unable to load DSM-5-TR matches.');
-        trackDiagnosisAction('dsm_lookup_search', 'failure', {
-          statusClass: err?.statusClass ?? 'unknown',
-        });
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -168,7 +149,6 @@ function DiagnosisLookupField({ row, onSelect, t }) {
             description: selected.description,
           });
           setSearch(`${selected.code} ${selected.description}`);
-          trackDiagnosisAction('dsm_lookup_select');
         }}
       />
       {error ? <Text size="xs" c="red">{error || t('client.diagnoses.lookupError')}</Text> : null}
@@ -228,12 +208,10 @@ function DiagnosesList({ clientId, initialDiagnoses, t }) {
 
   const handleDelete = (key) => {
     setRows((prev) => prev.map((row) => row._key === key ? { ...row, _deleted: true } : row));
-    trackDiagnosisAction('diagnosis_remove');
   };
 
   const handleAdd = () => {
     setRows((prev) => [...prev, createDiagnosisDraft()]);
-    trackDiagnosisAction('diagnosis_add');
   };
 
   const handleSave = async () => {
@@ -247,11 +225,6 @@ function DiagnosesList({ clientId, initialDiagnoses, t }) {
         }
 
         if (!row.code.trim() || !row.description.trim()) {
-          frontendTelemetry.trackValidationError('client.diagnoses', 'client_detail', {
-            surfaceKind: 'tab',
-            action: 'diagnosis_save',
-            validationState: 'missing_required_fields',
-          });
           throw new Error(t('client.diagnoses.validationRequired'));
         }
 
@@ -280,12 +253,8 @@ function DiagnosesList({ clientId, initialDiagnoses, t }) {
       }
 
       setRows(nextRows);
-      trackDiagnosisAction('diagnosis_save');
       notifications.show({ title: 'Saved', message: 'Diagnoses saved.', color: 'green' });
     } catch (err) {
-      trackDiagnosisAction('diagnosis_save', 'failure', {
-        statusClass: err?.statusClass ?? 'unknown',
-      });
       notifications.show({ title: 'Error', message: err.message, color: 'red' });
     } finally {
       setSaving(false);

@@ -5,8 +5,6 @@ import {
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { csrfHeaders } from '../../../lib/csrf.js';
-import { useSurfaceTelemetry } from '../../../lib/useSurfaceTelemetry.js';
-import { frontendTelemetry } from '../../../lib/frontendTelemetry.js';
 import { useI18n } from '../../../lib/i18nContext.jsx';
 
 async function apiFetch(url, options = {}) {
@@ -29,7 +27,6 @@ function centsToDollars(cents) {
 
 export default function OfferingsTab() {
   const { t, formatCurrency } = useI18n();
-  useSurfaceTelemetry('studio.offerings', { surfaceKind: 'tab', workflow: 'workspace_studio' });
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
@@ -58,12 +55,10 @@ export default function OfferingsTab() {
           setMinistryNote(note);
           setSavedMinistryNote(note);
           setSummary(summaryData);
-          frontendTelemetry.trackSurfaceLoad('studio.offerings', 'success');
         }
       } catch (err) {
         if (!cancelled) {
           setLoadError(err.message || 'Failed to load offerings data.');
-          frontendTelemetry.trackSurfaceLoad('studio.offerings', 'error');
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -89,10 +84,8 @@ export default function OfferingsTab() {
       setSuggestedDraft(centsToDollars(amountCents));
       setSavedMinistryNote(ministryNote);
       notifications.show({ title: 'Saved', message: 'Suggested offering amount updated.', color: 'green' });
-      frontendTelemetry.trackAction('studio.offerings', 'save_suggested', 'success', { workflow: 'workspace_studio' });
     } catch (err) {
       notifications.show({ title: 'Save failed', message: err.message || 'Unable to save.', color: 'red' });
-      frontendTelemetry.trackAction('studio.offerings', 'save_suggested', 'failure', { workflow: 'workspace_studio' });
     } finally {
       setSaving(false);
     }

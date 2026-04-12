@@ -7,7 +7,6 @@ import IntakePreviewTab   from './tabs/IntakePreviewTab.jsx';
 import DiagnosesTab       from './tabs/DiagnosesTab.jsx';
 import FaithProfileTab    from './tabs/FaithProfileTab.jsx';
 import LegalAdminTab      from './tabs/LegalAdminTab.jsx';
-import { useSurfaceTelemetry } from '../../lib/useSurfaceTelemetry.js';
 import { useI18n } from '../../lib/i18nContext.jsx';
 
 const TABS = [
@@ -23,17 +22,6 @@ const TABS = [
 export default function ClientDetailTabs({ client, clientId, currentUser, initialTab = null }) {
   const { t } = useI18n();
   const [activeTab, setActiveTab] = useState(initialTab || 'demographics');
-  const activeSurfaceId = {
-    demographics: 'client.demographics',
-    contacts: 'client.contacts',
-    clinical: 'client.clinical',
-    intakePreview: 'client.intake_preview',
-    diagnoses: 'client.diagnoses',
-    faith: 'client.faith',
-    legal: 'client.legal',
-  }[activeTab] ?? 'client.demographics';
-
-  useSurfaceTelemetry(activeSurfaceId, { surfaceKind: 'tab', workflow: 'client_detail' });
 
   useEffect(() => {
     setActiveTab(initialTab || 'demographics');

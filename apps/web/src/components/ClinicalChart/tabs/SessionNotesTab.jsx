@@ -6,7 +6,6 @@ import {
 import { notifications } from '@mantine/notifications';
 import { useI18n } from '../../../lib/i18nContext.jsx';
 import { csrfHeaders } from '../../../lib/csrf.js';
-import { frontendTelemetry } from '../../../lib/frontendTelemetry.js';
 
 const NOTE_TYPE_OPTIONS = [
   { value: 'intake_note',           label: 'Intake Note' },
@@ -325,10 +324,8 @@ export default function SessionNotesTab({
       const data = await apiFetch(`/api/v1/clients/${encodeURIComponent(clientId)}/progress-notes`);
       const clinical = (data?.items ?? []).filter((n) => n.noteType !== 'internal_note');
       setNotes(clinical);
-      frontendTelemetry.trackSurfaceLoad('chart.session_notes', 'success');
     } catch (err) {
       setLoadError(err.message);
-      frontendTelemetry.trackSurfaceLoad('chart.session_notes', 'error');
     } finally {
       setLoading(false);
     }
@@ -397,10 +394,8 @@ export default function SessionNotesTab({
       setComposerOpen(false);
       await loadNotes();
       notifications.show({ title: 'Saved', message: 'Draft note created.', color: 'green' });
-      frontendTelemetry.trackAction('chart.session_notes', 'create_note', 'success', { workflow: 'clinical_chart' });
     } catch (err) {
       notifications.show({ title: 'Error', message: err.message, color: 'red' });
-      frontendTelemetry.trackAction('chart.session_notes', 'create_note', 'failure', { workflow: 'clinical_chart' });
     } finally {
       setSubmitting(false);
     }

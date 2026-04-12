@@ -461,18 +461,15 @@ async function doRefresh() {
 
     if (authStatus.canViewAdminMonitoring) {
       requests.push(
-        fetch('/api/v1/telemetry/summary', { credentials: 'include' }).then((r) => r.json()),
         fetch('/api/v1/monitoring/db', { credentials: 'include' }).then((r) => r.json()).catch(() => null),
       );
     }
 
     const settled = await Promise.allSettled(requests);
-    const [apiHealth, apiSummaryResp, dbStatsResp] = settled;
+    const [apiHealth, dbStatsResp] = settled;
 
     const health = apiHealth.status === 'fulfilled' ? apiHealth.value : null;
-    const apiData = authStatus.canViewAdminMonitoring && apiSummaryResp?.status === 'fulfilled' ? apiSummaryResp.value : null;
     const dbStats = authStatus.canViewAdminMonitoring && dbStatsResp?.status === 'fulfilled' ? dbStatsResp.value : null;
-    const sum = apiData?.summary ?? {};
 
     // Health chip
     if (health?.service) {
@@ -483,48 +480,13 @@ async function doRefresh() {
       $('healthText').textContent = 'Degraded';
     }
 
-    // KPIs
-    const reqCount = sum.requestCount ?? 0;
-    const errCount = sum.errorCount   ?? 0;
-    setText('kpiRequests', reqCount);
-    setText('kpiRequestsSub', `${sum.mutationCount ?? 0} mutations`);
-    setText('kpiErrors',   errCount);
-    const errRate = reqCount > 0 ? `${((errCount / reqCount) * 100).toFixed(1)}% error rate` : 'No traffic yet';
-    setText('kpiErrorsSub', errRate);
-    setText('kpiLatency', fmtMs(sum.avgDurationMs));
-    setText('kpiLatencySub', `p95 ${fmtMs(sum.requestLatencyMs?.p95)}  max ${fmtMs(sum.requestLatencyMs?.max)}`);
-    setText('kpiUptime',   fmtUptime(sum.process?.uptimeSeconds));
-    setText('kpiActive',   sum.activeRequests ?? 0);
-    setText('kpiMutations', sum.mutationCount ?? 0);
-    if (sum.lastMutationAt) setText('kpiMutationsSub', `Last: ${fmtTime(sum.lastMutationAt)}`);
-
-    // Push history point
-    historyData.push({ t: Date.now(), req: reqCount, err: errCount });
-    if (historyData.length > MAX_HISTORY) historyData.shift();
-    updateSparkline();
-
-    // Charts
-    updateDonut(sum.statusCounts);
-    updateLatencyBars(sum.requestLatencyMs, sum.proxyLatencyMs);
-    updateMemory(sum.process);
-
-    // Vitals
-    const vitals = { ...(sum.browserVitals ?? {}) };
-    updateVitals(vitals);
-
     // Health checks and DB panel (admin only)
     if (authStatus.canViewAdminMonitoring) {
-      updateHealthChecks(sum.health ?? {});
+      updateHealthChecks({});
       updateDbPanel(dbStats);
-      lastErrors = sum.recentErrors ?? [];
-      setText('errorCount', lastErrors.length);
-      if (drillOpen) renderErrorTable();
     } else {
       updateHealthChecksRestricted();
       updateDbPanel({ mode: 'restricted' });
-      lastErrors = [];
-      setText('errorCount', '—');
-      if (drillOpen) renderErrorTable();
     }
 
   } catch (err) {

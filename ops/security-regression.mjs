@@ -184,14 +184,6 @@ async function main() {
   assert(result.status === 200, 'Practice admin must access DB diagnostics');
   console.log('monitoring-db-admin-read', result.status, result.payload.mode);
 
-  result = await req('/v1/telemetry/summary');
-  assert(result.status === 401, 'Unauthenticated callers must not access telemetry summary');
-  console.log('telemetry-summary-auth-guard', result.status, result.payload.error);
-
-  result = await req('/v1/telemetry/summary', { headers: headersByRole.practiceAdmin });
-  assert(result.status === 200, 'Practice admin must access telemetry summary');
-  console.log('telemetry-summary-admin-read', result.status, result.payload.service);
-
   result = await req('/v1/portal/public-requests', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },

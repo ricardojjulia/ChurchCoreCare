@@ -8,8 +8,6 @@ import Metrics from './components/Metrics';
 import WorkspaceGrid from './components/WorkspaceGrid';
 import { csrfHeaders } from './lib/csrf.js';
 import { fetchClients, fetchOperationsSummaryScoped, fetchAppointments } from './lib/clientApi.js';
-import { frontendTelemetry } from './lib/frontendTelemetry.js';
-import { useSurfaceTelemetry } from './lib/useSurfaceTelemetry.js';
 import { useI18n } from './lib/i18nContext.jsx';
 import { buildCounselorWorkspaceData } from './lib/counselorWorkspace.js';
 import { isClientRole, isCounselorRole } from './lib/roles.js';
@@ -479,44 +477,6 @@ export default function App() {
   const showClinical         = currentView === 'clinical';
   const showFaith            = currentView === 'faith';
   const showFallbackWorkspace = !showDashboard && !showCounselorHome && !showTasks && !showUsers && !showCounselors && !showClients && !showScheduling && !showWorkspaceStudio && !showDocuments && !showPortal && !showOfferings && !showClinical && !showFaith;
-  const topLevelSurfaceId = !isAuthenticated
-    ? 'auth'
-    : selectedClientId || selectedCounselorId
-      ? null
-      : showCounselorHome
-        ? 'counselor_home'
-      : showTasks
-        ? 'tasks'
-      : showUsers
-        ? 'users'
-        : showCounselors
-          ? 'counselors'
-          : showClients
-            ? 'clients'
-          : showScheduling
-            ? 'scheduling'
-            : showWorkspaceStudio
-              ? 'workspace_studio'
-              : showDashboard
-                ? 'dashboard'
-                : currentView;
-
-  useEffect(() => {
-    frontendTelemetry.setRole(userRole ?? 'anonymous');
-  }, [userRole]);
-
-  useSurfaceTelemetry(topLevelSurfaceId, {
-    surfaceKind: 'view',
-    workflow: 'navigation',
-    emptyState: ['offerings', 'faith'].includes(topLevelSurfaceId) ? 'placeholder' : null,
-  });
-
-  useEffect(() => {
-    if (clientPickerOpen) {
-      frontendTelemetry.trackSurfaceView('modal.client_picker', { surfaceKind: 'modal', workflow: 'client_picker' });
-    }
-  }, [clientPickerOpen]);
-
   if (authBootstrapping) {
     return (
       <Center h="100vh">

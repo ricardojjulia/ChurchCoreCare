@@ -4,8 +4,6 @@ import {
   Badge, Loader, Alert, Select, NumberInput, Textarea, Modal, TextInput,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { useSurfaceTelemetry } from '../../lib/useSurfaceTelemetry.js';
-import { frontendTelemetry } from '../../lib/frontendTelemetry.js';
 import { useI18n } from '../../lib/i18nContext.jsx';
 import { csrfHeaders } from '../../lib/csrf.js';
 
@@ -28,7 +26,6 @@ function formatDate(iso) {
 
 export default function OfferingsPage({ clients = [] }) {
   const { t, formatCurrency } = useI18n();
-  useSurfaceTelemetry('offerings', { surfaceKind: 'view', workflow: 'navigation' });
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
@@ -54,10 +51,8 @@ export default function OfferingsPage({ clients = [] }) {
       ]);
       setOfferings(offeringsData?.items ?? []);
       setSummary(summaryData);
-      frontendTelemetry.trackSurfaceLoad('offerings', 'success');
     } catch (err) {
       setLoadError(err.message || 'Failed to load offerings.');
-      frontendTelemetry.trackSurfaceLoad('offerings', 'error');
     } finally {
       setLoading(false);
     }
@@ -86,10 +81,8 @@ export default function OfferingsPage({ clients = [] }) {
       setDraft({ clientId: '', amountDollars: 0, receivedOn: new Date().toISOString().slice(0, 10), note: '' });
       await load();
       notifications.show({ title: 'Recorded', message: 'Offering recorded successfully.', color: 'green' });
-      frontendTelemetry.trackAction('offerings', 'record_offering', 'success', { workflow: 'offerings' });
     } catch (err) {
       notifications.show({ title: 'Failed', message: err.message || 'Unable to record offering.', color: 'red' });
-      frontendTelemetry.trackAction('offerings', 'record_offering', 'failure', { workflow: 'offerings' });
     } finally {
       setRecording(false);
     }
@@ -116,14 +109,12 @@ export default function OfferingsPage({ clients = [] }) {
         message: t('offerings.deleteSuccessMessage'),
         color: 'green',
       });
-      frontendTelemetry.trackAction('offerings', 'delete_offering', 'success', { workflow: 'offerings' });
     } catch (err) {
       notifications.show({
         title: t('offerings.deleteFailureTitle'),
         message: err.message || t('offerings.deleteFailureMessage'),
         color: 'red',
       });
-      frontendTelemetry.trackAction('offerings', 'delete_offering', 'failure', { workflow: 'offerings' });
     } finally {
       setDeletingId(null);
     }

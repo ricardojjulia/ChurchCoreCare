@@ -3,7 +3,6 @@ import {
   Stack, Paper, Group, Title, Text, Badge, Loader, Alert, Divider, Table,
 } from '@mantine/core';
 import { useI18n } from '../../../lib/i18nContext.jsx';
-import { frontendTelemetry } from '../../../lib/frontendTelemetry.js';
 
 const STATUS_COLORS = {
   assigned:    'blue',
@@ -64,16 +63,13 @@ export default function HomeworkTab({ clientId }) {
         return true;
       });
       setAssignments(deduped);
-      frontendTelemetry.trackSurfaceLoad('chart.homework', 'success');
     } catch (err) {
       // Fallback: try assignments endpoint directly
       try {
         const data2 = await apiFetch(`/api/v1/forms/assignments?clientId=${encodeURIComponent(clientId)}`);
         setAssignments(data2?.items ?? []);
-        frontendTelemetry.trackSurfaceLoad('chart.homework', 'success');
       } catch (err2) {
         setLoadError(err2.message || err.message);
-        frontendTelemetry.trackSurfaceLoad('chart.homework', 'error');
       }
     } finally {
       setLoading(false);
