@@ -16,7 +16,6 @@ import {
   Title,
   UnstyledButton,
 } from '@mantine/core';
-import { frontendTelemetry } from '../lib/frontendTelemetry.js';
 import { useI18n } from '../lib/i18nContext.jsx';
 import ClientModal from './ClientModal';
 
@@ -199,12 +198,6 @@ export default function WorkspaceGrid({
   const closeDrilldown = () => setDrilldown({ type: null, title: '', items: [] });
 
   const openAlertAction = (item) => {
-    frontendTelemetry.trackAction('dashboard', 'alert_open', 'success', {
-      workflow: 'operations_alerts',
-      action: item?.id ?? 'unknown',
-      result: item?.severity ?? 'success',
-    });
-
     switch (item?.actionType) {
       case 'highTouchpointUnscheduled':
         openDrilldown(

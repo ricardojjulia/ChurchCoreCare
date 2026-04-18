@@ -8,7 +8,6 @@ import {
   Text,
   Title,
 } from '@mantine/core';
-import { frontendTelemetry } from '../lib/frontendTelemetry.js';
 import { useI18n } from '../lib/i18nContext.jsx';
 
 function statusTone(status) {
@@ -135,9 +134,6 @@ export default function CounselorTasksPage({
                         size="compact-sm"
                         variant="subtle"
                         onClick={() => {
-                          frontendTelemetry.trackAction('tasks', 'open_chart_note_gap', 'success', {
-                            workflow: 'counselor_tasks',
-                          });
                           onOpenChart?.({
                             clientId: item.clientId,
                             initialTab: 'sessionNotes',
@@ -178,9 +174,6 @@ export default function CounselorTasksPage({
                       size="compact-sm"
                       variant="subtle"
                       onClick={() => {
-                        frontendTelemetry.trackAction('tasks', 'open_documents', 'success', {
-                          workflow: 'counselor_tasks',
-                        });
                         onOpenDocuments?.();
                       }}
                     >
@@ -222,9 +215,6 @@ export default function CounselorTasksPage({
                       size="compact-sm"
                       variant="subtle"
                       onClick={() => {
-                        frontendTelemetry.trackAction('tasks', 'open_scheduling', 'success', {
-                          workflow: 'counselor_tasks',
-                        });
                         onOpenScheduling?.(item.clientId);
                       }}
                     >
@@ -265,9 +255,6 @@ export default function CounselorTasksPage({
                       size="compact-sm"
                       variant="subtle"
                       onClick={() => {
-                        frontendTelemetry.trackAction('tasks', 'open_intake_preview', 'success', {
-                          workflow: 'counselor_tasks',
-                        });
                         onOpenClient?.({ clientId: item.clientId, initialTab: 'intakePreview' });
                       }}
                     >

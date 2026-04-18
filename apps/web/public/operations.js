@@ -1,8 +1,6 @@
 /* Operations Studio — all button handlers */
 'use strict';
 
-window.faithTelemetry?.start({ surfaceId: 'operations', surfaceKind: 'page' });
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function el(id) { return document.getElementById(id); }
@@ -52,77 +50,69 @@ function setBusy(btn, busy) {
 }
 
 async function apiGet(path) {
-  return window.faithTelemetry?.instrumentRequest(`/api${path}`, 'GET', async () => {
-    const res = await fetch(`/api${path}`, {
-      credentials: 'include',
-      headers: csrfHeaders(),
-    });
-    const payload = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      const error = new Error(payload.error || `${res.status} ${res.statusText}`);
-      error.status = res.status;
-      error.statusClass = `${Math.floor(res.status / 100)}xx`;
-      throw error;
-    }
-    return payload;
-  }, { workflow: 'operations' }) ?? Promise.resolve({});
+  const res = await fetch(`/api${path}`, {
+    credentials: 'include',
+    headers: csrfHeaders(),
+  });
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const error = new Error(payload.error || `${res.status} ${res.statusText}`);
+    error.status = res.status;
+    error.statusClass = `${Math.floor(res.status / 100)}xx`;
+    throw error;
+  }
+  return payload;
 }
 
 async function apiPost(path, body) {
-  return window.faithTelemetry?.instrumentRequest(`/api${path}`, 'POST', async () => {
-    const res = await fetch(`/api${path}`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: csrfHeaders(),
-      body: JSON.stringify(body),
-    });
-    const payload = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      const error = new Error(payload.error || `${res.status} ${res.statusText}`);
-      error.status = res.status;
-      error.statusClass = `${Math.floor(res.status / 100)}xx`;
-      throw error;
-    }
-    return payload;
-  }, { workflow: 'operations' }) ?? Promise.resolve({});
+  const res = await fetch(`/api${path}`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: csrfHeaders(),
+    body: JSON.stringify(body),
+  });
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const error = new Error(payload.error || `${res.status} ${res.statusText}`);
+    error.status = res.status;
+    error.statusClass = `${Math.floor(res.status / 100)}xx`;
+    throw error;
+  }
+  return payload;
 }
 
 async function apiPatch(path, body) {
-  return window.faithTelemetry?.instrumentRequest(`/api${path}`, 'PATCH', async () => {
-    const res = await fetch(`/api${path}`, {
-      method: 'PATCH',
-      credentials: 'include',
-      headers: csrfHeaders(),
-      body: JSON.stringify(body),
-    });
-    const payload = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      const error = new Error(payload.error || `${res.status} ${res.statusText}`);
-      error.status = res.status;
-      error.statusClass = `${Math.floor(res.status / 100)}xx`;
-      throw error;
-    }
-    return payload;
-  }, { workflow: 'operations' }) ?? Promise.resolve({});
+  const res = await fetch(`/api${path}`, {
+    method: 'PATCH',
+    credentials: 'include',
+    headers: csrfHeaders(),
+    body: JSON.stringify(body),
+  });
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const error = new Error(payload.error || `${res.status} ${res.statusText}`);
+    error.status = res.status;
+    error.statusClass = `${Math.floor(res.status / 100)}xx`;
+    throw error;
+  }
+  return payload;
 }
 
 async function apiPut(path, body) {
-  return window.faithTelemetry?.instrumentRequest(`/api${path}`, 'PUT', async () => {
-    const res = await fetch(`/api${path}`, {
-      method: 'PUT',
-      credentials: 'include',
-      headers: csrfHeaders(),
-      body: JSON.stringify(body),
-    });
-    const payload = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      const error = new Error(payload.error || `${res.status} ${res.statusText}`);
-      error.status = res.status;
-      error.statusClass = `${Math.floor(res.status / 100)}xx`;
-      throw error;
-    }
-    return payload;
-  }, { workflow: 'operations' }) ?? Promise.resolve({});
+  const res = await fetch(`/api${path}`, {
+    method: 'PUT',
+    credentials: 'include',
+    headers: csrfHeaders(),
+    body: JSON.stringify(body),
+  });
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const error = new Error(payload.error || `${res.status} ${res.statusText}`);
+    error.status = res.status;
+    error.statusClass = `${Math.floor(res.status / 100)}xx`;
+    throw error;
+  }
+  return payload;
 }
 
 function pretty(obj) { return JSON.stringify(obj, null, 2); }
@@ -148,7 +138,6 @@ async function checkConnection() {
 function initTabs() {
   document.querySelectorAll('.tab-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const startedAt = performance.now();
       document.querySelectorAll('.tab-btn').forEach((b) => {
         b.classList.remove('active');
         b.setAttribute('aria-selected', 'false');
@@ -158,10 +147,6 @@ function initTabs() {
       btn.setAttribute('aria-selected', 'true');
       const panel = el(`tab-${btn.dataset.tab}`);
       if (panel) panel.classList.add('active');
-      window.faithTelemetry?.trackInteraction('tab.switch', performance.now() - startedAt, {
-        workflow: 'operations',
-        result: 'success',
-      });
     });
   });
 }

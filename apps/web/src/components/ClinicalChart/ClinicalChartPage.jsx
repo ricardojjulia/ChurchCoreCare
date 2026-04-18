@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import {
   Stack, Title, Text, Select, Paper, Group, Tabs, Alert,
 } from '@mantine/core';
-import { useSurfaceTelemetry } from '../../lib/useSurfaceTelemetry.js';
 import { useI18n } from '../../lib/i18nContext.jsx';
 import ClinicalChartSummaryHeader from './ClinicalChartSummaryHeader.jsx';
 import SessionNotesTab   from './tabs/SessionNotesTab.jsx';
@@ -39,8 +38,6 @@ export default function ClinicalChartPage({
   useEffect(() => {
     setActiveTab(initialTab || 'sessionNotes');
   }, [handoffKey, initialTab]);
-
-  useSurfaceTelemetry('clinical', { surfaceKind: 'view', workflow: 'clinical_chart' });
 
   const clientOptions = clients.map((c) => ({
     value: c.id,

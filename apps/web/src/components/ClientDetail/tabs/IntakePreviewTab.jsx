@@ -12,8 +12,6 @@ import {
   Title,
 } from '@mantine/core';
 import { fetchClientIntakePreview } from '../../../lib/clientApi.js';
-import { frontendTelemetry } from '../../../lib/frontendTelemetry.js';
-import { useSurfaceTelemetry } from '../../../lib/useSurfaceTelemetry.js';
 
 function KeyValueList({ title, items, emptyLabel = 'No details available yet.' }) {
   return (
@@ -40,7 +38,6 @@ function urgencyColor(level) {
 }
 
 export default function IntakePreviewTab({ clientId }) {
-  useSurfaceTelemetry('client.intake_preview', { surfaceKind: 'tab', workflow: 'client_detail' });
 
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -57,12 +54,6 @@ export default function IntakePreviewTab({ clientId }) {
         const item = payload?.item ?? null;
         setPreview(item);
         setLoading(false);
-        if (!item?.eligible) {
-          frontendTelemetry.trackEmptyState('client.intake_preview', 'ineligible_preview', {
-            surfaceKind: 'tab',
-            workflow: 'client_detail',
-          });
-        }
       })
       .catch((err) => {
         if (cancelled) return;

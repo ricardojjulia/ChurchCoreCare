@@ -1,5 +1,3 @@
-const SURFACE_ID = 'portal';
-const SURFACE_KIND = 'view';
 const REQUEST_INTENTS = {
   care_request: {
     heading: 'I am looking for care',
@@ -85,12 +83,6 @@ async function postJson(path, body, { includeCsrf = false } = {}) {
   return payload;
 }
 
-function sanitizeTelemetryValue(value, fallback = 'unknown') {
-  if (typeof value !== 'string') return fallback;
-  const candidate = value.trim().toLowerCase().slice(0, 80);
-  return candidate || fallback;
-}
-
 function escapeHtml(value) {
   return String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -98,40 +90,6 @@ function escapeHtml(value) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
-}
-
-function trackEvent(type, action, result = 'success', extra = {}) {
-  postJson('/api/v1/telemetry/events', {
-    events: [{
-      type: sanitizeTelemetryValue(type),
-      surfaceId: SURFACE_ID,
-      surfaceKind: SURFACE_KIND,
-      workflow: sanitizeTelemetryValue(extra.workflow || 'portal_public'),
-      action: sanitizeTelemetryValue(action),
-      result: sanitizeTelemetryValue(result),
-      role: 'anonymous',
-      statusClass: sanitizeTelemetryValue(extra.statusClass || 'success'),
-      emptyState: sanitizeTelemetryValue(extra.emptyState || 'none', 'none'),
-      validationState: sanitizeTelemetryValue(extra.validationState || 'none', 'none'),
-      durationMs: Number.isFinite(extra.durationMs) ? Math.max(0, extra.durationMs) : 0,
-      at: new Date().toISOString(),
-    }],
-  }).catch(() => {});
-}
-
-function trackSurfaceView() {
-  trackEvent('screen_view', 'view');
-}
-
-function trackSurfaceLoad(result = 'success', extra = {}) {
-  trackEvent('screen_load', 'load', result, {
-    durationMs: Math.round((performance.now() - loadStartedAt) * 100) / 100,
-    ...extra,
-  });
-}
-
-function trackUiError(action) {
-  trackEvent('ui_error', action, 'error', { statusClass: 'client' });
 }
 
 function collectServices(formEl) {
@@ -281,10 +239,8 @@ async function loadPortalConfig() {
       throw new Error(body?.error || 'Unable to load portal settings');
     }
     applyPortalConfig(body?.item || DEFAULT_CONFIG);
-    trackSurfaceLoad('success');
   } catch {
     applyPortalConfig(DEFAULT_CONFIG);
-    trackSurfaceLoad('failure', { statusClass: 'client_error' });
   }
 }
 
@@ -292,7 +248,6 @@ function installIntentHandlers() {
   document.querySelectorAll('.portal-intent-btn').forEach((button) => {
     button.addEventListener('click', () => {
       selectIntent(button.dataset.intent);
-      trackEvent('interaction', `intent.${button.dataset.intent}`, 'success');
     });
   });
 }
@@ -328,12 +283,10 @@ function installFormHandler() {
 
     if (!firstName || !lastName || !email) {
       setStatus('First name, last name, and email are required.', 'error');
-      trackEvent('validation_error', 'portal_request.required', 'failure', { validationState: 'required' });
       return;
     }
     if (!consentToContact) {
       setStatus('Please confirm that the practice may contact you about this request.', 'error');
-      trackEvent('validation_error', 'portal_request.consent', 'failure', { validationState: 'required' });
       return;
     }
 
@@ -377,32 +330,12 @@ function installFormHandler() {
       } else {
         setStatus('Request submitted successfully. Our team will contact you soon.', 'success');
       }
-      trackEvent('interaction', 'portal_request.submit', 'success', {
-        durationMs: Math.round((performance.now() - startedAt) * 100) / 100,
-      });
-      trackEvent('action', `intent.${requestIntent}.submit`, 'success');
     } catch (error) {
       setStatus(error?.message || 'Unable to submit request at this time.', 'error');
-      trackEvent('interaction', 'portal_request.submit', 'failure', {
-        durationMs: Math.round((performance.now() - startedAt) * 100) / 100,
-        statusClass: error?.status >= 500 ? 'server_error' : 'client_error',
-      });
-      trackEvent('action', `intent.${requestIntent}.submit`, 'failure', {
-        statusClass: error?.status >= 500 ? 'server_error' : 'client_error',
-      });
     }
   });
 }
 
-window.addEventListener('error', () => trackUiError('window.error'));
-window.addEventListener('unhandledrejection', () => trackUiError('window.unhandledrejection'));
-window.addEventListener('pagehide', () => {
-  trackEvent('screen_active', 'active', 'success', {
-    durationMs: Math.round(performance.now() * 100) / 100,
-  });
-});
-
-trackSurfaceView();
 installIntentHandlers();
 installFormHandler();
 loadPortalConfig();

@@ -25,7 +25,6 @@ console.log('Using:', sessionCookie ? 'session cookie' : 'dev bypass headers');
 const endpoints = [
   '/v1/monitor/api-health',
   '/v1/monitor/summary',
-  '/v1/telemetry/summary',
   '/v1/monitor',
 ];
 

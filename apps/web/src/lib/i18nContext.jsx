@@ -10,8 +10,6 @@ import {
   localeLabels,
   resolveLocaleCode,
 } from '@faith/i18n';
-import { frontendTelemetry } from './frontendTelemetry.js';
-
 const LOCALE_STORAGE_KEY = 'faith.locale';
 
 // ---------------------------------------------------------------------------
@@ -176,15 +174,8 @@ export function I18nProvider({ children, currentUser }) {
       setLocaleState(applied);
       localStorage.setItem(LOCALE_STORAGE_KEY, applied);
 
-      frontendTelemetry.trackAction('settings', 'locale_switch', 'success', {
-        workflow: 'i18n',
-        statusClass: applied,
-      });
     } catch {
-      frontendTelemetry.trackAction('settings', 'locale_switch', 'error', {
-        workflow: 'i18n',
-        statusClass: nextLocale,
-      });
+      // locale switch failed
     } finally {
       setLoading(false);
     }

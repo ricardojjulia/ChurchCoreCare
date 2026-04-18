@@ -1,1 +1,1 @@
-window.faithTelemetry?.start({ surfaceId: 'about', surfaceKind: 'page' });
+// About page — no interactive logic required.

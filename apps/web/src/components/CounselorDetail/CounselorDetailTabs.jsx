@@ -7,7 +7,6 @@ import CounselorFaithProfileTab from './tabs/CounselorFaithProfileTab.jsx';
 import CertificationsTab        from './tabs/CertificationsTab.jsx';
 import EmploymentTab            from './tabs/EmploymentTab.jsx';
 import AvailabilityTab          from './tabs/AvailabilityTab.jsx';
-import { useSurfaceTelemetry } from '../../lib/useSurfaceTelemetry.js';
 import { useI18n } from '../../lib/i18nContext.jsx';
 
 const TABS = [
@@ -23,17 +22,6 @@ const TABS = [
 export default function CounselorDetailTabs({ counselor, staffId, currentUser }) {
   const { t } = useI18n();
   const [activeTab, setActiveTab] = useState('profile');
-  const activeSurfaceId = {
-    profile: 'counselor.profile',
-    licenses: 'counselor.licenses',
-    specialties: 'counselor.specialties',
-    faith: 'counselor.faith',
-    certifications: 'counselor.certifications',
-    employment: 'counselor.employment',
-    availability: 'counselor.availability',
-  }[activeTab] ?? 'counselor.profile';
-
-  useSurfaceTelemetry(activeSurfaceId, { surfaceKind: 'tab', workflow: 'counselor_detail' });
 
   return (
     <Tabs value={activeTab} onChange={(value) => setActiveTab(value || 'profile')} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>

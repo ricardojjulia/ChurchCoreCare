@@ -8,7 +8,6 @@ import LocationsTab from './tabs/LocationsTab.jsx';
 import StaffTab from './tabs/StaffTab.jsx';
 import LifecycleTab from './tabs/LifecycleTab.jsx';
 import AppointmentsTab from './tabs/AppointmentsTab.jsx';
-import { useSurfaceTelemetry } from '../../lib/useSurfaceTelemetry.js';
 import { useI18n } from '../../lib/i18nContext.jsx';
 
 const STUDIO_TABS = [
@@ -27,18 +26,9 @@ const STUDIO_TABS = [
 export default function WorkspaceStudioPage({ initialTab = 'portal', onSchedulePortalRequest, onViewClient, onOpenCounselorMaintenance, initialDocumentsClientId = '' }) {
   const { t } = useI18n();
   const [activeTab, setActiveTab] = useState(initialTab || 'portal');
-  const activeSurfaceId = `studio.${activeTab === 'documentsStudio' ? 'documents' : activeTab}`;
-
   useEffect(() => {
     setActiveTab(initialTab || 'portal');
   }, [initialTab]);
-
-  const PLACEHOLDER_TABS = new Set(['chart', 'clients']);
-  useSurfaceTelemetry(activeSurfaceId, {
-    surfaceKind: 'tab',
-    workflow: 'workspace_studio',
-    emptyState: PLACEHOLDER_TABS.has(activeTab) ? 'placeholder' : null,
-  });
 
   return (
     <Stack gap="md" p="md">

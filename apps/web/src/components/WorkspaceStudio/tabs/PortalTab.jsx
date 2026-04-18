@@ -6,8 +6,6 @@ import {
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { csrfHeaders } from '../../../lib/csrf.js';
-import { frontendTelemetry } from '../../../lib/frontendTelemetry.js';
-
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 async function apiFetch(url, options = {}) {
@@ -611,9 +609,6 @@ function PublicRequestsSection({ items, loading, onRefresh, onViewClient }) {
         headers: csrfHeaders(),
         body: JSON.stringify({ requestId }),
       });
-      frontendTelemetry.trackAction('studio.portal', 'create_client_from_care_request', 'success', {
-        workflow: 'workspace_studio',
-      });
       const wasCreated = response?.conversion?.status === 'created';
       notifications.show({
         title: wasCreated ? 'Client Created' : 'Client Linked',
@@ -624,10 +619,6 @@ function PublicRequestsSection({ items, loading, onRefresh, onViewClient }) {
       });
       onRefresh();
     } catch (err) {
-      frontendTelemetry.trackAction('studio.portal', 'create_client_from_care_request', 'failure', {
-        workflow: 'workspace_studio',
-        statusClass: 'client',
-      });
       notifications.show({ title: 'Error', message: err.message, color: 'red' });
     } finally {
       setCreatingId(null);

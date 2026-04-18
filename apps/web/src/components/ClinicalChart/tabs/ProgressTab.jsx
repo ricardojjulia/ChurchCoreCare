@@ -3,7 +3,6 @@ import {
   Stack, Paper, Group, Title, Text, Badge, Loader, Alert, Divider, Table, SimpleGrid,
 } from '@mantine/core';
 import { useI18n } from '../../../lib/i18nContext.jsx';
-import { frontendTelemetry } from '../../../lib/frontendTelemetry.js';
 
 // Severity band definitions for scored instruments
 const SEVERITY_BANDS = {
@@ -152,10 +151,8 @@ export default function ProgressTab({ clientId }) {
     try {
       const data = await apiFetch(`/api/v1/forms/submissions?clientId=${encodeURIComponent(clientId)}`);
       setSubmissions(data?.items ?? []);
-      frontendTelemetry.trackSurfaceLoad('chart.progress', 'success');
     } catch (err) {
       setLoadError(err.message);
-      frontendTelemetry.trackSurfaceLoad('chart.progress', 'error');
     } finally {
       setLoading(false);
     }
