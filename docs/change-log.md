@@ -2,6 +2,27 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 17, 2026 — Telehealth Phase 2+3, Supervision Cosign, Time Tracking
+
+### feat: faith-integrated clinical notes, supervision cosign workflow, licensure time tracking
+
+**Date:** April 17, 2026
+**Affected area:** `apps/api/src/db/migrate.js`, `apps/api/src/db/queries/clinical.js`, `apps/api/src/db/queries/timeTracking.js` (new), `apps/api/src/index.js`, `apps/web/src/components/ClinicalChart/tabs/SessionNotesTab.jsx`, `apps/web/src/components/TimeTracking/` (new), `apps/web/src/App.jsx`, `apps/web/src/components/Sidebar.jsx`, `packages/domain/src/index.js`, `packages/i18n/src/index.js`
+
+**What changed:**
+- **Telehealth Phase 2 (Faith-integrated clinical notes):** Session notes now include scripture reference and spiritual practices checkboxes (prayer journaling, scripture reading, church attendance, small group, spiritual direction, fasting, sabbath practice).
+- **Telehealth Phase 3 (Supervision cosign):** Intern counselors can submit notes for supervisor review; supervisors can cosign or return notes for revision. `supervisor_assignments` table tracks supervision relationships. Audit ledger records all cosign events.
+- **Time Tracking:** New `TimeTrackingPage` with Quick Log modal for direct clinical, indirect/admin, individual/group supervision, CE/spiritual formation, and ministry coordination hours. Summary cards and category filter. Delete unlocked entries.
+- **Licensure Progress Bars:** `LicensureProgressBars` component fetches goals and time-entry summary and renders per-goal progress bars with hours achieved/target.
+- **Supervision appointment type:** `supervision` added to domain `appointmentTypes`.
+- **Form catalog:** `FaithIntegratedAdultIntake` and `PreMaritalChristianIntake` templates added.
+- **Counselor nav:** `Time Tracking` nav link added to counselor sidebar.
+- **i18n:** `nav.timeTracking`, `chart.note.scriptureReference`, `chart.note.spiritualPractices`, `chart.note.submitForReview`, cosign status keys added.
+
+**Migration steps:** Auto-applied on next API startup — idempotent migrations add columns and tables only if missing.
+
+---
+
 ## April 17, 2026 — JaaS Telehealth Video Sessions (Phase 1)
 
 ### feat: integrated JaaS telehealth video sessions with JWT auth, audit ledger, and scheduling UI

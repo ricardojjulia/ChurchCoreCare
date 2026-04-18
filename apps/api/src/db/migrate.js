@@ -392,6 +392,34 @@ async function applyColumnMigrations(conn) {
     FROM \`faith_language_preferences\`
   `).catch(() => { /* old table may not exist in fresh installs — ignore */ });
 
+  // ── Phase 2: Faith-integrated clinical fields on progress notes ──────────
+  await addColumnIfMissing('progress_notes', 'scripture_reference', 'VARCHAR(255) NULL');
+  await addColumnIfMissing('progress_notes', 'spiritual_practices', 'JSON NULL');
+
+  // ── Phase 3: Cosign workflow columns on progress notes ────────────────────
+  await addColumnIfMissing('progress_notes', 'cosign_status', "VARCHAR(32) NULL DEFAULT NULL COMMENT 'pending_review|reviewed|rejected'");
+  await addColumnIfMissing('progress_notes', 'cosign_requested_by', 'VARCHAR(64) NULL');
+  await addColumnIfMissing('progress_notes', 'cosign_requested_at', 'DATETIME NULL');
+  await addColumnIfMissing('progress_notes', 'cosigned_by', 'VARCHAR(64) NULL');
+  await addColumnIfMissing('progress_notes', 'cosigned_at', 'DATETIME NULL');
+  await addColumnIfMissing('progress_notes', 'cosign_comments_enc', 'TEXT NULL');
+
+  // ── Phase 3: Supervisor assignments table ────────────────────────────────
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS \`supervisor_assignments\` (
+      \`id\`            CHAR(36)     NOT NULL,
+      \`tenant_id\`     VARCHAR(64)  NOT NULL,
+      \`supervisor_id\` VARCHAR(64)  NOT NULL,
+      \`intern_id\`     VARCHAR(64)  NOT NULL,
+      \`practice_id\`   VARCHAR(64)  NOT NULL,
+      \`assigned_at\`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (\`id\`),
+      UNIQUE KEY \`uq_sup_intern\` (\`supervisor_id\`, \`intern_id\`, \`practice_id\`),
+      INDEX \`idx_sa_tenant_intern\` (\`tenant_id\`, \`intern_id\`),
+      INDEX \`idx_sa_supervisor\` (\`tenant_id\`, \`supervisor_id\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
   console.log('Column migrations done.');
 }
 

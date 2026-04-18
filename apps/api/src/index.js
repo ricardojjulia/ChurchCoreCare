@@ -153,6 +153,12 @@ import { getClientClinicalHistory, upsertClientClinicalHistory } from './db/quer
 import { getClientFaithProfile, upsertClientFaithProfile } from './db/queries/clientFaithProfiles.js';
 import { getClientLegal, upsertClientLegal } from './db/queries/clientLegal.js';
 import { createClient as createClientRecord } from './db/queries/clients.js';
+import {
+  listTimeEntries, createTimeEntry, getTimeEntry, updateTimeEntry, deleteTimeEntry,
+  syncTimeEntryFromAppointment, getTimeEntrySummary,
+  listLicensureGoals, createLicensureGoal,
+  listSupervisorAssignments, createSupervisorAssignment, deleteSupervisorAssignment, isSupervisorOf,
+} from './db/queries/timeTracking.js';
 
 const port = Number(process.env.PORT || 3001);
 const currentFilePath = fileURLToPath(import.meta.url);
@@ -814,6 +820,8 @@ const DEFAULT_FORM_CATALOG = Object.freeze([
   { formKey: 'SpiritualWellnessInventory', title: 'Spiritual Wellness Inventory', category: 'faith', isStandardOnSignup: false },
   { formKey: 'FaithHistoryQuestionnaire', title: 'Faith History Questionnaire', category: 'faith', isStandardOnSignup: false },
   { formKey: 'ValuesAndBiblicalIdentityWorksheet', title: 'Values and Biblical Identity Worksheet', category: 'faith', isStandardOnSignup: false },
+  { formKey: 'FaithIntegratedAdultIntake', title: 'Faith-Integrated Adult Intake', category: 'intake', isStandardOnSignup: false },
+  { formKey: 'PreMaritalChristianIntake', title: 'Pre-Marital Christian Counseling Intake', category: 'intake', isStandardOnSignup: false },
   { formKey: 'FamilySystemsAssessment', title: 'Family Systems Assessment', category: 'family', isStandardOnSignup: false },
 ]);
 
@@ -1436,6 +1444,16 @@ export async function handleApiRequest(request, response) {
     }
 
     if (requestUrl.pathname.startsWith('/v1/clients/') && requestUrl.pathname.includes('/progress-notes/') && !requestUrl.pathname.endsWith('/progress-notes')) {
+      // Cosign sub-actions: /v1/clients/:cId/progress-notes/:nId/submit-for-review
+      //                     /v1/clients/:cId/progress-notes/:nId/cosign
+      if (requestUrl.pathname.endsWith('/submit-for-review')) {
+        await handleProgressNoteCosignRequest(request, response, requestUrl, session);
+        return;
+      }
+      if (requestUrl.pathname.endsWith('/cosign')) {
+        await handleProgressNoteCosign(request, response, requestUrl, session);
+        return;
+      }
       await handleClientProgressNoteById(request, response, requestUrl, session);
       return;
     }
@@ -1788,6 +1806,11 @@ export async function handleApiRequest(request, response) {
       return;
     }
 
+    if (requestUrl.pathname.endsWith('/sync-time') && requestUrl.pathname.startsWith('/v1/appointments/')) {
+      await handleAppointmentSyncTime(request, response, requestUrl, session);
+      return;
+    }
+
     if (requestUrl.pathname.startsWith('/v1/appointments/')) {
       await handleAppointmentById(request, response, requestUrl, session);
       return;
@@ -1870,6 +1893,36 @@ export async function handleApiRequest(request, response) {
 
     if (requestUrl.pathname.startsWith('/v1/staff/')) {
       await handleStaffById(request, response, requestUrl, session);
+      return;
+    }
+
+    // ─── Supervisor assignments ─────────────────────────────────────────────
+    if (requestUrl.pathname === '/v1/supervisor-assignments') {
+      await handleSupervisorAssignments(request, response, requestUrl, session);
+      return;
+    }
+    if (requestUrl.pathname.startsWith('/v1/supervisor-assignments/')) {
+      await handleSupervisorAssignmentById(request, response, requestUrl, session);
+      return;
+    }
+
+    // ─── Time entries ────────────────────────────────────────────────────────
+    if (requestUrl.pathname === '/v1/time-entries') {
+      await handleTimeEntries(request, response, requestUrl, session);
+      return;
+    }
+    if (requestUrl.pathname === '/v1/time-entries/summary') {
+      await handleTimeEntriesSummary(request, response, requestUrl, session);
+      return;
+    }
+    if (requestUrl.pathname.startsWith('/v1/time-entries/')) {
+      await handleTimeEntryById(request, response, requestUrl, session);
+      return;
+    }
+
+    // ─── Licensure goals ─────────────────────────────────────────────────────
+    if (requestUrl.pathname === '/v1/licensure-goals') {
+      await handleLicensureGoals(request, response, requestUrl, session);
       return;
     }
 
@@ -3372,6 +3425,10 @@ async function handleClientProgressNotes(request, response, requestUrl, session)
     ? payload.interventions.map((entry) => sanitizeStr(String(entry), 300)).filter(Boolean)
     : [];
   const appointmentId = sanitizeStr(payload.appointmentId, 64) ?? null;
+  const scriptureReference = sanitizeStr(payload.scriptureReference, 255) ?? null;
+  const spiritualPractices = Array.isArray(payload.spiritualPractices)
+    ? payload.spiritualPractices.map((s) => sanitizeStr(String(s), 64)).filter(Boolean)
+    : null;
 
   if (process.env.DB_NAME) {
     const item = await createProgressNote({
@@ -3385,6 +3442,8 @@ async function handleClientProgressNotes(request, response, requestUrl, session)
       lockedNote: Boolean(payload.locked),
       signedBy: Boolean(payload.locked) ? sanitizeStr(payload.signedBy, 120) ?? callerRole(request, session) : null,
       signedAt: Boolean(payload.locked) ? new Date().toISOString() : null,
+      scriptureReference,
+      spiritualPractices,
     });
     emitAudit(request, 'chart.progress_note.create', 'progress_note', item.id, session);
     writeJson(response, 201, { item });
@@ -3468,6 +3527,14 @@ async function handleClientProgressNoteById(request, response, requestUrl, sessi
     fields.lockedNote = true;
     fields.signedBy = sanitizeStr(payload.signedBy, 120) ?? callerRole(request, session);
     fields.signedAt = new Date().toISOString();
+  }
+  // Phase 2 faith fields
+  if (payload.scriptureReference !== undefined)
+    fields.scriptureReference = sanitizeStr(payload.scriptureReference, 255) ?? null;
+  if (payload.spiritualPractices !== undefined) {
+    fields.spiritualPractices = Array.isArray(payload.spiritualPractices)
+      ? payload.spiritualPractices.map((s) => sanitizeStr(String(s), 64)).filter(Boolean)
+      : null;
   }
 
   if (!Object.keys(fields).length) {
@@ -14447,6 +14514,320 @@ async function handleMonitoringDb(response) {
       sizeKb: Number(r.size_kb)   || 0,
     })),
   });
+}
+
+// ─── Cosign workflow ─────────────────────────────────────────────────────────
+
+function extractCosignNoteId(requestUrl) {
+  // /v1/clients/:cId/progress-notes/:nId/submit-for-review  OR  .../cosign
+  const parts = requestUrl.pathname.split('/');
+  const pnIdx = parts.indexOf('progress-notes');
+  const cIdx = parts.indexOf('clients');
+  if (pnIdx === -1 || cIdx === -1) return {};
+  return { clientId: parts[cIdx + 1] ?? null, noteId: parts[pnIdx + 1] ?? null };
+}
+
+async function handleProgressNoteCosignRequest(request, response, requestUrl, session) {
+  if (request.method !== 'POST') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+  if (session.role !== 'intern') { writeJson(response, 403, { error: 'Only interns may submit notes for review' }); return; }
+
+  const { clientId, noteId } = extractCosignNoteId(requestUrl);
+  if (!clientId || !noteId) { writeJson(response, 400, { error: 'Invalid path' }); return; }
+
+  if (!process.env.DB_NAME) { writeJson(response, 501, { error: 'DB not configured' }); return; }
+
+  const [rows] = await pool.query(
+    'SELECT id, tenant_id, locked, cosign_status FROM progress_notes WHERE id = ? AND client_id = ? AND tenant_id = ?',
+    [noteId, clientId, session.tenantId],
+  );
+  if (!rows[0]) { writeJson(response, 404, { error: 'Note not found' }); return; }
+  if (rows[0].locked) { writeJson(response, 409, { error: 'Note is already signed and locked' }); return; }
+  if (rows[0].cosign_status === 'pending_review') { writeJson(response, 409, { error: 'Note already pending review' }); return; }
+
+  await updateProgressNote(noteId, clientId, session.tenantId, {
+    cosignStatus: 'pending_review',
+    cosignRequestedBy: session.userId,
+    cosignRequestedAt: new Date().toISOString(),
+  });
+  emitAudit(request, 'session_note.submit_review', 'progress_note', noteId, session);
+  writeJson(response, 200, { status: 'pending_review' });
+}
+
+async function handleProgressNoteCosign(request, response, requestUrl, session) {
+  if (request.method !== 'POST') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+  if (!['counselor', 'practice_admin', 'practice_owner'].includes(session.role)) {
+    writeJson(response, 403, { error: 'Insufficient privileges to cosign' });
+    return;
+  }
+
+  const { clientId, noteId } = extractCosignNoteId(requestUrl);
+  if (!clientId || !noteId) { writeJson(response, 400, { error: 'Invalid path' }); return; }
+
+  if (!process.env.DB_NAME) { writeJson(response, 501, { error: 'DB not configured' }); return; }
+
+  const [rows] = await pool.query(
+    'SELECT id, tenant_id, cosign_status, cosign_requested_by FROM progress_notes WHERE id = ? AND client_id = ? AND tenant_id = ?',
+    [noteId, clientId, session.tenantId],
+  );
+  if (!rows[0]) { writeJson(response, 404, { error: 'Note not found' }); return; }
+  if (rows[0].cosign_status !== 'pending_review') { writeJson(response, 409, { error: 'Note is not pending review' }); return; }
+
+  // Supervisor role check: counselor must be assigned as supervisor of the intern
+  if (session.role === 'counselor') {
+    const isAssigned = await isSupervisorOf(session.tenantId, session.userId, rows[0].cosign_requested_by);
+    if (!isAssigned) { writeJson(response, 403, { error: 'Not assigned as supervisor for this intern' }); return; }
+  }
+
+  const payload = await readJsonBody(request);
+  const action = payload.action === 'reject' ? 'rejected' : 'reviewed';
+  const comments = sanitizeStr(payload.comments, 2000) ?? null;
+
+  await updateProgressNote(noteId, clientId, session.tenantId, {
+    cosignStatus: action,
+    cosignedBy: session.userId,
+    cosignedAt: new Date().toISOString(),
+    cosignComments: comments,
+  });
+  emitAudit(request, 'session_note.cosigned', 'progress_note', noteId, session);
+  writeJson(response, 200, { status: action });
+}
+
+// ─── Supervisor assignments ──────────────────────────────────────────────────
+
+async function handleSupervisorAssignments(request, response, requestUrl, session) {
+  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+
+  if (request.method === 'GET') {
+    const params = requestUrl.searchParams;
+    if (!process.env.DB_NAME) { writeJson(response, 200, { items: [] }); return; }
+    const items = await listSupervisorAssignments(session.tenantId, {
+      supervisorId: params.get('supervisorId') ?? undefined,
+      internId: params.get('internId') ?? undefined,
+    });
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method === 'POST') {
+    if (!['practice_admin', 'practice_owner', 'platform_admin'].includes(session.role)) {
+      writeJson(response, 403, { error: 'Insufficient privileges' });
+      return;
+    }
+    const payload = await readJsonBody(request);
+    const supervisorId = sanitizeStr(payload.supervisorId, 64);
+    const internId     = sanitizeStr(payload.internId, 64);
+    const practiceId   = sanitizeStr(payload.practiceId, 64);
+    if (!supervisorId || !internId || !practiceId) {
+      writeJson(response, 400, { error: 'supervisorId, internId, and practiceId are required' });
+      return;
+    }
+    if (!process.env.DB_NAME) { writeJson(response, 501, { error: 'DB not configured' }); return; }
+    const item = await createSupervisorAssignment({
+      id: genId('sa'), tenantId: session.tenantId, supervisorId, internId, practiceId,
+    });
+    emitAudit(request, 'supervisor_assignment.created', 'supervisor_assignment', item.id, session);
+    writeJson(response, 201, { item });
+    return;
+  }
+
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+async function handleSupervisorAssignmentById(request, response, requestUrl, session) {
+  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+  if (!['practice_admin', 'practice_owner', 'platform_admin'].includes(session.role)) {
+    writeJson(response, 403, { error: 'Insufficient privileges' });
+    return;
+  }
+  if (request.method !== 'DELETE') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+
+  const id = requestUrl.pathname.replace('/v1/supervisor-assignments/', '');
+  if (!process.env.DB_NAME) { writeJson(response, 501, { error: 'DB not configured' }); return; }
+  const deleted = await deleteSupervisorAssignment(id, session.tenantId);
+  if (!deleted) { writeJson(response, 404, { error: 'Assignment not found' }); return; }
+  emitAudit(request, 'supervisor_assignment.deleted', 'supervisor_assignment', id, session);
+  writeJson(response, 204, null);
+}
+
+// ─── Time tracking ───────────────────────────────────────────────────────────
+
+async function resolveTimeEntryUser(session, requestUrl) {
+  // Allows a supervisor or admin to view a specific intern's time entries
+  const forUser = requestUrl.searchParams.get('userId');
+  if (!forUser || forUser === session.userId) return session.userId;
+  if (['practice_admin', 'practice_owner', 'platform_admin'].includes(session.role)) return forUser;
+  if (session.role === 'counselor') {
+    if (!process.env.DB_NAME) return null;
+    const ok = await isSupervisorOf(session.tenantId, session.userId, forUser);
+    return ok ? forUser : null;
+  }
+  return null;
+}
+
+async function handleTimeEntries(request, response, requestUrl, session) {
+  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+
+  if (request.method === 'GET') {
+    const userId = await resolveTimeEntryUser(session, requestUrl);
+    if (!userId) { writeJson(response, 403, { error: 'Not authorised to view those time entries' }); return; }
+    if (!process.env.DB_NAME) { writeJson(response, 200, { items: [] }); return; }
+    const items = await listTimeEntries(session.tenantId, userId, {
+      category: requestUrl.searchParams.get('category') ?? undefined,
+      dateFrom: requestUrl.searchParams.get('date_from') ?? undefined,
+      dateTo:   requestUrl.searchParams.get('date_to') ?? undefined,
+    });
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method === 'POST') {
+    const payload = await readJsonBody(request);
+    const category  = sanitizeStr(payload.category, 64);
+    const startTime = sanitizeStr(payload.startTime, 40);
+    const endTime   = sanitizeStr(payload.endTime, 40);
+    if (!category || !startTime || !endTime) {
+      writeJson(response, 400, { error: 'category, startTime, endTime are required' });
+      return;
+    }
+    const durationMinutes = Math.round((new Date(endTime) - new Date(startTime)) / 60000);
+    if (durationMinutes <= 0) { writeJson(response, 400, { error: 'endTime must be after startTime' }); return; }
+    if (!process.env.DB_NAME) { writeJson(response, 501, { error: 'DB not configured' }); return; }
+    const item = await createTimeEntry({
+      id: genId('te'), tenantId: session.tenantId, userId: session.userId,
+      category, startTime, endTime, durationMinutes,
+      description: sanitizeStr(payload.description, 2000) ?? null,
+    });
+    emitAudit(request, 'time_entry.created', 'time_entry', item.id, session);
+    writeJson(response, 201, { item });
+    return;
+  }
+
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+async function handleTimeEntriesSummary(request, response, requestUrl, session) {
+  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+  if (request.method !== 'GET') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+
+  const userId = await resolveTimeEntryUser(session, requestUrl);
+  if (!userId) { writeJson(response, 403, { error: 'Not authorised' }); return; }
+  if (!process.env.DB_NAME) { writeJson(response, 200, { summary: [] }); return; }
+  const summary = await getTimeEntrySummary(session.tenantId, userId, {
+    dateFrom: requestUrl.searchParams.get('date_from') ?? undefined,
+    dateTo:   requestUrl.searchParams.get('date_to') ?? undefined,
+  });
+  writeJson(response, 200, { summary });
+}
+
+async function handleTimeEntryById(request, response, requestUrl, session) {
+  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+  const id = requestUrl.pathname.replace('/v1/time-entries/', '');
+
+  if (request.method === 'PATCH') {
+    if (!process.env.DB_NAME) { writeJson(response, 501, { error: 'DB not configured' }); return; }
+    const entry = await getTimeEntry(id, session.tenantId);
+    if (!entry) { writeJson(response, 404, { error: 'Not found' }); return; }
+    if (entry.userId !== session.userId) { writeJson(response, 403, { error: 'Forbidden' }); return; }
+    if (entry.isLocked) { writeJson(response, 409, { error: 'Time entry is locked' }); return; }
+
+    const payload = await readJsonBody(request);
+    const fields = {};
+    if (payload.category !== undefined)    fields.category = sanitizeStr(payload.category, 64);
+    if (payload.startTime !== undefined)   fields.startTime = sanitizeStr(payload.startTime, 40);
+    if (payload.endTime !== undefined)     fields.endTime   = sanitizeStr(payload.endTime, 40);
+    if (payload.description !== undefined) fields.description = sanitizeStr(payload.description, 2000) ?? null;
+    if (fields.startTime || fields.endTime) {
+      const s = new Date(fields.startTime ?? entry.startTime);
+      const e = new Date(fields.endTime ?? entry.endTime);
+      fields.durationMinutes = Math.round((e - s) / 60000);
+      if (fields.durationMinutes <= 0) { writeJson(response, 400, { error: 'endTime must be after startTime' }); return; }
+    }
+    await updateTimeEntry(id, session.tenantId, fields);
+    const updated = await getTimeEntry(id, session.tenantId);
+    emitAudit(request, 'time_entry.updated', 'time_entry', id, session);
+    writeJson(response, 200, { item: updated });
+    return;
+  }
+
+  if (request.method === 'DELETE') {
+    if (!process.env.DB_NAME) { writeJson(response, 501, { error: 'DB not configured' }); return; }
+    const entry = await getTimeEntry(id, session.tenantId);
+    if (!entry) { writeJson(response, 404, { error: 'Not found' }); return; }
+    if (entry.userId !== session.userId && !['practice_admin', 'practice_owner', 'platform_admin'].includes(session.role)) {
+      writeJson(response, 403, { error: 'Forbidden' }); return;
+    }
+    if (entry.isLocked) { writeJson(response, 409, { error: 'Locked time entry cannot be deleted' }); return; }
+    await deleteTimeEntry(id, session.tenantId);
+    emitAudit(request, 'time_entry.deleted', 'time_entry', id, session);
+    writeJson(response, 204, null);
+    return;
+  }
+
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+async function handleAppointmentSyncTime(request, response, requestUrl, session) {
+  if (request.method !== 'POST') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+
+  const appointmentId = requestUrl.pathname
+    .replace('/v1/appointments/', '').replace('/sync-time', '');
+
+  if (!process.env.DB_NAME) { writeJson(response, 501, { error: 'DB not configured' }); return; }
+
+  const [apptRows] = await pool.query(
+    'SELECT id, tenant_id, staff_id, start_time, end_time FROM appointments WHERE id = ? AND tenant_id = ?',
+    [appointmentId, session.tenantId],
+  );
+  if (!apptRows[0]) { writeJson(response, 404, { error: 'Appointment not found' }); return; }
+  const appt = apptRows[0];
+  const durationMinutes = appt.start_time && appt.end_time
+    ? Math.round((new Date(appt.end_time) - new Date(appt.start_time)) / 60000)
+    : 0;
+
+  const { created, entry } = await syncTimeEntryFromAppointment({
+    id: genId('te'), tenantId: session.tenantId, userId: appt.staff_id,
+    appointmentId: appt.id, startTime: appt.start_time, endTime: appt.end_time, durationMinutes,
+  });
+  if (created) emitAudit(request, 'time_entry.synced', 'time_entry', entry.id, session);
+  writeJson(response, created ? 201 : 200, { created, item: entry });
+}
+
+// ─── Licensure goals ─────────────────────────────────────────────────────────
+
+async function handleLicensureGoals(request, response, requestUrl, session) {
+  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+
+  if (request.method === 'GET') {
+    if (!process.env.DB_NAME) { writeJson(response, 200, { items: [] }); return; }
+    const items = await listLicensureGoals(session.tenantId, session.userId);
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method === 'POST') {
+    const payload = await readJsonBody(request);
+    const label         = sanitizeStr(payload.label, 120);
+    const targetMinutes = Number(payload.targetMinutes);
+    const effectiveFrom = sanitizeStr(payload.effectiveFrom, 20);
+    if (!label || !targetMinutes || !effectiveFrom) {
+      writeJson(response, 400, { error: 'label, targetMinutes, effectiveFrom are required' });
+      return;
+    }
+    if (!process.env.DB_NAME) { writeJson(response, 501, { error: 'DB not configured' }); return; }
+    const item = await createLicensureGoal({
+      id: genId('lg'), tenantId: session.tenantId, userId: session.userId,
+      label, targetMinutes, effectiveFrom,
+      effectiveTo: sanitizeStr(payload.effectiveTo, 20) ?? null,
+      categoryFilter: Array.isArray(payload.categoryFilter) ? payload.categoryFilter : null,
+    });
+    writeJson(response, 201, { item });
+    return;
+  }
+
+  writeJson(response, 405, { error: 'Method not allowed' });
 }
 
 function resolveRoute(pathname) {
