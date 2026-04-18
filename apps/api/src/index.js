@@ -63,7 +63,7 @@ import {
 } from './lib/auth.js';
 import {
   listStaff, getStaffById, createStaff, updateStaff,
-  listPractices, getPracticeById, createPractice, updatePractice,
+  listPractices, getPracticeById, getPracticeVideoKeyEnc, createPractice, updatePractice,
   listLocations, getLocationById, createLocation, updateLocation, deleteLocation,
   listAvailabilityTemplates, upsertAvailabilityTemplate, deleteAvailabilityTemplate,
 } from './db/queries/staff.js';
@@ -1795,6 +1795,11 @@ export async function handleApiRequest(request, response) {
 
     if (requestUrl.pathname === '/v1/practices') {
       await handlePracticesCollection(request, response, session);
+      return;
+    }
+
+    if (requestUrl.pathname.endsWith('/video-config') && requestUrl.pathname.startsWith('/v1/practices/')) {
+      await handlePracticeVideoConfig(request, response, requestUrl, session);
       return;
     }
 
@@ -5463,12 +5468,43 @@ async function handleVideoSession(request, response, requestUrl, session) {
     }
   }
 
-  // Build a short-lived RS256 JaaS JWT on-demand. Never persisted.
-  const appId = process.env.JITSI_APP_ID;
-  const apiKeyId = process.env.JITSI_API_KEY_ID;
-  const privateKeyPem = process.env.JITSI_PRIVATE_KEY_BASE64
-    ? Buffer.from(process.env.JITSI_PRIVATE_KEY_BASE64, 'base64').toString()
-    : null;
+  // Resolve JaaS config: per-practice DB config takes precedence over server-
+  // level env vars so that each counseling practice can bring its own free or
+  // paid JaaS account.
+  let appId = null;
+  let apiKeyId = null;
+  let privateKeyPem = null;
+  let domain = '8x8.vc';
+
+  if (process.env.DB_NAME) {
+    // Look up the practice for this tenant to find its JaaS credentials.
+    const [practices] = await pool.query(
+      'SELECT jaas_app_id, jaas_api_key_id, jaas_private_key_enc, jaas_domain FROM practices WHERE tenant_id = ? LIMIT 1',
+      [tenantId],
+    );
+    if (practices.length) {
+      const p = practices[0];
+      if (p.jaas_app_id) appId = p.jaas_app_id;
+      if (p.jaas_api_key_id) apiKeyId = p.jaas_api_key_id;
+      if (p.jaas_domain) domain = p.jaas_domain;
+      if (p.jaas_private_key_enc) {
+        // Decrypt the stored private key ciphertext (AES-256-GCM).
+        try {
+          privateKeyPem = decrypt(p.jaas_private_key_enc);
+        } catch {
+          // Corrupted key — fall through to env var fallback.
+        }
+      }
+    }
+  }
+
+  // Fall back to server-level env vars (single-tenant / self-hosted installs).
+  if (!appId) appId = process.env.JITSI_APP_ID ?? null;
+  if (!apiKeyId) apiKeyId = process.env.JITSI_API_KEY_ID ?? null;
+  if (!privateKeyPem && process.env.JITSI_PRIVATE_KEY_BASE64) {
+    privateKeyPem = Buffer.from(process.env.JITSI_PRIVATE_KEY_BASE64, 'base64').toString();
+  }
+  if (process.env.JITSI_DOMAIN) domain = process.env.JITSI_DOMAIN;
 
   let jwt = null;
   if (appId && apiKeyId && privateKeyPem) {
@@ -5516,7 +5552,6 @@ async function handleVideoSession(request, response, requestUrl, session) {
     jwt = `${header}.${payload}.${signature}`;
   }
 
-  const domain = process.env.JITSI_DOMAIN || '8x8.vc';
   const fullRoomName = appId ? `${appId}/${roomName}` : roomName;
 
   await emitAudit(request, 'session.video_started', 'appointment', appointmentId, session);
@@ -11040,6 +11075,76 @@ async function handlePracticesCollection(request, response, session) {
   writeJson(response, 201, { item });
 }
 
+/**
+ * PATCH /v1/practices/:id/video-config
+ *
+ * Allows a practice admin to configure the JaaS credentials for their practice.
+ * The private key PEM is accepted as a plain-text PEM string and encrypted with
+ * AES-256-GCM before being stored — it is NEVER returned in any API response.
+ * All fields are optional; omitting a field leaves the existing value unchanged.
+ * Setting a field to null explicitly clears it (reverting to env-var fallback).
+ *
+ * Required role: practice_admin or admin.
+ * Returns the updated practice object (jaasPrivateKeyConfigured boolean only).
+ */
+async function handlePracticeVideoConfig(request, response, requestUrl, session) {
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+  if (requirePracticeAdmin(request, response, session)) return;
+
+  if (!process.env.DB_NAME) {
+    writeJson(response, 501, { error: 'Video config requires database mode' });
+    return;
+  }
+
+  const practiceId = requestUrl.pathname
+    .replace(/\/video-config$/, '')
+    .replace('/v1/practices/', '');
+  const tenantId = callerTenant(request, session);
+  const practice = await getPracticeById(practiceId, tenantId);
+  if (!practice) {
+    writeJson(response, 404, { error: 'Practice not found' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const fields = {};
+
+  // appId — plain text identifier (e.g. "vpaas-magic-cookie-…")
+  if ('jaasAppId' in payload) {
+    fields.jaasAppId = payload.jaasAppId === null ? null : sanitizeStr(payload.jaasAppId, 255);
+  }
+  // API key ID from the JaaS dashboard Credentials page
+  if ('jaasApiKeyId' in payload) {
+    fields.jaasApiKeyId = payload.jaasApiKeyId === null ? null : sanitizeStr(payload.jaasApiKeyId, 255);
+  }
+  // JaaS domain — almost always "8x8.vc" for hosted; allow customisation for
+  // self-hosted Jitsi deployments.
+  if ('jaasDomain' in payload) {
+    fields.jaasDomain = payload.jaasDomain === null ? null : sanitizeStr(payload.jaasDomain, 128);
+  }
+  // Private key — accepted as plain PEM; encrypted before storage.
+  // Setting to null clears the stored key (falls back to env var).
+  if ('jaasPrivateKeyPem' in payload) {
+    if (payload.jaasPrivateKeyPem === null) {
+      fields.jaasPrivateKeyEnc = null;
+    } else {
+      const pem = String(payload.jaasPrivateKeyPem).trim();
+      if (!pem.startsWith('-----BEGIN')) {
+        writeJson(response, 400, { error: 'jaasPrivateKeyPem must be a valid PEM string' });
+        return;
+      }
+      fields.jaasPrivateKeyEnc = encrypt(pem);
+    }
+  }
+
+  const updated = await updatePractice(practiceId, tenantId, fields);
+  emitAudit(request, 'practice.video_config.update', 'practice', practiceId, session);
+  writeJson(response, 200, { item: updated });
+}
+
 async function handlePracticeById(request, response, requestUrl, session) {
   const practiceId = requestUrl.pathname.replace('/v1/practices/', '');
 
@@ -14419,6 +14524,7 @@ function resolveRoute(pathname) {
   if (pathname.startsWith('/v1/clients/')) return '/v1/clients/:id';
   if (pathname.endsWith('/video-session') && pathname.startsWith('/v1/appointments/')) return '/v1/appointments/:id/video-session';
   if (pathname.startsWith('/v1/appointments/')) return '/v1/appointments/:id';
+  if (pathname.endsWith('/video-config') && pathname.startsWith('/v1/practices/')) return '/v1/practices/:id/video-config';
   if (pathname.startsWith('/v1/practices/')) return '/v1/practices/:id';
   if (pathname.startsWith('/v1/locations/')) return '/v1/locations/:id';
   if (pathname.startsWith('/v1/staff/') && pathname.endsWith('/availability')) return '/v1/staff/:id/availability';

@@ -307,6 +307,16 @@ async function applyColumnMigrations(conn) {
   // and never persisted.
   await addColumnIfMissing('appointments', 'video_room_id', 'VARCHAR(255) NULL AFTER remote_session');
 
+  // Per-practice JaaS video config — each counseling practice brings its own
+  // free or paid JaaS account. The private key is AES-256-GCM encrypted at
+  // rest. All four columns are nullable so practices that have not yet
+  // configured video gracefully fall back to the server-level env vars (or
+  // simply return a null JWT and no-op the button).
+  await addColumnIfMissing('practices', 'jaas_app_id', 'VARCHAR(255) NULL');
+  await addColumnIfMissing('practices', 'jaas_api_key_id', 'VARCHAR(255) NULL');
+  await addColumnIfMissing('practices', 'jaas_private_key_enc', 'TEXT NULL');
+  await addColumnIfMissing('practices', 'jaas_domain', "VARCHAR(128) NULL DEFAULT '8x8.vc'");
+
   // ── Time Tracking (Phase 1) ───────────────────────────────────────────────
   await conn.query(`
     CREATE TABLE IF NOT EXISTS \`time_entries\` (
