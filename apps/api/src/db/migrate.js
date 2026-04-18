@@ -301,6 +301,59 @@ async function applyColumnMigrations(conn) {
   // Practice-level default content language
   await addColumnIfMissing('practices', 'default_content_language', "VARCHAR(35) NOT NULL DEFAULT 'en'");
 
+  // ── Telehealth (Phase 1) ──────────────────────────────────────────────────
+  // Persists the unique Jitsi room name for each appointment. Stored in plain
+  // text — it is a random opaque token, not PHI. The JWT is generated on-demand
+  // and never persisted.
+  await addColumnIfMissing('appointments', 'video_room_id', 'VARCHAR(255) NULL AFTER remote_session');
+
+  // ── Time Tracking (Phase 1) ───────────────────────────────────────────────
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS \`time_entries\` (
+      \`id\`               CHAR(36)      NOT NULL,
+      \`tenant_id\`        VARCHAR(64)   NOT NULL,
+      \`user_id\`          VARCHAR(64)   NOT NULL,
+      \`appointment_id\`   VARCHAR(64)   NULL,
+      \`category\`         ENUM(
+                             'direct_clinical',
+                             'indirect_admin',
+                             'supervision_individual',
+                             'supervision_group',
+                             'ce_spiritual',
+                             'ministry_coordination'
+                           )             NOT NULL,
+      \`start_time\`       DATETIME      NOT NULL,
+      \`end_time\`         DATETIME      NOT NULL,
+      \`duration_minutes\` INT           NOT NULL,
+      \`is_locked\`        TINYINT(1)    NOT NULL DEFAULT 0,
+      \`verified_by\`      VARCHAR(64)   NULL,
+      \`verified_at\`      DATETIME      NULL,
+      \`description_enc\`  TEXT          NULL,
+      \`created_at\`       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      \`updated_at\`       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (\`id\`),
+      INDEX \`idx_te_user_category\` (\`tenant_id\`, \`user_id\`, \`category\`),
+      INDEX \`idx_te_user_start\`    (\`tenant_id\`, \`user_id\`, \`start_time\`),
+      INDEX \`idx_te_appointment\`   (\`appointment_id\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS \`licensure_goals\` (
+      \`id\`              CHAR(36)      NOT NULL,
+      \`tenant_id\`       VARCHAR(64)   NOT NULL,
+      \`user_id\`         VARCHAR(64)   NOT NULL,
+      \`label\`           VARCHAR(255)  NOT NULL,
+      \`category_filter\` VARCHAR(255)  NULL,
+      \`target_minutes\`  INT           NOT NULL,
+      \`effective_from\`  DATE          NOT NULL,
+      \`effective_to\`    DATE          NULL,
+      \`created_at\`      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (\`id\`),
+      INDEX \`idx_lg_user\` (\`tenant_id\`, \`user_id\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
   // Create faith_pastoral_registers as the rename of faith_language_preferences
   await conn.query(`
     CREATE TABLE IF NOT EXISTS \`faith_pastoral_registers\` (

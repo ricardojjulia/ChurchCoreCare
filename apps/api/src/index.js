@@ -80,7 +80,7 @@ import { getStaffEmployment, upsertStaffEmployment } from './db/queries/staffEmp
 import { getStaffFaithProfile, upsertStaffFaithProfile } from './db/queries/staffFaithProfiles.js';
 import {
   listAppointments, getAppointmentById, createAppointment, updateAppointment, deleteAppointment,
-  listAppointmentsByDateRange,
+  listAppointmentsByDateRange, updateAppointmentVideoRoom,
   listReminders, createReminder, updateReminder,
   listWaitlist, createWaitlistEntry, updateWaitlistEntry,
   listAvailabilityOverrides, createAvailabilityOverride, updateAvailabilityOverride, deleteAvailabilityOverride,
@@ -1780,6 +1780,11 @@ export async function handleApiRequest(request, response) {
 
     if (requestUrl.pathname === '/v1/platform/retention-policies') {
       await handleRetentionPolicies(request, response, session);
+      return;
+    }
+
+    if (requestUrl.pathname.endsWith('/video-session') && requestUrl.pathname.startsWith('/v1/appointments/')) {
+      await handleVideoSession(request, response, requestUrl, session);
       return;
     }
 
@@ -5426,6 +5431,102 @@ async function handleAppointmentsCollection(request, response, session) {
     emitAudit(request, 'appointment.create', 'appointment', appointment.id);
     writeJson(response, 201, { item: appointment });
   }
+}
+
+async function handleVideoSession(request, response, requestUrl, session) {
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const appointmentId = requestUrl.pathname
+    .replace(/\/video-session$/, '')
+    .replace('/v1/appointments/', '');
+  const appointment = await resolveAuthorizedAppointment(
+    request, response, appointmentId, session, 'appointment.video_session.start',
+  );
+  if (!appointment) return;
+
+  const tenantId = callerTenant(request, session);
+  const role = callerRole(request, session);
+  const isModerator = role !== 'client';
+
+  // Persist a stable opaque room name for this appointment (not PHI).
+  let roomName = appointment.videoRoomId;
+  if (!roomName) {
+    roomName = crypto.randomBytes(16).toString('hex');
+    if (process.env.DB_NAME) {
+      await updateAppointmentVideoRoom(appointmentId, tenantId, roomName);
+    } else {
+      const appt = appointments.find((a) => a.id === appointmentId);
+      if (appt) appt.videoRoomId = roomName;
+    }
+  }
+
+  // Build a short-lived RS256 JaaS JWT on-demand. Never persisted.
+  const appId = process.env.JITSI_APP_ID;
+  const apiKeyId = process.env.JITSI_API_KEY_ID;
+  const privateKeyPem = process.env.JITSI_PRIVATE_KEY_BASE64
+    ? Buffer.from(process.env.JITSI_PRIVATE_KEY_BASE64, 'base64').toString()
+    : null;
+
+  let jwt = null;
+  if (appId && apiKeyId && privateKeyPem) {
+    const now = Math.floor(Date.now() / 1000);
+    // Display name: role label only — no PII/PHI in JWT claims.
+    const displayName = isModerator ? 'Counselor' : 'Client';
+    const header = Buffer.from(
+      JSON.stringify({ alg: 'RS256', kid: apiKeyId, typ: 'JWT' }),
+    ).toString('base64url');
+    const payload = Buffer.from(
+      JSON.stringify({
+        aud: 'jitsi',
+        iss: 'chat',
+        iat: now,
+        exp: now + 7200,
+        nbf: now - 5,
+        sub: appId,
+        context: {
+          features: {
+            livestreaming: false,
+            'file-upload': false,
+            'outbound-call': false,
+            'sip-outbound-call': false,
+            transcription: false,
+            'list-visitors': false,
+            recording: false,
+            flip: false,
+          },
+          user: {
+            'hidden-from-recorder': false,
+            moderator: isModerator,
+            name: displayName,
+            id: session?.userId ?? 'anonymous',
+            avatar: '',
+            email: '',
+          },
+        },
+        room: `${appId}/${roomName}`,
+      }),
+    ).toString('base64url');
+
+    const signer = crypto.createSign('RSA-SHA256');
+    signer.update(`${header}.${payload}`);
+    const signature = signer.sign(privateKeyPem, 'base64url');
+    jwt = `${header}.${payload}.${signature}`;
+  }
+
+  const domain = process.env.JITSI_DOMAIN || '8x8.vc';
+  const fullRoomName = appId ? `${appId}/${roomName}` : roomName;
+
+  await emitAudit(request, 'session.video_started', 'appointment', appointmentId, session);
+
+  writeJson(response, 200, {
+    jwt,
+    domain,
+    roomName: fullRoomName,
+    appointmentId,
+  });
 }
 
 async function handleAppointmentById(request, response, requestUrl, session) {
@@ -14316,6 +14417,7 @@ function resolveRoute(pathname) {
   if (pathname === '/v1/platform/data-exports') return '/v1/platform/data-exports';
   if (pathname === '/v1/platform/retention-policies') return '/v1/platform/retention-policies';
   if (pathname.startsWith('/v1/clients/')) return '/v1/clients/:id';
+  if (pathname.endsWith('/video-session') && pathname.startsWith('/v1/appointments/')) return '/v1/appointments/:id/video-session';
   if (pathname.startsWith('/v1/appointments/')) return '/v1/appointments/:id';
   if (pathname.startsWith('/v1/practices/')) return '/v1/practices/:id';
   if (pathname.startsWith('/v1/locations/')) return '/v1/locations/:id';

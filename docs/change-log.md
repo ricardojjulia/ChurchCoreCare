@@ -2,7 +2,39 @@
 
 <!-- markdownlint-disable MD024 -->
 
-## April 11, 2026 — Bundle and Locale Status Sync
+## April 17, 2026 — JaaS Telehealth Video Sessions (Phase 1)
+
+### feat: integrated JaaS telehealth video sessions with JWT auth, audit ledger, and scheduling UI
+
+**Date:** April 17, 2026
+**Affected area:** `apps/api/src/db/migrate.js`, `apps/api/src/db/queries/appointments.js`, `apps/api/src/index.js`, `apps/api/src/lib/i18n-store.js`, `apps/web/src/lib/clientApi.js`, `apps/web/src/components/VideoSession/`, `apps/web/src/components/SchedulingPage.jsx`, `packages/i18n/src/index.js`, `.env.example`
+
+Phase 1 of the telehealth integration. Remote appointments now show a **Join Video Session** button that opens an embedded JaaS/Jitsi meeting directly in the scheduling page.
+
+**What changed:**
+
+- **DB migration:** Added `video_room_id VARCHAR(255) NULL` column to `appointments` table (idempotent `addColumnIfMissing`)
+- **DB migration:** Added `time_entries` and `licensure_goals` tables for the future time-tracking feature
+- **appointments.js:** `APPOINTMENT_SELECT` and `rowToAppointment` now include `video_room_id`; added `updateAppointmentVideoRoom(id, tenantId, videoRoomId)` export
+- **index.js:** Added `POST /v1/appointments/:id/video-session` route and `handleVideoSession` handler — generates a stable opaque room name, signs an RS256 JWT using `node:crypto` (`createSign('RSA-SHA256')`), writes a `session.video_started` audit event, returns `{ jwt, domain, roomName, appointmentId }`
+- **index.js:** Route dispatch places video-session sub-route check before the generic `startsWith('/v1/appointments/')` catch-all
+- **clientApi.js:** Added `startVideoSession(appointmentId)` export
+- **VideoSession/useJitsiSession.js:** Custom React hook — dynamically loads JaaS External API script, instantiates `JitsiMeetExternalAPI`, and exposes lifecycle callbacks
+- **VideoSession/VideoSessionModal.jsx:** Mantine Modal wrapping the Jitsi container with pre-launch CTA, spinner, and error states
+- **SchedulingPage.jsx:** Added "Join Video" button for remote appointments; wired `VideoSessionModal`
+- **i18n:** Added 5 `telehealth.*` keys to `packages/i18n/src/index.js` (`join_session`, `leave_session`, `session_started`, `session_ended`, `error_joining`); added `telehealth` namespace to `i18n-store.js`
+- **.env.example:** Added `JITSI_APP_ID`, `JITSI_API_KEY_ID`, `JITSI_PRIVATE_KEY_BASE64`, `JITSI_DOMAIN`, `VITE_JITSI_DOMAIN`
+
+**Privacy and security controls:**
+
+- JWT `user.name` is `'Counselor'` or `'Client'` only — no PII in JWT claims
+- Room name is a random 32-hex token with no semantic content
+- Private key is only loaded from environment; never committed
+- Audit event `session.video_started` is written to the ledger on every session start
+
+**Why:** Platform differentiation via integrated telehealth; enables faith-based practices to conduct HIPAA-conscious video sessions without leaving the platform.
+
+
 
 ### fix: commit referenced public web bundle artifacts and publish the latest es-MX locale status
 
