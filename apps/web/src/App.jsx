@@ -16,6 +16,7 @@ import './App.css';
 
 const CounselorHomePage = lazy(() => import('./components/CounselorHomePage.jsx'));
 const CounselorTasksPage = lazy(() => import('./components/CounselorTasksPage.jsx'));
+const TimeTrackingPage = lazy(() => import('./components/TimeTracking/TimeTrackingPage.jsx'));
 const ClientsPage = lazy(() => import('./components/ClientsPage.jsx'));
 const ClientDetailPage = lazy(() => import('./components/ClientDetail/ClientDetailPage.jsx'));
 const CounselorDetailPage = lazy(() => import('./components/CounselorDetail/CounselorDetailPage.jsx'));
@@ -644,6 +645,8 @@ export default function App() {
               currentUser={currentUser}
               sharedOperationsSummary={operationsSummaryData.summary ?? null}
             />
+          ) : showTimeTracking ? (
+            <TimeTrackingPage currentUser={currentUser} />
           ) : showClinical ? (
             <ClinicalChartPage
               clients={clientsData.items}

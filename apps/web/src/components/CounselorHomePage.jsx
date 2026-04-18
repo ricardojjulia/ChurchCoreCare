@@ -9,6 +9,7 @@ import {
   Title,
 } from '@mantine/core';
 import { useI18n } from '../lib/i18nContext.jsx';
+import LicensureProgressBars from './TimeTracking/LicensureProgressBars.jsx';
 
 function resolveClientFullName(client) {
   return [client?.firstName, client?.lastName]
@@ -351,6 +352,8 @@ export default function CounselorHomePage({
           </Stack>
         </Paper>
       </SimpleGrid>
+
+      <LicensureProgressBars userId={currentUser?.id} />
     </Stack>
   );
 }
