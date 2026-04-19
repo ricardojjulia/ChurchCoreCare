@@ -2,6 +2,15 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 18, 2026 — Per-tenant Jitsi/JaaS video configuration UI
+
+### feat: Add per-practice video / telehealth configuration in Workspace Studio
+
+**Date:** April 18, 2026
+**Affected area:** `apps/web/src/components/WorkspaceStudio/tabs/PracticeTab.jsx`
+
+The Practice tab in Workspace Studio now includes a **Video / Telehealth Configuration** section. Practice admins can enter their own JaaS (Jitsi as a Service) credentials — App ID, API Key ID, domain, and RSA private key (PEM). Credentials are write-only from the UI: the private key is never returned by the API (stored encrypted at rest, AES-256-GCM). The backend (`handlePracticeVideoConfig`, `PATCH /v1/practices/:id/video-config`) and DB columns (`jaas_app_id`, `jaas_api_key_id`, `jaas_private_key_enc`, `jaas_domain` on `practices`) were already in place. Video session handlers (scheduled and ad-hoc) already prefer tenant DB config over server-level env vars; this change provides the missing admin UI to populate those values.
+
 ## April 18, 2026 — Portal data coverage: counselor visibility into portal activity
 
 ### feat: Surface portal activity and contact preferences in counselor client detail view
