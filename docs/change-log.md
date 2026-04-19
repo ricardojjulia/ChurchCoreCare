@@ -2,7 +2,20 @@
 
 <!-- markdownlint-disable MD024 -->
 
-## April 17, 2026 — Licensure progress bars on Counselor Home + PHI-safe CSV export
+## April 18, 2026 — Jitsi "Start Session" button + ad-hoc emergency meeting
+
+### feat: Start Session button on all active appointments and ad-hoc emergency meeting launcher
+
+**Date:** April 18, 2026
+**Affected area:** `apps/web/src/components/SchedulingPage.jsx`, `apps/web/src/components/VideoSession/VideoSessionModal.jsx`, `apps/web/src/lib/clientApi.js`, `apps/api/src/index.js`
+
+- **Start Session button**: Every appointment row that is not completed, cancelled, or no-show now shows a "Start Session" button. Clicking it opens the existing Jitsi/JaaS VideoSessionModal and launches the video call with a JWT issued by the API.
+- **Ad-hoc Meeting button**: A new "Ad-hoc Meeting" button appears in the scheduling toolbar. Clicking it opens a client picker where the counselor selects any client. Confirming opens VideoSessionModal with an ad-hoc room (no appointment required).
+- **API**: New `POST /v1/video/adhoc-session` endpoint. Accepts `{ clientId }`, verifies tenant + client access, generates an opaque room name, issues a JaaS RS256 JWT (moderator role), and emits an audit event `session.video_adhoc_started`. Restricted to non-client roles.
+- **VideoSessionModal**: Now accepts either `appointmentId` (scheduled) or `clientId` (ad-hoc) props and routes to the appropriate API call.
+- **Security**: Room names are opaque hex strings — no PHI in room identifiers or JWT claims. Client role is denied access to the ad-hoc endpoint.
+
+
 
 ### feat: wire LicensureProgressBars into CounselorHomePage and add PHI-safe CSV export
 

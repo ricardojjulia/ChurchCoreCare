@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { Alert, Button, Loader, Modal, Stack, Text } from '@mantine/core';
-import { startVideoSession } from '../../lib/clientApi.js';
+import { startVideoSession, startAdHocVideoSession } from '../../lib/clientApi.js';
 import { useJitsiSession } from './useJitsiSession.js';
 
 /**
@@ -9,10 +9,11 @@ import { useJitsiSession } from './useJitsiSession.js';
  * @param {object} props
  * @param {boolean} props.opened          – modal open state
  * @param {() => void} props.onClose       – close handler
- * @param {string} props.appointmentId     – appointment ID to create/join session for
+ * @param {string} [props.appointmentId]   – appointment ID (scheduled session)
+ * @param {string} [props.clientId]        – client ID (ad-hoc session, used when no appointmentId)
  * @param {string} [props.clientName]      – displayed in the modal title
  */
-export function VideoSessionModal({ opened, onClose, appointmentId, clientName }) {
+export function VideoSessionModal({ opened, onClose, appointmentId, clientId, clientName }) {
   const containerRef = useRef(null);
   const [sessionData, setSessionData] = useState(null);
   const [starting, setStarting] = useState(false);
@@ -38,14 +39,16 @@ export function VideoSessionModal({ opened, onClose, appointmentId, clientName }
     setStarting(true);
     setStartError(null);
     try {
-      const data = await startVideoSession(appointmentId);
+      const data = appointmentId
+        ? await startVideoSession(appointmentId)
+        : await startAdHocVideoSession(clientId);
       setSessionData(data);
     } catch (err) {
       setStartError(err.message ?? 'Could not start video session');
     } finally {
       setStarting(false);
     }
-  }, [appointmentId, starting, sessionData]);
+  }, [appointmentId, clientId, starting, sessionData]);
 
   return (
     <Modal
@@ -62,7 +65,7 @@ export function VideoSessionModal({ opened, onClose, appointmentId, clientName }
           <Stack align="center" justify="center" style={{ flex: 1 }} gap="md" p="xl">
             <Text>Ready to join the video session with {clientName ?? 'your client'}?</Text>
             <Button color="blue" size="md" onClick={handleStart}>
-              Join Video Session
+              {appointmentId ? 'Join Video Session' : 'Start Ad-hoc Session'}
             </Button>
           </Stack>
         )}

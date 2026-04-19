@@ -727,6 +727,14 @@ export async function startVideoSession(appointmentId) {
   });
 }
 
+export async function startAdHocVideoSession(clientId) {
+  return apiFetch('/api/v1/video/adhoc-session', {
+    method: 'POST',
+    headers: csrfHeaders(),
+    body: JSON.stringify({ clientId }),
+  });
+}
+
 // ── Phase 4 — ScheduleOps ─────────────────────────────────────────────────
 
 export function fetchAvailabilityOverrides({ staffId, from, to } = {}) {

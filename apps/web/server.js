@@ -50,7 +50,7 @@ function buildWebSecurityHeaders(requestUrl = '/') {
           "style-src 'self' 'unsafe-inline'",
           "connect-src 'self'",
           "img-src 'self' data:",
-          "font-src 'self'",
+          "font-src 'self' data:",
           "frame-ancestors 'none'",
           "base-uri 'self'",
           "form-action 'self'",

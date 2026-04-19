@@ -1806,6 +1806,11 @@ export async function handleApiRequest(request, response) {
       return;
     }
 
+    if (requestUrl.pathname === '/v1/video/adhoc-session') {
+      await handleAdHocVideoSession(request, response, session);
+      return;
+    }
+
     if (requestUrl.pathname.endsWith('/sync-time') && requestUrl.pathname.startsWith('/v1/appointments/')) {
       await handleAppointmentSyncTime(request, response, requestUrl, session);
       return;
@@ -5632,6 +5637,121 @@ async function handleVideoSession(request, response, requestUrl, session) {
     domain,
     roomName: fullRoomName,
     appointmentId,
+  });
+}
+
+async function handleAdHocVideoSession(request, response, session) {
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  // Only staff may start ad-hoc sessions — clients cannot initiate.
+  const callerRoleValue = callerRole(request, session);
+  if (callerRoleValue === 'client' || !callerRoleValue) {
+    writeJson(response, 403, { error: 'Forbidden' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const clientId = sanitizeStr(payload?.clientId ?? '', 64) || null;
+  if (!clientId) {
+    writeJson(response, 400, { error: 'clientId is required' });
+    return;
+  }
+
+  // Validate the client exists and the caller has access.
+  const client = await resolveAuthorizedClient(request, response, clientId, session, 'appointment.video_session.adhoc');
+  if (!client) return;
+
+  const tenantId = callerTenant(request, session);
+
+  // Generate an opaque room name — not tied to an appointment.
+  const roomName = crypto.randomBytes(16).toString('hex');
+
+  // Resolve JaaS config (same logic as scheduled session).
+  let appId = null;
+  let apiKeyId = null;
+  let privateKeyPem = null;
+  let domain = '8x8.vc';
+
+  if (process.env.DB_NAME) {
+    const [practices] = await pool.query(
+      'SELECT jaas_app_id, jaas_api_key_id, jaas_private_key_enc, jaas_domain FROM practices WHERE tenant_id = ? LIMIT 1',
+      [tenantId],
+    );
+    if (practices.length) {
+      const p = practices[0];
+      if (p.jaas_app_id) appId = p.jaas_app_id;
+      if (p.jaas_api_key_id) apiKeyId = p.jaas_api_key_id;
+      if (p.jaas_domain) domain = p.jaas_domain;
+      if (p.jaas_private_key_enc) {
+        try {
+          privateKeyPem = decrypt(p.jaas_private_key_enc);
+        } catch { /* fall through */ }
+      }
+    }
+  }
+
+  if (!appId) appId = process.env.JITSI_APP_ID ?? null;
+  if (!apiKeyId) apiKeyId = process.env.JITSI_API_KEY_ID ?? null;
+  if (!privateKeyPem && process.env.JITSI_PRIVATE_KEY_BASE64) {
+    privateKeyPem = Buffer.from(process.env.JITSI_PRIVATE_KEY_BASE64, 'base64').toString();
+  }
+  if (process.env.JITSI_DOMAIN) domain = process.env.JITSI_DOMAIN;
+
+  let jwt = null;
+  if (appId && apiKeyId && privateKeyPem) {
+    const now = Math.floor(Date.now() / 1000);
+    const header = Buffer.from(
+      JSON.stringify({ alg: 'RS256', kid: apiKeyId, typ: 'JWT' }),
+    ).toString('base64url');
+    const jwtPayload = Buffer.from(
+      JSON.stringify({
+        aud: 'jitsi',
+        iss: 'chat',
+        iat: now,
+        exp: now + 7200,
+        nbf: now - 5,
+        sub: appId,
+        context: {
+          features: {
+            livestreaming: false,
+            'file-upload': false,
+            'outbound-call': false,
+            'sip-outbound-call': false,
+            transcription: false,
+            'list-visitors': false,
+            recording: false,
+            flip: false,
+          },
+          user: {
+            'hidden-from-recorder': false,
+            moderator: true,
+            name: 'Counselor',
+            id: session?.userId ?? 'anonymous',
+            avatar: '',
+            email: '',
+          },
+        },
+        room: `${appId}/${roomName}`,
+      }),
+    ).toString('base64url');
+
+    const signer = crypto.createSign('RSA-SHA256');
+    signer.update(`${header}.${jwtPayload}`);
+    const signature = signer.sign(privateKeyPem, 'base64url');
+    jwt = `${header}.${jwtPayload}.${signature}`;
+  }
+
+  const fullRoomName = appId ? `${appId}/${roomName}` : roomName;
+
+  await emitAudit(request, 'session.video_adhoc_started', 'client', clientId, session);
+
+  writeJson(response, 200, {
+    jwt,
+    domain,
+    roomName: fullRoomName,
   });
 }
 
@@ -14948,6 +15068,7 @@ function resolveRoute(pathname) {
   if (pathname === '/v1/platform/retention-policies') return '/v1/platform/retention-policies';
   if (pathname.startsWith('/v1/clients/')) return '/v1/clients/:id';
   if (pathname.endsWith('/video-session') && pathname.startsWith('/v1/appointments/')) return '/v1/appointments/:id/video-session';
+  if (pathname === '/v1/video/adhoc-session') return '/v1/video/adhoc-session';
   if (pathname.startsWith('/v1/appointments/')) return '/v1/appointments/:id';
   if (pathname.endsWith('/video-config') && pathname.startsWith('/v1/practices/')) return '/v1/practices/:id/video-config';
   if (pathname.startsWith('/v1/practices/')) return '/v1/practices/:id';
