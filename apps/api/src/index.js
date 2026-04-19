@@ -118,7 +118,7 @@ import {
   listPortalDataRightRequests, createPortalDataRightRequest, updatePortalDataRightRequest,
   listPortalMessageThreads, getPortalMessageThread, createPortalMessageThread, updatePortalMessageThread,
   listPortalMessages, createPortalMessage,
-  listPortalAppointmentRequests, createPortalAppointmentRequest, updatePortalAppointmentRequest,
+  listPortalAppointmentRequests, createPortalAppointmentRequest, updatePortalAppointmentRequest, getPortalAppointmentRequest,
 } from './db/queries/portal.js';
 import {
   listFormCatalog, createFormCatalogItem, updateFormCatalogItem, getFormCatalogItemByKey,
@@ -9429,7 +9429,7 @@ async function handlePortalAppointmentRequests(request, response, requestUrl, se
 
   const requestId = sanitizeStr(payload.requestId, 50);
   const item = process.env.DB_NAME
-    ? (await listPortalAppointmentRequests(client.tenantId, client.id)).find((entry) => entry.id === requestId)
+    ? await getPortalAppointmentRequest(requestId, client.tenantId)
     : portalAppointmentRequests.find((entry) => entry.id === requestId);
   if (!item) {
     writeJson(response, 404, { error: 'Appointment request not found' });
