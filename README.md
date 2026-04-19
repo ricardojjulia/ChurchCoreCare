@@ -427,6 +427,31 @@ node tests/e2e/ui-error-scan.mjs
 
 `node tests/e2e/ui-error-scan.mjs` drives Chromium against `http://127.0.0.1:3002` by default, signs in with the local admin and client demo accounts, and writes a page-by-page error report to `test-results/ui-error-scan.json`. Override the target with `UI_SCAN_BASE_URL` when needed.
 
+### Load testing (k6)
+
+Performance and load tests live in `tests/load/` and are powered by [k6](https://k6.io). They run real workflows against the live API — not mocks.
+
+```bash
+# Start the API first
+pnpm start:api
+
+# Run the full counselor workflow (composite, highest-value)
+pnpm test:load:full
+
+# Run a focused scenario
+pnpm test:load:auth
+pnpm test:load:intake
+pnpm test:load:notes
+
+# Run all scenarios sequentially
+pnpm test:load
+
+# Target staging with custom VU count
+BASE_URL=https://staging.example.com ./tests/load/run.sh full --vus 20 --duration 3m
+```
+
+Six scenarios are available: auth, client intake, session notes, scheduling, billing, and the full composite counselor workflow. See [`docs/LOAD-TESTING.md`](docs/LOAD-TESTING.md) for the complete guide — logic, thresholds, how to run on a schedule, and how to add new scenarios.
+
 ### Demo dataset workflows
 
 ```bash
@@ -558,6 +583,7 @@ The change log summarizes completed work across releases and documents the detai
 
 ## Documentation Index
 
+- **Load Testing:** `docs/LOAD-TESTING.md` — k6 load test guide: scenarios, execution, thresholds, scheduling, and how to expand
 - **API Documentation:** `docs/api/openapi.yaml` — OpenAPI 3.1 spec (v2.0.0), 150+ endpoints; interactive via `http://localhost:3002/api/docs`
 - **User Manual:** `docs/User Manual/README.md` — full end-user guide covering all roles and platform surfaces
 - Locale status docs: `docs/i18n/` — generated per-locale translation coverage and review readiness snapshots
