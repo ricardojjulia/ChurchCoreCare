@@ -2,6 +2,23 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 18, 2026 — Portal data coverage: counselor visibility into portal activity
+
+### feat: Surface portal activity and contact preferences in counselor client detail view
+
+**Date:** April 18, 2026
+**Affected area:** `apps/api/src/index.js`, `apps/web/src/lib/clientApi.js`, `apps/web/src/components/ClientDetail/tabs/PortalActivityTab.jsx`, `apps/web/src/components/ClientDetail/tabs/DemographicsTab.jsx`, `apps/web/src/components/ClientDetail/ClientDetailTabs.jsx`, `packages/i18n/src/index.js`, locale files
+
+Three portal data gaps closed:
+
+1. **Portal Activity tab (counselor view)** — A new "Portal Activity" tab was added to the counselor Client Detail view. It shows all portal message threads (with reply capability), client scheduling/appointment requests (with Approve/Decline/Mark Scheduled actions), and client-uploaded documents, all sourced live from the DB via the existing portal API endpoints.
+
+2. **Portal Contact Preferences on Demographics tab** — The counselor Demographics tab now fetches the client's self-managed portal profile (via `fetchPortalProfile`) and displays a read-only "Portal Contact Preferences" section at the bottom showing preferred name, contact email/phone, pronouns, marital status, education, occupation, affiliations, and preferred contact method. This data does not overwrite the clinical record.
+
+3. **Portal messages DB support** — `handlePortalMessages` in `index.js` was updated to use `listPortalMessageThreads`/`listPortalMessages` and `createPortalMessageThread`/`createPortalMessage` from the DB query layer when `DB_NAME` is set, instead of falling back to in-memory only.
+
+---
+
 ## April 18, 2026 — Client portal active video session banner
 
 ### feat: Show active video session join link in client portal dashboard
