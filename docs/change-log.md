@@ -2,6 +2,19 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 18, 2026 — Workspace Studio: Chart and Clients tabs
+
+### feat: Build ChartTab and ClientsTab in Workspace Studio
+
+**Date:** April 18, 2026
+**Affected area:** `apps/web/src/components/WorkspaceStudio/tabs/ChartTab.jsx` (new), `apps/web/src/components/WorkspaceStudio/tabs/ClientsTab.jsx` (new), `apps/web/src/components/WorkspaceStudio/WorkspaceStudioPage.jsx`
+
+The **Chart** and **Clients** tabs in Workspace Studio previously showed empty placeholders. Both now have full implementations:
+
+- **ChartTab** — Manages the practice's clinical form and instrument catalog. Fetches `GET /api/v1/forms/catalog?includeInactive=true`, groups all 41+ instruments by category (intake, administrative, assessment, clinical, treatment, worksheets, faith, etc.), and lets practice admins toggle each form active/inactive and toggle "standard on signup" status via `PATCH /api/v1/forms/catalog`. Summary badges show active/signup/total counts. Includes search and category filter. Switches are disabled while saving.
+
+- **ClientsTab** — Displays a management-level client directory. Fetches `GET /api/v1/clients` with optional status filter. Shows summary stats cards (active, waitlist, inactive, discharged, high-touchpoint, minor). Table supports client-side search by name/faith background and server-side status filtering. Row click or icon button opens the client chart via the existing `onViewClient` prop. Client names are treated as PHI and not logged or emitted in telemetry.
+
 ## April 18, 2026 — Per-tenant Jitsi/JaaS video configuration UI
 
 ### feat: Add per-practice video / telehealth configuration in Workspace Studio
