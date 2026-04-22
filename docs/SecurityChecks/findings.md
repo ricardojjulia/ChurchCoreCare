@@ -87,6 +87,19 @@
 - Remediation applied: `encrypt.js` now loads `DB_ENCRYPTION_HMAC_KEY` separately via `loadHmacKey()` / `hmacKey()`. When set, `deriveLookupHash()` uses it exclusively; when absent, it falls back to the main key for backward compatibility. Changing the HMAC key invalidates all existing lookup hashes — a rehash migration is required before switching keys in production. README already documented the variable correctly.
 - Manual verification needed: Confirm whether deployment tooling injects additional unused secrets or relies on the README contract.
 
+### F-007 - Tenant host isolation is now implemented but strict unknown-tenant rejection is configuration-dependent
+- Severity: Medium
+- Confidence: Medium
+- Category: AuthZ, Tenant Isolation, Configuration
+- Status: Mitigated (requires deployment configuration to reach full enforcement)
+- Affected files: `/home/runner/work/FaithCounseling/FaithCounseling/apps/api/src/db/pools.js`, `/home/runner/work/FaithCounseling/FaithCounseling/apps/api/src/db/pool.js`, `/home/runner/work/FaithCounseling/FaithCounseling/apps/api/src/middleware/tenant.js`, `/home/runner/work/FaithCounseling/FaithCounseling/apps/api/src/index.js`
+- Evidence: Request handling now resolves tenant context from host and runs inside tenant-scoped DB context (`apps/api/src/index.js` server wrapper and `runWithTenantContext`). Unknown tenant rejection is enforced only when `TENANT_STRICT_HOST_ROUTING=true` and an allowlist is provided (`apps/api/src/middleware/tenant.js`).
+- Risk: If SaaS deployment enables host-based tenant routing without strict mode and explicit tenant allowlists, unknown or mistyped tenant hosts may route through default tenant behavior instead of deterministic 404 isolation.
+- Impact: Weak host-routing configuration can undermine expected tenant boundary guarantees in production SaaS mode.
+- PHI/PII relevance: Tenant isolation failures can expose cross-practice metadata or records.
+- Remediation applied: Added strict-mode 404 enforcement capability and explicit tenant allowlist support. Default mode remains backward-compatible for local/dev.
+- Manual verification needed: Confirm production uses `TENANT_STRICT_HOST_ROUTING=true`, sets `TENANT_ALLOWED_SLUGS`, and provisions tenant DB mappings before enabling custom host routing.
+
 ## Sensitive Data Inventory
 - PHI: client demographics, DOB, SSN fragments, treatment plans, progress notes, diagnoses, medications, allergies, clinical history, legal/guardianship data, portal messages, uploads, intake answers — primarily in `/home/runner/work/FaithCounseling/FaithCounseling/apps/api/src/db/schema.sql` and related query modules; several flows correctly encrypt these fields. The credential-disclosure and log-leakage paths from the original review have been remediated.
 - PII: names, emails, phone numbers, addresses, contact details, employment/licensure identifiers, portal registration details — found across `clients`, `staff_members`, `portal_*`, `client_*`, and `tenant_provisioning` tables plus route handlers in `apps/api/src/index.js`.
