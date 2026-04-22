@@ -2,6 +2,25 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 22, 2026 — Phase 4 CI/deployment tenant policy guard and runbook enforcement
+
+### feat: add tenant-host routing policy guard workflow, env baseline keys, and operational runbook
+
+**Date:** April 22, 2026
+**Affected area:** `ops/check-tenant-policy.mjs`, `.github/workflows/tenant-policy-guard.yml`, `ops/runbooks/tenant-host-routing-policy.txt`, `package.json`, `README.md`, `docs/SecurityChecks/findings.md`, `docs/SecurityChecks/recommendations.md`
+
+Implemented Phase 4 slice 5 with explicit CI/deployment policy enforcement for tenant routing and provisioning flags:
+
+- added `ops/check-tenant-policy.mjs` to validate required tenant-host/provisioning env keys and fail-closed routing policy (`ENABLE_TENANT_HOST_ROUTING=true` in non-local runtime requires `TENANT_STRICT_HOST_ROUTING=true`)
+- added `pnpm policy:tenant` script and a new GitHub Actions workflow (`.github/workflows/tenant-policy-guard.yml`) to enforce policy checks on PRs and pushes to `main`
+- enforced required Phase 4 guardrail variable presence via policy script input validation (`ENABLE_TENANT_HOST_ROUTING`, `TENANT_STRICT_HOST_ROUTING`, `TENANT_ALLOWED_SLUGS`, `TENANT_DB_MAP`, `TENANT_SLUG_CACHE_TTL_MS`)
+- added operations runbook guidance at `ops/runbooks/tenant-host-routing-policy.txt` for rollout sequence, failure modes, remediation, and validation checklist
+
+Validation notes:
+
+- `pnpm policy:tenant` passes with baseline `.env.example`
+- production-mode guard simulation passes with explicit strict routing enabled
+
 ## April 22, 2026 — Phase 4 provisioning API transition tests and automation wiring
 
 ### feat: add endpoint tests for provisioning transitions and wire smoke/security scripts to PATCH lifecycle updates

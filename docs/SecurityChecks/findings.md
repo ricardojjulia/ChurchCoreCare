@@ -113,6 +113,19 @@
 - Remediation applied: Added canonical status lifecycle helper (`queued`, `in_progress`, `completed`, `failed`), enforced transition rules in `PATCH /v1/platform/tenant-provisioning`, added request-by-id lookup for transition validation, aligned provisioned tenant detection to canonical `completed` status, added endpoint-level API tests, and wired smoke/validation/security regression scripts to the canonical PATCH transition flow.
 - Manual verification needed: Validate staging/production provisioning orchestration uses API transitions exclusively (no direct DB status writes).
 
+### F-009 - Deployment-policy drift could weaken tenant host-routing isolation if configuration checks are skipped
+- Severity: Medium
+- Confidence: High
+- Category: Tenant Isolation, Configuration, DevSecOps
+- Status: Mitigated
+- Affected files: `/home/runner/work/FaithCounseling/FaithCounseling/ops/check-tenant-policy.mjs`, `/home/runner/work/FaithCounseling/FaithCounseling/.github/workflows/tenant-policy-guard.yml`, `/home/runner/work/FaithCounseling/FaithCounseling/ops/runbooks/tenant-host-routing-policy.txt`
+- Evidence: Prior slices introduced runtime fail-closed startup behavior for non-local tenant-host mode, but there was no dedicated CI/deployment policy gate validating required host-routing/provisioning flag posture pre-merge. This left a path for configuration drift between intended and deployed isolation controls.
+- Risk: Teams can merge or deploy configuration changes that omit or mis-set strict tenant routing flags, potentially weakening host-based tenant isolation guarantees.
+- Impact: Misconfigured SaaS routing posture can increase cross-tenant exposure risk through unknown host acceptance or inconsistent tenant-source policy.
+- PHI/PII relevance: Tenant isolation protects practice-scoped client records, portal data, and operational metadata.
+- Remediation applied: Added CI-enforced tenant policy guard (`tenant-policy-guard.yml`) and policy script (`ops/check-tenant-policy.mjs`) that validates required env keys, enforces non-local fail-closed host-routing policy, and requires a canonical tenant source (`TENANT_ALLOWED_SLUGS` or DB-backed provisioning). Added rollout/remediation runbook in `ops/runbooks/tenant-host-routing-policy.txt`.
+- Manual verification needed: Confirm deployment pipelines that inject runtime env values execute equivalent policy checks before release and that production secrets/variables match the guarded combinations.
+
 ## Sensitive Data Inventory
 - PHI: client demographics, DOB, SSN fragments, treatment plans, progress notes, diagnoses, medications, allergies, clinical history, legal/guardianship data, portal messages, uploads, intake answers — primarily in `/home/runner/work/FaithCounseling/FaithCounseling/apps/api/src/db/schema.sql` and related query modules; several flows correctly encrypt these fields. The credential-disclosure and log-leakage paths from the original review have been remediated.
 - PII: names, emails, phone numbers, addresses, contact details, employment/licensure identifiers, portal registration details — found across `clients`, `staff_members`, `portal_*`, `client_*`, and `tenant_provisioning` tables plus route handlers in `apps/api/src/index.js`.

@@ -23,6 +23,7 @@
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
     "test:step12": "node ops/step12-validate.mjs",
+    "policy:tenant": "node ops/check-tenant-policy.mjs",
     "test:security": "node ops/security-regression.mjs",
     "security:appsec": "node ops/appsec-scan.mjs",
     "security:db": "node ops/db-security-scan.mjs",
