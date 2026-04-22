@@ -458,17 +458,9 @@ export const DEFAULT_THRESHOLDS = {
 };
 ```
 
-### Connect to Grafana + Prometheus
+### Optional external metrics sink
 
-k6 can push metrics in real time to a Prometheus remote-write endpoint (already running in the observability stack):
-
-```bash
-K6_PROMETHEUS_RW_SERVER_URL=http://localhost:9090/api/v1/write \
-k6 run --out experimental-prometheus-rw \
-  tests/load/k6/scenarios/06-full-workflow.js
-```
-
-Then build a Grafana dashboard over the `k6_*` metric namespace to visualize p95 latency, error rate, and VU count on the same time axis as your API and DB metrics.
+If you need k6 metrics in an external dashboard, point k6 at whatever remote-write backend your environment already provides. Faith Counseling no longer ships a local Prometheus observability stack as part of the standard development workflow.
 
 ---
 
