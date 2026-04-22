@@ -15,6 +15,7 @@ Time Tracking Phase 3 is now active for counselor supervision workflows:
 - **Licensure totals now respect verification:** `getTimeEntrySummary(..., { countForGoals: true })` excludes unverified supervision minutes from goal progress. `LicensureProgressBars` now requests the correct counselor `userId` and uses the verification-aware summary mode.
 - **Supervisor ledger review UI:** `TimeTrackingPage` now supports switching between the current counselor's ledger and assigned intern ledgers, shows verification status badges inline, renders a pending-verification panel, and keeps intern ledger views read-only.
 - **PHI-safe CSV export v2:** `GET /api/v1/time-entries/export` now emits the board-oriented columns `Date`, `Category`, `Duration (minutes)`, `Duration (hours)`, `Client Reference`, `Verified By`, `Verified Date`, and `Supervisor Signature`. Client reference is a deterministic 6-character hash of `appointment_id`; exports never include descriptions, client names, or raw appointment IDs.
+- **Plan alignment update:** `PLANS/TIME-TRACKING-COUNSELORS.md` and `PLANS/PLAN-TRACKER.md` now reflect the delivered status for phases 1-3 on branch `feat/time-tracking-phase-3` (PR #92), pending merge to `main`.
 
 ## April 21, 2026 — OTEL instrumentation removal
 
