@@ -2,6 +2,26 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 22, 2026 — Phase 4 tenant DB registry and host routing foundation
+
+### feat: add tenant-aware pool registry and host-based tenant context middleware
+
+**Date:** April 22, 2026
+**Affected area:** `apps/api/src/db/pool.js`, `apps/api/src/db/pools.js`, `apps/api/src/middleware/tenant.js`, `apps/api/src/index.js`, `README.md`, `docs/SecurityChecks/findings.md`, `docs/SecurityChecks/recommendations.md`
+
+Implemented the first executable Phase 4 infrastructure slice for multi-tenant SaaS readiness while preserving current single-tenant behavior:
+
+- added a tenant-aware MySQL pool registry (`db/pools.js`) with lazy per-tenant pool creation
+- kept existing query modules backward compatible via a proxy-style `db/pool.js` interface
+- added host-based tenant resolution middleware (`middleware/tenant.js`) with optional strict unknown-tenant rejection (`TENANT_STRICT_HOST_ROUTING=true`)
+- wrapped request execution in tenant context propagation (`runWithTenantContext`) at server entry so DB operations can resolve the active tenant pool
+
+Security posture notes:
+
+- strict host routing is opt-in by environment flag, preventing accidental breakage in local/dev setups
+- unknown tenant hosts can now be denied with HTTP 404 when strict routing and allowlist are enabled
+- no PHI payloads or tenant secrets were introduced in telemetry or response bodies by this slice
+
 ## April 22, 2026 — Telehealth Phase 4 SaaS infrastructure scaffolding
 
 ### feat: scaffold SaaS multi-tenant infrastructure for commercial launch

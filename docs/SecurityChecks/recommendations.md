@@ -52,11 +52,21 @@
 - Implementation notes: Load a dedicated HMAC key for lookup hashing, retain the encryption key for AES-GCM only, and remove or wire up any documented but unused secrets such as `SESSION_SECRET`.
 - Definition of done: Runtime uses distinct keys for encryption and lookup hashing, and repository docs describe only the secrets the code actually consumes.
 
+### R-006 - Enforce strict host-based tenant isolation before SaaS rollout
+- Related findings: F-007
+- Priority: Near-term
+- Effort: S
+- Suggested owner: Backend, DevOps
+- Recommendation: Require strict unknown-tenant rejection and explicit tenant allowlisting in every non-local environment that uses host-based tenant routing.
+- Implementation notes: Set `TENANT_STRICT_HOST_ROUTING=true`, configure `TENANT_ALLOWED_SLUGS`, and ensure per-tenant DB mappings are present before accepting tenant host traffic. Add deployment checks that fail if strict routing is disabled in SaaS environments.
+- Definition of done: Unknown tenant hosts always return 404 in staging/production and cannot fall back to default tenant handling.
+
 ## Quick Wins
 - Remove `temporaryPassword` from public and admin portal API responses.
 - Remove `resetToken` from password-reset HTTP responses in every environment.
 - Stop logging raw audit objects and client-linked reminder identifiers from the worker.
 - Add a deployment review item to verify `instant_activation` is disabled until credential delivery is safe.
+- Add deployment checks to require strict tenant host routing (`TENANT_STRICT_HOST_ROUTING=true`) and explicit tenant slug allowlists.
 
 ## Longer-Term Hardening
 - Add end-to-end MFA coverage and negative tests for MFA-required accounts.

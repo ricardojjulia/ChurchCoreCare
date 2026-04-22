@@ -45,7 +45,8 @@ import { logError, logInfo, logWarn, serializeError } from './lib/log.js';
 import { translateMessages } from './lib/translate.js';
 import { handleCors, checkRateLimit, enforceRbac, enforceTenantScope, callerIdentity } from './lib/security.js';
 import { searchDsm5TrDiagnoses } from './lib/dsm5-tr-reference.js';
-import pool, { verifyConnection } from './db/pool.js';
+import pool, { verifyConnection, runWithTenantContext } from './db/pool.js';
+import { resolveTenantContext, denyUnknownTenantHost } from './middleware/tenant.js';
 import { encrypt, decrypt, encryptJson, decryptJson, deriveLookupHash } from './lib/encrypt.js';
 import {
   login,
@@ -2034,7 +2035,27 @@ export async function handleApiRequest(request, response) {
   }
 }
 
-export const server = http.createServer(handleApiRequest);
+export const server = http.createServer((request, response) => {
+  const tenantContext = resolveTenantContext(request.headers.host);
+  request.tenantId = tenantContext.tenantId;
+  request.tenantHost = tenantContext.host;
+
+  if (denyUnknownTenantHost(response, tenantContext)) {
+    return;
+  }
+
+  runWithTenantContext(tenantContext, () => handleApiRequest(request, response)).catch((error) => {
+    logError('request.tenant_context_failure', {
+      requestId: request.requestId,
+      tenantId: tenantContext.tenantId,
+      tenantHost: tenantContext.host,
+      error,
+    });
+    if (!response.headersSent) {
+      writeJson(response, 500, { error: 'Unexpected server error' });
+    }
+  });
+});
 
 server.on('error', (error) => {
   if (error?.code === 'EADDRINUSE') {
