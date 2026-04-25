@@ -2,6 +2,20 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## April 25, 2026 — GitHub Actions pnpm version source alignment
+
+### fix: remove duplicate pnpm version declarations from workflows
+
+**Date:** April 25, 2026
+**Affected area:** `.github/workflows/tenant-policy-guard.yml`, `.github/workflows/deploy.yml`, `.github/workflows/nightly-security-check.yml`, `README.md`
+
+Aligned GitHub Actions pnpm setup with the root `packageManager` declaration so `pnpm/action-setup@v4` no longer fails when both a workflow `version` and `package.json` package manager version are present.
+
+Validation notes:
+
+- local `pnpm policy:tenant` passed before the CI fix
+- GitHub tenant policy guard failure was traced to duplicate pnpm version sources, not the policy script
+
 ## April 22, 2026 — Phase 4 CI/deployment tenant policy guard and runbook enforcement
 
 ### feat: add tenant-host routing policy guard workflow, env baseline keys, and operational runbook

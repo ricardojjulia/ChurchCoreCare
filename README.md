@@ -113,6 +113,8 @@ The repository runs automated nightly AppSec and DB Security scans at **23:00 UT
 | Nightly runner | `node ops/nightly-security-runner.mjs` | Orchestrator — generates dated reports in `docs/SecurityChecks/` |
 | Dry run | `node ops/nightly-security-runner.mjs --dry-run` | Run scans without writing files or opening PRs |
 
+GitHub Actions uses the root `packageManager` declaration (`pnpm@10.33.2`) as the single pnpm version source for CI, deploy, tenant-policy, and nightly security workflows.
+
 Reports are stored in [`docs/SecurityChecks/`](./docs/SecurityChecks/) as timestamped Markdown summaries and JSON raw data.
 
 **Current status:** AppSec `MEDIUM` (12 medium — `Math.random()` in UI key generation, deferred), DB Security `CLEAN` (0 critical/high/medium/low, PHI coverage 100%).
