@@ -221,7 +221,7 @@ The checked-in public web bundle includes this shortcut so environments serving 
 
 The `apps/web/public/assets` bundle files may be refreshed and committed when shipping UI workflow updates so the checked-in public web surface stays aligned with the latest source behavior.
 
-**Note:** After UI or workflow changes (such as the SchedulingPage recurring series modal fix in v4.7.0), always rebuild the public assets with `pnpm --filter @faith/web build` and commit the updated bundle. This ensures that all users receive the latest code and prevents stale JavaScript errors from cached or outdated bundles.
+**Note:** After UI or workflow changes (such as the SchedulingPage recurring series modal fix in v4.7.0), always rebuild the public assets with `pnpm --filter @churchcore/web build` and commit the updated bundle. This ensures that all users receive the latest code and prevents stale JavaScript errors from cached or outdated bundles.
 
 ## Standalone Product Pages
 
@@ -272,9 +272,9 @@ flowchart TB
     end
 
     subgraph packages[" 📦  Shared Packages "]
-        DOM["@faith/domain\nContracts · Enums · Types"]
-        I18N["@faith/i18n\nLocale Catalogs · Runtime Translations"]
-        TEL["@faith/telemetry\nReserved Monitoring Utilities"]
+        DOM["@churchcore/domain\nContracts · Enums · Types"]
+        I18N["@churchcore/i18n\nLocale Catalogs · Runtime Translations"]
+        TEL["@churchcore/telemetry\nReserved Monitoring Utilities"]
     end
 
     subgraph ops[" 🚀  Local Startup & Demo Ops "]
@@ -326,7 +326,7 @@ pnpm start
 
 - loads `.env` via `node --env-file=.env`
 - ensures Docker is running (launches Docker Desktop when needed)
-- ensures `faith-mysql` is running
+- ensures `churchcore-postgres` is running
 - waits for MySQL readiness
 - runs API migration when DB is configured
 - starts API, web, and worker services
@@ -411,9 +411,9 @@ This repository is deployment-ready, but it does not currently include opinionat
 
 ### Service start commands (container or VM)
 
-- API service: `pnpm --filter @faith/api start`
-- Web service: `pnpm --filter @faith/web start`
-- Worker service: `pnpm --filter @faith/worker start`
+- API service: `pnpm --filter @churchcore/api start`
+- Web service: `pnpm --filter @churchcore/web start`
+- Worker service: `pnpm --filter @churchcore/worker start`
 
 ## Technology How-Tos
 

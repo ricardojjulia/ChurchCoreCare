@@ -40,5 +40,5 @@ jobs:
           NODE_ENV: production
           ENABLE_TENANT_HOST_ROUTING: "true"
           TENANT_STRICT_HOST_ROUTING: "true"
-          DB_NAME: faith_counseling
+          DB_NAME: churchcore_care
         run: pnpm policy:tenant
