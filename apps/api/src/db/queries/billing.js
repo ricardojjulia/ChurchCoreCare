@@ -121,6 +121,10 @@ function rowToClaim(row) {
     externalReference: row.external_reference,
     notes: row.notes,
     adjudicationNotes: row.notes,
+    stediSubmissionId: row.stedi_submission_id ?? null,
+    payerClaimNumber: row.payer_claim_number ?? null,
+    rejectionReason: row.rejection_reason ?? null,
+    eraReceivedAt: row.era_received_at instanceof Date ? row.era_received_at.toISOString() : (row.era_received_at ?? null),
     createdAt: row.created_at,
   };
 }
@@ -456,6 +460,23 @@ export async function updateSuperbill(id, tenantId, fields) {
 // Claims
 // ---------------------------------------------------------------------------
 
+export async function getClaimById(id, tenantId) {
+  const [rows] = await pool.query(
+    'SELECT * FROM claims WHERE id = ? AND tenant_id = ?',
+    [id, tenantId],
+  );
+  if (rows.length === 0) return null;
+  return rowToClaim(rows[0]);
+}
+
+export async function listClaimsByStatus(tenantId, status) {
+  const [rows] = await pool.query(
+    'SELECT * FROM claims WHERE tenant_id = ? AND status = ? AND stedi_submission_id IS NOT NULL',
+    [tenantId, status],
+  );
+  return rows.map(rowToClaim);
+}
+
 export async function listClaims(tenantId, status) {
   if (status !== undefined) {
     const [rows] = await pool.query(
@@ -502,6 +523,10 @@ export async function updateClaim(id, tenantId, fields) {
   if (fields.status !== undefined) { setClauses.push('status = ?'); values.push(fields.status); }
   if (fields.externalReference !== undefined) { setClauses.push('external_reference = ?'); values.push(fields.externalReference); }
   if (fields.notes !== undefined) { setClauses.push('notes = ?'); values.push(fields.notes); }
+  if (fields.stediSubmissionId !== undefined) { setClauses.push('stedi_submission_id = ?'); values.push(fields.stediSubmissionId); }
+  if (fields.payerClaimNumber !== undefined) { setClauses.push('payer_claim_number = ?'); values.push(fields.payerClaimNumber); }
+  if (fields.rejectionReason !== undefined) { setClauses.push('rejection_reason = ?'); values.push(fields.rejectionReason); }
+  if (fields.eraReceivedAt !== undefined) { setClauses.push('era_received_at = ?'); values.push(toSqlTimestamp(fields.eraReceivedAt)); }
 
   if (setClauses.length > 0) {
     values.push(id, tenantId);

@@ -339,6 +339,7 @@ function AppointmentComposer({
   const [conflicts, setConflicts] = useState([]);
   const [startTime24, setStartTime24] = useState('');
   const [endTime24, setEndTime24] = useState('');
+  const [staleEligibility, setStaleEligibility] = useState(false);
 
   const counselorOptions = counselors.map((staff) => ({
     value: staff.id,
@@ -415,6 +416,25 @@ function AppointmentComposer({
     setStartTime24(startsAtValue ? dateToTime24(startsAtValue) : '');
     setEndTime24(endsAtValue ? dateToTime24(endsAtValue) : '');
   }, [opened, editingAppointment, initialClientId, initialPortalRequest, timezone, currentUser, counselors]);
+
+  const selectedClientId = form.values.clientId;
+  useEffect(() => {
+    if (!selectedClientId || !opened) { setStaleEligibility(false); return; }
+    let cancelled = false;
+    fetch(`/api/v1/clients/${selectedClientId}/insurance`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((json) => {
+        if (cancelled) return;
+        const list = json?.insurance ?? json?.items ?? [];
+        const active = list.find((i) => i.is_active);
+        if (!active) { setStaleEligibility(false); return; }
+        const checkedAt = active.eligibility_checked_at ?? null;
+        const stale = !checkedAt || (Date.now() - new Date(checkedAt).getTime() > 30 * 86400 * 1000);
+        setStaleEligibility(stale);
+      })
+      .catch(() => { if (!cancelled) setStaleEligibility(false); });
+    return () => { cancelled = true; };
+  }, [selectedClientId, opened]);
 
   const submit = form.onSubmit(async (values) => {
     setSaving(true);
@@ -515,6 +535,12 @@ function AppointmentComposer({
                   </Text>
                 ))}
               </Stack>
+            </Alert>
+          ) : null}
+
+          {staleEligibility ? (
+            <Alert color="yellow">
+              Insurance eligibility for this client hasn&apos;t been verified in 30+ days. Consider verifying before the appointment.
             </Alert>
           ) : null}
 

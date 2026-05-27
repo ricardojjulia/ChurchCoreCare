@@ -94,21 +94,115 @@ These documentation updates must be part of the same commit as the code change. 
 
 ---
 
+## AI development factory
+
+This repository ships a software factory for both Claude Code and Codex. Both environments run the same seven-phase workflow — the tools and invocation syntax differ, the discipline does not. Read `CLAUDE.md` for the full stack and architecture context.
+
+### Claude Code factory (`.claude/`)
+
+The factory for Claude Code lives in `.claude/` and uses separate agent files that each run in their own context window:
+
+| File | Purpose |
+| --- | --- |
+| `CLAUDE.md` | Project knowledge loaded into every session automatically |
+| `.claude/agents/codebase-researcher.md` | Read-only codebase mapper — always the first step |
+| `.claude/agents/story-writer.md` | Rough idea → user story with acceptance criteria |
+| `.claude/agents/spec-writer.md` | Approved story → technical brief |
+| `.claude/agents/backend-builder.md` | Services, API routes, DB migrations, jobs, unit tests |
+| `.claude/agents/frontend-builder.md` | React components, pages, forms, UI tests |
+| `.claude/agents/test-verifier.md` | Acceptance tests against the user story |
+| `.claude/agents/implementation-validator.md` | Independent pre-PR audit (read-only) |
+| `.claude/skills/build-with-tests/SKILL.md` | Single-agent feature build with tests |
+| `.claude/skills/orchestrate-feature/SKILL.md` | Full pipeline orchestrator with three human approval gates |
+| `.claude/hooks/pre-commit.sh` | Blocks credential/key/env files from being committed |
+
+#### How to invoke (Claude Code)
+
+**Full pipeline** (research → story → spec → build → test → validate):
+
+```text
+Use the orchestrate-feature skill to build [describe the feature].
+```
+
+**Quick build** (you already have a brief):
+
+```text
+Use the build-with-tests skill to implement [describe the feature].
+```
+
+**Individual agents** at any step:
+
+```text
+@codebase-researcher — how does [area] work today?
+@implementation-validator — review this before I open a PR
+```
+
+### Codex factory (`.codex/`)
+
+The factory for Codex lives in `.codex/skills/` and maps the same seven roles into sequential Codex work phases:
+
+| Skill | Purpose |
+| --- | --- |
+| `.codex/skills/churchcore-care-feature-factory/SKILL.md` | Full pipeline — research through validation, with three approval gates |
+| `.codex/skills/churchcore-care-feature-factory/references/agent-roles.md` | Role contracts referenced by the factory |
+| `.codex/skills/churchcore-care-build-with-tests/SKILL.md` | Focused implementation when a brief is already approved |
+| `.codex/skills/churchcore-care-pr-review/SKILL.md` | PR and diff review before merge or handoff |
+
+#### How to invoke (Codex)
+
+**Full pipeline:**
+
+```text
+Use the churchcore-care-feature-factory skill to build [describe the feature].
+```
+
+**Implementation only (brief already approved):**
+
+```text
+Use the churchcore-care-build-with-tests skill to implement [describe the feature].
+```
+
+**PR review:**
+
+```text
+Use the churchcore-care-pr-review skill to review this PR / diff.
+```
+
+### Factory alignment rule
+
+Both factories run the same phases and enforce the same rules. The role contracts in `.codex/skills/churchcore-care-feature-factory/references/agent-roles.md` are the shared reference. If a rule changes (e.g., a new PHI convention, a new required audit event), update `CLAUDE.md` first, then update the Codex role contracts to match.
+
+### Factory rules for agents
+
+- `@codebase-researcher` is always invoked before any implementation. Never build without a codebase map.
+- The user story must be explicitly approved before the spec is written.
+- The technical brief must be explicitly approved before code is written.
+- `@implementation-validator` must run before any PR is opened. No BLOCKERs may be present.
+- `@implementation-validator` is read-only — it never fixes what it finds.
+- All factory outputs must still satisfy the project rules in this file and in the two canonical plan files.
+
+---
+
 ## Required execution checklist for every task
 
 1. Read `AGENTS.md` (this file).
-2. Confirm task scope — identify whether monitoring or security plans apply.
-3. Make changes on a new feature branch.
-4. Run relevant validation and tests.
-5. Update `README.md` and `docs/change-log.md` (and create a release summary if applicable).
-6. Commit with a signed commit.
-7. Push branch and open a PR with a clear summary and validation notes.
+2. Read `CLAUDE.md` — project stack, architecture rules, and conventions.
+3. Confirm task scope — identify whether monitoring or security plans apply.
+4. For non-trivial features, run the factory pipeline (`orchestrate-feature` skill).
+5. Make changes on a new feature branch.
+6. Run `pnpm lint` and `pnpm test` — both must pass.
+7. Update `README.md` and `docs/change-log.md` (and create a release summary if applicable).
+8. Commit with a signed commit.
+9. Push branch and open a PR using `.github/pull_request_template.md` — fill every section.
 
 ## Pull request expectations
 
-Every PR must include:
+Every PR must fill all sections of `.github/pull_request_template.md`:
 
-- **What changed** — describe the change.
-- **Why it changed** — describe the motivation.
-- **Validation performed** — tests run, manual checks done.
+- **What changed** — specific description (screen, behavior, file, API).
+- **Why it changed** — motivation and user/clinical/operational need.
+- **Plan alignment** — which PLANS/ section this belongs to.
+- **Validation performed** — lint, test, manual checks, browser sweep result.
+- **Security and compliance notes** — PHI, audit, tenant isolation.
+- **AI factory notes** — if built with the factory, confirm validator was run.
 - **Follow-up actions** — anything maintainers need to do after merge.

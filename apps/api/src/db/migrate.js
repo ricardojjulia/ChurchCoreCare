@@ -411,6 +411,55 @@ async function applyColumnMigrations(conn) {
   await addColumnIfMissing('progress_notes', 'cosigned_at', 'TIMESTAMPTZ NULL');
   await addColumnIfMissing('progress_notes', 'cosign_comments_enc', 'TEXT NULL');
 
+  // ── Phase B2: Stedi EDI claims ────────────────────────────────────────────
+  await addColumnIfMissing('claims', 'stedi_submission_id', 'VARCHAR(128) NULL');
+  await addColumnIfMissing('claims', 'payer_claim_number', 'VARCHAR(64) NULL');
+  await addColumnIfMissing('claims', 'rejection_reason', 'TEXT NULL');
+  await addColumnIfMissing('claims', 'era_received_at', 'TIMESTAMPTZ NULL');
+  await addColumnIfMissing('practices', 'npi', 'VARCHAR(10) NULL');
+
+  // ── Phase B3: Insurance eligibility ──────────────────────────────────────
+  await addColumnIfMissing('client_insurance', 'eligibility_response_enc', 'TEXT NULL');
+  await addColumnIfMissing('client_insurance', 'eligibility_checked_at', 'TIMESTAMPTZ NULL');
+  await addColumnIfMissing('client_insurance', 'eligibility_status', "VARCHAR(32) NULL");
+
+  // ── Phase B1: AI session note drafting ───────────────────────────────────
+  await addColumnIfMissing('progress_notes', 'note_format', 'VARCHAR(32) NULL');
+  await addColumnIfMissing('progress_notes', 'ai_draft_used', 'BOOLEAN NOT NULL DEFAULT FALSE');
+
+  // ── Practice billing gate ─────────────────────────────────────────────────
+  await addColumnIfMissing('portal_settings', 'insurance_billing_enabled', 'BOOLEAN NOT NULL DEFAULT FALSE');
+
+  // ── Phase A1: Tenant slug registry ───────────────────────────────────────
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS tenant_slugs (
+      slug        VARCHAR(64)  NOT NULL,
+      tenant_id   VARCHAR(64)  NOT NULL,
+      is_active   BOOLEAN      NOT NULL DEFAULT TRUE,
+      created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (slug)
+    )
+  `);
+
+  // ── Phase A2: Stripe subscription billing ────────────────────────────────
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS tenant_subscriptions (
+      id                       CHAR(36)     NOT NULL DEFAULT gen_random_uuid(),
+      tenant_id                VARCHAR(64)  NOT NULL,
+      stripe_customer_id       VARCHAR(64)  NULL,
+      stripe_subscription_id   VARCHAR(64)  NULL,
+      stripe_price_id          VARCHAR(64)  NULL,
+      status                   VARCHAR(32)  NOT NULL DEFAULT 'trial',
+      trial_ends_at            TIMESTAMPTZ  NULL,
+      current_period_end       TIMESTAMPTZ  NULL,
+      canceled_at              TIMESTAMPTZ  NULL,
+      created_at               TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+      updated_at               TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (id),
+      UNIQUE (tenant_id)
+    )
+  `);
+
   // ── Phase 3: Supervisor assignments table ────────────────────────────────
   await conn.query(`
     CREATE TABLE IF NOT EXISTS supervisor_assignments (

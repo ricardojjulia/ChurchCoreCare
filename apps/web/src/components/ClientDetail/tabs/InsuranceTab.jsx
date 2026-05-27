@@ -3,6 +3,7 @@ import { notifications } from '@mantine/notifications';
 import { Stack, Title, Paper, SimpleGrid, TextInput, Select, Checkbox, Button, Group, Text, Divider, NumberInput } from '@mantine/core';
 import { DateInput } from '@mantine/dates';
 import { createClientInsurance, updateClientInsurance, createReferringProvider, updateReferringProvider } from '../../../lib/clientApi.js';
+import EligibilityCard from './EligibilityCard.jsx';
 
 function strToDate(s) { if (!s) return null; const d = new Date(s); return isNaN(d) ? null : d; }
 function dateToStr(value) {
@@ -121,6 +122,11 @@ function InsuranceCard({ title, initialData, clientId, coverageOrder }) {
               <Group><Button size="xs" loading={saving} onClick={handleSave}>Save {title}</Button></Group>
             </>
           )}
+        </Stack>
+      )}
+      {form.id && clientId && (
+        <Stack p="md" pt={0}>
+          <EligibilityCard clientId={clientId} insuranceId={form.id} />
         </Stack>
       )}
     </Paper>

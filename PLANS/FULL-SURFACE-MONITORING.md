@@ -113,6 +113,17 @@ Required boundary rules:
 - `client.diagnoses`
 - `client.faith`
 - `client.legal`
+- `client.insurance` — insurance records + real-time eligibility card (EligibilityCard)
+
+### Clinical chart surfaces
+
+- `clinical.session_notes` — progress notes form + SOAP/DAP/BIRP note editor
+- `clinical.ai_note_draft` — AI draft panel (AiNoteDraftPanel); gated by `AI_NOTES_ENABLED`; must show clear loading, error, and empty states; never surfaces PHI in audit labels
+
+### Billing surfaces
+
+- `billing.claims` — claims list with submit/status workflow (ClaimsList, ClaimCard, ClaimSubmitButton)
+- `billing.subscription` — plan status, trial days remaining, upgrade/activate controls
 
 ### Counselor detail tabs
 
@@ -144,11 +155,17 @@ Required boundary rules:
 - `scheduling.practice`
 - `scheduling.month`
 
+### SaaS / platform surfaces
+
+- `signup` — trial signup form (SignupPage); public; must show slug availability, validation errors, and success confirmation
+- `trial_expired` — conversion gate (TrialExpiredPage); shown when `subscriptionStatus = trial_expired`
+- `trial_banner` — top-of-app warning strip; visible when `daysRemaining <= 7`
+
 ### Modal and workflow surfaces
 
 - Client picker modal
 - Client create/edit modal
-- Appointment composer
+- Appointment composer — includes stale eligibility advisory alert when active insurance >30 days old
 - User maintenance dialogs
 - Counselor maintenance dialogs
 - Portal action dialogs

@@ -43,6 +43,53 @@ export async function sendEmail({ to, subject, text }) {
   return { sent: true };
 }
 
+// ─── Email templates (pure functions — return { subject, text }) ──────────────
+
+const APP_BASE_URL = process.env.APP_BASE_URL ?? 'https://app.churchcorecare.com';
+
+export function trialWelcomeEmail(practiceName, practiceUrl, trialEndsAt) {
+  const endsDate = trialEndsAt ? new Date(trialEndsAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'in 30 days';
+  return {
+    subject: 'Welcome to ChurchCore Care — your trial is ready',
+    text: `Hello${practiceName ? ` ${practiceName}` : ''},
+
+Your 30-day free trial of ChurchCore Care is now active. No credit card required until your trial ends.
+
+Your practice URL: ${practiceUrl}
+Trial ends: ${endsDate}
+
+To ensure uninterrupted access, add a payment method before your trial expires:
+${APP_BASE_URL}/settings/billing
+
+If you have questions or need help getting started, simply reply to this email.
+
+The ChurchCore Care Team
+`,
+  };
+}
+
+export function paymentFailedEmail(practiceName, retryDate) {
+  const retryStr = retryDate ? `We'll retry the charge on ${new Date(retryDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}.` : 'Please update your payment method as soon as possible to avoid a service interruption.';
+  return {
+    subject: 'Action required: payment failed for ChurchCore Care',
+    text: `Hello${practiceName ? ` ${practiceName}` : ''},
+
+We were unable to process your ChurchCore Care subscription payment.
+
+${retryStr}
+
+To update your payment method and restore full access:
+${APP_BASE_URL}/settings/billing
+
+Your data is safe and your practice records are preserved.
+
+If you believe this is an error, please reply to this email and we'll help resolve it.
+
+The ChurchCore Care Team
+`,
+  };
+}
+
 /**
  * Send an SMS via Twilio.
  * @returns {{ sent: boolean, reason?: string }}
