@@ -1,6 +1,10 @@
 import pg from 'pg';
 import { decrypt } from './decrypt.js';
 import { sendEmail, sendSms } from './notify.js';
+import { startProvisioningWorker } from './provision.js';
+import { processTrialReminders } from './trial-reminders.js';
+import { processDunning } from './subscription-billing.js';
+import { pollClaimStatuses } from './edi-status-poller.js';
 
 const workerName = 'reminder-worker';
 const { Pool } = pg;
@@ -234,6 +238,9 @@ async function pollAllTenants() {
       await Promise.all([
         processDueReminders(pool, tenantId),
         expireStaleReminders(pool, tenantId),
+        processTrialReminders(pool, tenantId),
+        processDunning(pool, tenantId),
+        pollClaimStatuses(pool, tenantId),
       ]);
     }),
   );
@@ -242,6 +249,9 @@ async function pollAllTenants() {
 // ---------------------------------------------------------------------------
 // Startup
 // ---------------------------------------------------------------------------
+
+// Start the tenant provisioning worker (always, regardless of tenant configs)
+const provisioningWorker = startProvisioningWorker();
 
 const tenantConfigs = resolveTenantConfigs();
 
@@ -261,7 +271,10 @@ if (tenantConfigs.length === 0) {
     console.log(`[${workerName}] SIGTERM received — draining and shutting down`);
     shuttingDown = true;
     clearInterval(intervalHandle);
-    await closeAllPools();
+    await Promise.allSettled([
+      closeAllPools(),
+      provisioningWorker?.stop(),
+    ]);
     process.exit(0);
   });
 

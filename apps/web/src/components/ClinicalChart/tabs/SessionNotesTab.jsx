@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Stack, Paper, Group, Title, Text, Button, Textarea, Select, Badge,
-  Loader, Alert, Divider, TextInput, Checkbox,
+  Loader, Alert, Divider, TextInput, Checkbox, Collapse,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
+import { Sparkles } from 'lucide-react';
 import { useI18n } from '../../../lib/i18nContext.jsx';
 import { csrfHeaders } from '../../../lib/csrf.js';
+import AiNoteDraftPanel from '../AiNoteDraftPanel.jsx';
 
 const NOTE_TYPE_OPTIONS = [
   { value: 'intake_note',           label: 'Intake Note' },
@@ -440,6 +442,7 @@ export default function SessionNotesTab({
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [composerOpen, setComposerOpen] = useState(false);
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [draft, setDraft] = useState({
     appointmentId: '',
@@ -635,6 +638,35 @@ export default function SessionNotesTab({
                 {apptLoadError}
               </Alert>
             )}
+
+            {/* AI Draft Assistant */}
+            <Paper withBorder radius="md" p="sm" style={{ borderColor: 'var(--mantine-color-violet-3)', background: 'var(--mantine-color-violet-0)' }}>
+              <Group justify="space-between" mb={aiPanelOpen ? 'sm' : 0}>
+                <Group gap="xs">
+                  <Sparkles size={15} color="var(--mantine-color-violet-6)" />
+                  <Text size="sm" fw={600} c="violet">AI Draft Assistant</Text>
+                </Group>
+                <Button
+                  size="xs"
+                  variant="subtle"
+                  color="violet"
+                  onClick={() => setAiPanelOpen((v) => !v)}
+                >
+                  {aiPanelOpen ? 'Hide' : 'Open'}
+                </Button>
+              </Group>
+              <Collapse in={aiPanelOpen}>
+                <AiNoteDraftPanel
+                  clientId={clientId}
+                  onDraftAccepted={(text) => {
+                    setDraft((d) => ({ ...d, summary: text }));
+                    setAiPanelOpen(false);
+                    notifications.show({ title: 'Draft applied', message: 'AI draft placed in the note summary. Review and edit before saving.', color: 'violet' });
+                  }}
+                />
+              </Collapse>
+            </Paper>
+
             <Select
               label="Session (required)"
               description="Notes must be attached to a scheduled calendar session"

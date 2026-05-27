@@ -15,6 +15,7 @@ This document covers everything you need to contribute effectively — from your
 - [Before You Start](#before-you-start)
 - [Setting Up Your Local Environment](#setting-up-your-local-environment)
 - [Project Structure](#project-structure)
+- [AI Development Factory](#ai-development-factory)
 - [Development Workflow](#development-workflow)
 - [Commit Conventions](#commit-conventions)
 - [What Every Commit Must Include](#what-every-commit-must-include)
@@ -158,6 +159,60 @@ churchcore-care/
 ├── tests/            Playwright E2E tests and UI error scan
 └── AGENTS.md         Session-level rules for AI agents working in this repo
 ```
+
+---
+
+## AI Development Factory
+
+This repository ships with a structured AI development factory built on Claude Code. It is not optional polish — it is the supported way to build non-trivial features in this codebase.
+
+### What the factory is
+
+The factory is a set of seven specialized agents, two workflow skills, and a pre-commit safety hook, all living in `.claude/`. Every agent has a narrow responsibility, its own tool permissions, and its own context window. The orchestrator chains them in sequence with three human approval gates so no significant code gets written without an approved story and an approved technical brief.
+
+| Agent | Job |
+| --- | --- |
+| `@codebase-researcher` | Maps the relevant code before anything is built. Always first. |
+| `@story-writer` | Turns a rough idea into a user story with acceptance criteria. |
+| `@spec-writer` | Turns an approved story into a technical brief. |
+| `@backend-builder` | Builds services, API routes, DB migrations, jobs, and unit tests. |
+| `@frontend-builder` | Builds React components, pages, forms, and UI tests. |
+| `@test-verifier` | Adds acceptance tests keyed to the user story's criteria. |
+| `@implementation-validator` | Independent read-only pre-PR audit — never writes code. |
+
+### How to use it
+
+**For a new feature** — run the full pipeline with human gates at story, spec, and validator:
+
+```text
+Use the orchestrate-feature skill to build [describe the feature].
+```
+
+**For a well-defined task** — run the build skill directly:
+
+```text
+Use the build-with-tests skill to implement [describe the feature].
+```
+
+**For a targeted question** — invoke an individual agent:
+
+```text
+@codebase-researcher — how does the scheduling system work today?
+@implementation-validator — review this implementation before I open a PR.
+```
+
+### Factory rules
+
+- `@codebase-researcher` is always the first step. Never build without a codebase map.
+- The user story must be explicitly approved before the spec is written.
+- The technical brief must be explicitly approved before code is written.
+- `@implementation-validator` must run before any PR is opened. No BLOCKERs may remain.
+- The PR template (`.github/pull_request_template.md`) includes a factory checklist — fill it.
+- All factory outputs must still satisfy the platform rules in `AGENTS.md` and the two canonical plan files.
+
+### Why this matters for clinical software
+
+A single open-ended AI session that plans, codes, and reviews its own work is a self-graded paper. On software that handles PHI, clinical records, and tenant-isolated data, self-graded is not acceptable. The factory separates those roles: the validator has never seen how the code was written — only what was supposed to be built and what is actually on disk. That gap is where real problems get caught.
 
 ---
 

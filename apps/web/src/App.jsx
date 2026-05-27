@@ -4,6 +4,10 @@ import { useDisclosure } from '@mantine/hooks';
 import AuthGate from './components/AuthGate';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
+import TrialBanner from './components/TrialBanner.jsx';
+import TrialExpiredPage from './components/TrialExpiredPage.jsx';
+import SignupPage from './components/SignupPage.jsx';
+import { useTrialStatus } from './lib/useTrialStatus.js';
 import Metrics from './components/Metrics';
 import WorkspaceGrid from './components/WorkspaceGrid';
 import { csrfHeaders } from './lib/csrf.js';
@@ -129,6 +133,7 @@ function summarizeAppointmentMetrics(items) {
 
 export default function App() {
   const { t } = useI18n();
+  const trialStatus = useTrialStatus();
   const [navOpened, { toggle: toggleNav, close: closeNav }] = useDisclosure(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
@@ -479,6 +484,10 @@ export default function App() {
   const showFaith            = currentView === 'faith';
   const showTimeTracking     = currentView === 'time-tracking';
   const showFallbackWorkspace = !showDashboard && !showCounselorHome && !showTasks && !showUsers && !showCounselors && !showClients && !showScheduling && !showWorkspaceStudio && !showDocuments && !showPortal && !showOfferings && !showClinical && !showFaith;
+  if (window.location.pathname === '/signup') {
+    return <SignupPage />;
+  }
+
   if (authBootstrapping) {
     return (
       <Center h="100vh">
@@ -495,6 +504,10 @@ export default function App() {
     return <AuthGate onContinue={handleAuthContinue} />;
   }
 
+  if (isAuthenticated && !trialStatus.loading && trialStatus.isExpired) {
+    return <TrialExpiredPage />;
+  }
+
   return (
     <AppShell
       header={{ height: 96 }}
@@ -502,13 +515,16 @@ export default function App() {
       padding={0}
     >
       <AppShell.Header>
-        <TopBar
-          opened={navOpened}
-          onMenuToggle={toggleNav}
-          onSignOut={handleSignOut}
-          currentUser={currentUser}
-          currentView={currentView}
-        />
+        <Stack gap={0}>
+          <TrialBanner />
+          <TopBar
+            opened={navOpened}
+            onMenuToggle={toggleNav}
+            onSignOut={handleSignOut}
+            currentUser={currentUser}
+            currentView={currentView}
+          />
+        </Stack>
       </AppShell.Header>
 
       <AppShell.Navbar>

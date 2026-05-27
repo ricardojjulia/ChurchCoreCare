@@ -53,6 +53,7 @@ import {
   isTenantHostRoutingEnabled,
   isStrictTenantRoutingEnabled,
   isNonLocalRuntime,
+  isSubscriptionGateExempt,
 } from './middleware/tenant.js';
 import { encrypt, decrypt, encryptJson, decryptJson, deriveLookupHash } from './lib/encrypt.js';
 import {
@@ -101,7 +102,7 @@ import {
   listInvoices, getInvoiceById, createInvoice, updateInvoice,
   listPayments, createPayment,
   listSuperbills, createSuperbill, updateSuperbill,
-  listClaims, createClaim, updateClaim,
+  listClaims, createClaim, updateClaim, getClaimById, listClaimsByStatus,
   getAgingReport,
 } from './db/queries/billing.js';
 import {
@@ -153,6 +154,17 @@ import {
   normalizeTenantProvisioningStatus,
   canTransitionTenantProvisioningStatus,
 } from './lib/tenant-provisioning.js';
+import { draftSessionNote } from './lib/ai-notes.js';
+import { constructWebhookEvent, createCustomer, createSubscription, getPlanByKey, createBillingPortalSession } from './lib/stripe.js';
+import { handleStripeWebhookEvent } from './lib/billing-webhooks.js';
+import { submitClaim as stediSubmitClaim } from './lib/stedi.js';
+import {
+  getTenantBySlug, createTenantSlug,
+  getTenantSubscription, upsertTenantSubscription,
+  isSubscriptionActive,
+} from './db/queries/tenants.js';
+import { verifyEligibility, getCachedEligibility } from './lib/eligibility.js';
+import { sendEmail, trialWelcomeEmail, paymentFailedEmail } from './lib/email.js';
 import { listClientAddresses, getClientAddress, createClientAddress, updateClientAddress, deleteClientAddress } from './db/queries/clientAddresses.js';
 import { listClientPhones, getClientPhone, createClientPhone, updateClientPhone, deleteClientPhone } from './db/queries/clientPhones.js';
 import { listClientContacts, getClientContact, createClientContact, updateClientContact, deleteClientContact } from './db/queries/clientContacts.js';
@@ -1119,6 +1131,7 @@ const portalSettingsRecords = [
     allowSchedulingRequests: true,
     showPublicCounselorDirectory: false,
     financialMode: 'offerings',
+    insuranceBillingEnabled: false,
     suggestedOfferingCents: 12000,
     offeringMinistryNote: 'Your gift helps sustain this counseling ministry and expand care for others.',
     contactPreferenceOptions: ['email', 'sms', 'phone', 'portal_message'],
@@ -1297,6 +1310,42 @@ const tenantProvisioningRequests = [
   },
 ];
 
+// In-memory slug registry and subscription registry (used when DB_NAME is not set).
+const tenantSlugRegistry = new Set(['newhope', 'system']);
+const tenantSubscriptionRegistry = new Map([
+  ['system', {
+    tenantId: 'system',
+    stripeCustomerId: null,
+    stripeSubscriptionId: null,
+    stripePriceId: null,
+    status: 'active',
+    trialEndsAt: null,
+    currentPeriodEnd: null,
+    canceledAt: null,
+  }],
+  // Test fixtures — used by tenant-subscription-gate.test.mjs in in-memory mode
+  ['suspended-test', {
+    tenantId: 'suspended-test',
+    stripeCustomerId: 'cus_test',
+    stripeSubscriptionId: null,
+    stripePriceId: null,
+    status: 'suspended',
+    trialEndsAt: null,
+    currentPeriodEnd: null,
+    canceledAt: null,
+  }],
+  ['trial-expired-test', {
+    tenantId: 'trial-expired-test',
+    stripeCustomerId: 'cus_test2',
+    stripeSubscriptionId: null,
+    stripePriceId: null,
+    status: 'trial',
+    trialEndsAt: new Date(0).toISOString(), // epoch = always expired
+    currentPeriodEnd: null,
+    canceledAt: null,
+  }],
+]);
+
 const supportImpersonationSessions = [
   {
     id: 'sis-001',
@@ -1340,6 +1389,45 @@ const retentionPolicies = [
 const runtimeAuditEvents = [];
 const MAX_RUNTIME_AUDIT_EVENTS = 4000;
 
+// ---------------------------------------------------------------------------
+// Subscription gate
+// Returns true (and writes 402) when the caller's tenant is suspended/churned.
+// Must be called after RBAC so session is already resolved and role is known.
+// ---------------------------------------------------------------------------
+
+async function enforceSubscriptionGate(request, response, route, session) {
+  if (isSubscriptionGateExempt(route)) return false;
+
+  const role = callerRole(request, session);
+  // platform_admin can access all tenants regardless of subscription status
+  if (role === 'platform_admin') return false;
+  // No role = public route that slipped past — RBAC already allowed it, let it through
+  if (!role) return false;
+
+  const tenantId = callerTenant(request, session);
+
+  let subscription;
+  if (process.env.DB_NAME) {
+    subscription = await getTenantSubscription(tenantId);
+  } else {
+    subscription = tenantSubscriptionRegistry.get(tenantId) ?? null;
+  }
+
+  // No subscription record = tenant is still being provisioned; allow through
+  if (!subscription) return false;
+
+  if (!isSubscriptionActive(subscription)) {
+    writeJson(response, 402, {
+      error: 'Subscription required',
+      subscriptionStatus: subscription.status,
+      billingUrl: '/settings/billing',
+    });
+    return true;
+  }
+
+  return false;
+}
+
 export async function handleApiRequest(request, response) {
   const requestUrl = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
   const route = resolveRoute(requestUrl.pathname);
@@ -1353,6 +1441,12 @@ export async function handleApiRequest(request, response) {
   response.setHeader('x-request-id', requestId);
 
   try {
+    // Stripe webhook — must be handled before CORS/auth with raw body intact
+    if (requestUrl.pathname === '/webhooks/stripe' && request.method === 'POST') {
+      await handleStripeWebhook(request, response);
+      return;
+    }
+
     // CORS — must come before rate-limit so preflight gets through cleanly
     if (handleCors(request, response)) return;
 
@@ -1364,6 +1458,9 @@ export async function handleApiRequest(request, response) {
 
     // RBAC — uses session when available, falls back to headers in dev
     if (enforceRbac(request, response, route, session)) return;
+
+    // Subscription gate — suspended/churned tenants blocked from clinical/staff routes
+    if (await enforceSubscriptionGate(request, response, route, session)) return;
 
     if ((requestUrl.pathname === '/health' || requestUrl.pathname === '/health/live') && request.method === 'GET') {
       const health = buildLiveHealthResponse();
@@ -1463,6 +1560,11 @@ export async function handleApiRequest(request, response) {
       return;
     }
 
+    if (requestUrl.pathname.endsWith('/progress-notes/draft') && requestUrl.pathname.startsWith('/v1/clients/')) {
+      await handleProgressNoteDraft(request, response, requestUrl, session);
+      return;
+    }
+
     if (requestUrl.pathname.endsWith('/progress-notes') && requestUrl.pathname.startsWith('/v1/clients/')) {
       await handleClientProgressNotes(request, response, requestUrl, session);
       return;
@@ -1480,6 +1582,13 @@ export async function handleApiRequest(request, response) {
         return;
       }
       await handleClientProgressNoteById(request, response, requestUrl, session);
+      return;
+    }
+
+    if (requestUrl.pathname.startsWith('/v1/clients/') && requestUrl.pathname.endsWith('/verify-eligibility')) {
+      const eligibilitySettings = await ensurePortalSettings(callerTenant(request, session));
+      if (requireInsuranceBillingEnabled(response, eligibilitySettings)) return;
+      await handleVerifyEligibility(request, response, requestUrl, session);
       return;
     }
 
@@ -1603,39 +1712,56 @@ export async function handleApiRequest(request, response) {
       return;
     }
 
-    if (requestUrl.pathname === '/v1/billing/service-codes') {
-      await handleServiceCodes(request, response, session);
+    if (requestUrl.pathname === '/v1/billing/subscription') {
+      await handleBillingSubscription(request, response, requestUrl, session);
       return;
     }
 
-    if (requestUrl.pathname === '/v1/billing/fee-schedules') {
-      await handleFeeSchedules(request, response, session);
+    if (requestUrl.pathname === '/v1/billing/portal') {
+      await handleBillingPortal(request, response, requestUrl, session);
       return;
     }
 
-    if (requestUrl.pathname === '/v1/billing/invoices') {
-      await handleInvoices(request, response, requestUrl, session);
+    if (requestUrl.pathname === '/v1/billing/subscription/activate') {
+      await handleBillingSubscriptionActivate(request, response, session);
       return;
     }
 
-    if (requestUrl.pathname === '/v1/billing/payments') {
-      await handlePayments(request, response, requestUrl, session);
+    if (requestUrl.pathname === '/v1/billing/subscription/upgrade') {
+      await handleBillingSubscriptionUpgrade(request, response, session);
       return;
     }
 
-    if (requestUrl.pathname === '/v1/billing/superbills') {
-      await handleSuperbills(request, response, requestUrl, session);
-      return;
+    if (requestUrl.pathname === '/v1/billing/service-codes' ||
+        requestUrl.pathname === '/v1/billing/fee-schedules' ||
+        requestUrl.pathname === '/v1/billing/invoices' ||
+        requestUrl.pathname === '/v1/billing/payments' ||
+        requestUrl.pathname === '/v1/billing/superbills' ||
+        requestUrl.pathname === '/v1/billing/claims' ||
+        requestUrl.pathname === '/v1/billing/reports/aging') {
+      const billingSettings = await ensurePortalSettings(callerTenant(request, session));
+      if (requireInsuranceBillingEnabled(response, billingSettings)) return;
+      if (requestUrl.pathname === '/v1/billing/service-codes') { await handleServiceCodes(request, response, session); return; }
+      if (requestUrl.pathname === '/v1/billing/fee-schedules') { await handleFeeSchedules(request, response, session); return; }
+      if (requestUrl.pathname === '/v1/billing/invoices') { await handleInvoices(request, response, requestUrl, session); return; }
+      if (requestUrl.pathname === '/v1/billing/payments') { await handlePayments(request, response, requestUrl, session); return; }
+      if (requestUrl.pathname === '/v1/billing/superbills') { await handleSuperbills(request, response, requestUrl, session); return; }
+      if (requestUrl.pathname === '/v1/billing/claims') { await handleClaimPlaceholders(request, response, requestUrl, session); return; }
+      if (requestUrl.pathname === '/v1/billing/reports/aging') { await handleAgingReport(request, response, requestUrl, session); return; }
     }
 
-    if (requestUrl.pathname === '/v1/billing/claims') {
-      await handleClaimPlaceholders(request, response, requestUrl, session);
-      return;
-    }
-
-    if (requestUrl.pathname === '/v1/billing/reports/aging') {
-      await handleAgingReport(request, response, requestUrl, session);
-      return;
+    // ── Claim submit / status (/v1/billing/claims/:id/submit|status) ──────────
+    {
+      const claimSubmitMatch = requestUrl.pathname.match(/^\/v1\/billing\/claims\/([^/]+)\/submit$/);
+      if (claimSubmitMatch) {
+        await handleClaimSubmit(request, response, claimSubmitMatch[1], session);
+        return;
+      }
+      const claimStatusMatch = requestUrl.pathname.match(/^\/v1\/billing\/claims\/([^/]+)\/status$/);
+      if (claimStatusMatch) {
+        await handleClaimStatusGet(request, response, claimStatusMatch[1], session);
+        return;
+      }
     }
 
     if (requestUrl.pathname === '/v1/portal/overview') {
@@ -1793,6 +1919,16 @@ export async function handleApiRequest(request, response) {
 
     if (requestUrl.pathname === '/v1/audit/intelligence/observations' || requestUrl.pathname === '/v1/audit/intelligence/observations/') {
       await handleAuditObservations(request, response, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/platform/check-slug') {
+      await handleCheckSlug(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/platform/signup') {
+      await handlePlatformSignup(request, response);
       return;
     }
 
@@ -3481,6 +3617,412 @@ async function handleClientTreatmentPlan(request, response, requestUrl, session)
 
   emitAudit(request, 'chart.treatment_plan.upsert', 'treatment_plan', plan.id);
   writeJson(response, 200, { item: plan });
+}
+
+// ─── Stripe webhook ───────────────────────────────────────────────────────────
+
+async function handleStripeWebhook(request, response) {
+  if (!process.env.STRIPE_WEBHOOK_SECRET) {
+    writeJson(response, 503, { error: 'Webhook not configured' });
+    return;
+  }
+
+  const rawBody = await new Promise((resolve, reject) => {
+    const chunks = [];
+    request.on('data', (chunk) => chunks.push(chunk));
+    request.on('end', () => resolve(Buffer.concat(chunks)));
+    request.on('error', reject);
+  });
+
+  const signature = request.headers['stripe-signature'];
+  if (!signature) {
+    writeJson(response, 400, { error: 'Missing stripe-signature header' });
+    return;
+  }
+
+  let event;
+  try {
+    event = constructWebhookEvent(rawBody, signature);
+  } catch (err) {
+    writeJson(response, 400, { error: 'Webhook signature verification failed' });
+    return;
+  }
+
+  try {
+    await handleStripeWebhookEvent(event);
+    writeJson(response, 200, { received: true });
+  } catch (err) {
+    logError({ event: 'stripe.webhook.handler_error', type: event.type });
+    writeJson(response, 500, { error: 'Webhook processing error' });
+  }
+}
+
+// ─── Billing subscription routes ──────────────────────────────────────────────
+
+async function handleBillingSubscription(request, response, requestUrl, session) {
+  if (request.method === 'GET') {
+    if (!process.env.DB_NAME) {
+      writeJson(response, 200, { subscription: null });
+      return;
+    }
+    const tenantId = request.headers['x-tenant-id'] ?? session?.tenantId;
+    if (!tenantId) {
+      writeJson(response, 400, { error: 'Tenant context required' });
+      return;
+    }
+    const result = await pool.query(
+      'SELECT * FROM tenant_subscriptions WHERE tenant_id = $1',
+      [tenantId],
+    );
+    const row = result.rows[0] ?? null;
+    writeJson(response, 200, {
+      subscription: row ? {
+        tenantId: row.tenant_id,
+        stripeCustomerId: row.stripe_customer_id,
+        stripeSubscriptionId: row.stripe_subscription_id,
+        stripePriceId: row.stripe_price_id,
+        status: row.status,
+        trialEndsAt: row.trial_ends_at,
+        currentPeriodEnd: row.current_period_end,
+        canceledAt: row.canceled_at,
+      } : null,
+    });
+    return;
+  }
+
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+async function handleBillingPortal(request, response, requestUrl, session) {
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (!process.env.STRIPE_SECRET_KEY) {
+    writeJson(response, 503, { error: 'Billing not configured' });
+    return;
+  }
+
+  const tenantId = request.headers['x-tenant-id'] ?? session?.tenantId;
+  if (!tenantId) {
+    writeJson(response, 400, { error: 'Tenant context required' });
+    return;
+  }
+
+  if (!process.env.DB_NAME) {
+    writeJson(response, 503, { error: 'Database not configured' });
+    return;
+  }
+
+  const result = await pool.query(
+    'SELECT stripe_customer_id FROM tenant_subscriptions WHERE tenant_id = $1',
+    [tenantId],
+  );
+  const customerId = result.rows[0]?.stripe_customer_id;
+  if (!customerId) {
+    writeJson(response, 404, { error: 'No billing account found for this tenant' });
+    return;
+  }
+
+  try {
+    const { createBillingPortalSession } = await import('./lib/stripe.js');
+    const portalSession = await createBillingPortalSession({
+      customerId,
+      returnUrl: process.env.APP_BASE_URL ? `${process.env.APP_BASE_URL}/settings/billing` : 'https://app.churchcorecare.com/settings/billing',
+    });
+    emitAudit(request, 'billing.portal.session_created', 'tenant', tenantId, session);
+    writeJson(response, 200, { url: portalSession.url });
+  } catch (err) {
+    writeJson(response, 503, { error: 'Billing service unavailable' });
+  }
+}
+
+// ─── Trial → paid subscription activation ────────────────────────────────────
+
+async function handleBillingSubscriptionActivate(request, response, session) {
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (!session) {
+    writeJson(response, 401, { error: 'Authentication required' });
+    return;
+  }
+
+  if (!['practice_admin', 'practice_owner', 'platform_admin'].includes(session.role)) {
+    writeJson(response, 403, { error: 'Insufficient permissions' });
+    return;
+  }
+
+  if (!process.env.STRIPE_SECRET_KEY) {
+    writeJson(response, 503, { error: 'Billing not configured' });
+    return;
+  }
+
+  const tenantId = callerTenant(request, session);
+
+  let subscription;
+  if (process.env.DB_NAME) {
+    subscription = await getTenantSubscription(tenantId);
+  } else {
+    subscription = tenantSubscriptionRegistry.get(tenantId) ?? null;
+  }
+
+  if (!subscription?.stripeCustomerId) {
+    writeJson(response, 404, { error: 'No billing account found for this practice' });
+    return;
+  }
+
+  try {
+    const returnUrl = process.env.APP_BASE_URL
+      ? `${process.env.APP_BASE_URL}/settings/billing`
+      : 'https://app.churchcorecare.com/settings/billing';
+
+    const portalSession = await createBillingPortalSession({
+      customerId: subscription.stripeCustomerId,
+      returnUrl,
+    });
+
+    await emitAudit(request, 'billing.subscription.activate_started', 'tenant_subscription', tenantId, session);
+    writeJson(response, 200, { url: portalSession.url });
+  } catch (err) {
+    logError('billing.activate_error', { tenantId, message: err.message });
+    writeJson(response, 503, { error: 'Billing service unavailable' });
+  }
+}
+
+// ── POST /v1/billing/subscription/upgrade ─────────────────────────────────────
+// Switches an existing Stripe subscription to a different plan (e.g. solo→group).
+
+async function handleBillingSubscriptionUpgrade(request, response, session) {
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (!session) {
+    writeJson(response, 401, { error: 'Authentication required' });
+    return;
+  }
+
+  if (!['practice_admin', 'practice_owner', 'platform_admin'].includes(session.role)) {
+    writeJson(response, 403, { error: 'Insufficient permissions' });
+    return;
+  }
+
+  if (!process.env.STRIPE_SECRET_KEY) {
+    writeJson(response, 503, { error: 'Billing not configured' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const planKey = sanitizeStr(payload.planKey, 32);
+  if (!planKey) {
+    writeJson(response, 400, { error: 'planKey is required' });
+    return;
+  }
+
+  let plan;
+  try {
+    plan = getPlanByKey(planKey);
+  } catch {
+    writeJson(response, 400, { error: `Unknown plan: ${planKey}` });
+    return;
+  }
+
+  const priceId = plan.priceId();
+  if (!priceId) {
+    writeJson(response, 503, { error: `Price not configured for plan: ${planKey}` });
+    return;
+  }
+
+  const tenantId = callerTenant(request, session);
+  let subscription;
+  if (process.env.DB_NAME) {
+    subscription = await getTenantSubscription(tenantId);
+  } else {
+    subscription = tenantSubscriptionRegistry.get(tenantId) ?? null;
+  }
+
+  if (!subscription?.stripeSubscriptionId) {
+    writeJson(response, 404, { error: 'No active subscription found for this practice' });
+    return;
+  }
+
+  try {
+    const stripe = await import('./lib/stripe.js');
+    const stripeSub = await stripe.getSubscription(subscription.stripeSubscriptionId);
+    const itemId = stripeSub.items?.data?.[0]?.id;
+    if (!itemId) {
+      writeJson(response, 503, { error: 'Subscription has no line items' });
+      return;
+    }
+
+    const Stripe = (await import('stripe')).default;
+    const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2025-04-30.basil' });
+    await stripeClient.subscriptions.update(subscription.stripeSubscriptionId, {
+      items: [{ id: itemId, price: priceId }],
+      proration_behavior: 'create_prorations',
+    });
+
+    emitAudit(request, 'billing.subscription.upgraded', 'tenant_subscription', tenantId, session);
+    writeJson(response, 200, { tenantId, planKey, status: 'upgraded' });
+  } catch (err) {
+    logError('billing.upgrade_error', { tenantId, message: err.message });
+    writeJson(response, 503, { error: 'Billing service unavailable' });
+  }
+}
+
+// ─── Insurance eligibility verification ──────────────────────────────────────
+// Route: POST /v1/clients/:clientId/insurance/:insuranceId/verify-eligibility
+//        GET  /v1/clients/:clientId/insurance/:insuranceId/verify-eligibility
+
+async function handleVerifyEligibility(request, response, requestUrl, session) {
+  if (!process.env.STEDI_API_KEY) {
+    writeJson(response, 503, { error: 'Eligibility service not configured' });
+    return;
+  }
+
+  // Parse: /v1/clients/:clientId/insurance/:insuranceId/verify-eligibility
+  const parts = requestUrl.pathname.split('/');
+  const clientIdx = parts.indexOf('clients');
+  const insuranceIdx = parts.indexOf('insurance');
+  if (clientIdx === -1 || insuranceIdx === -1) {
+    writeJson(response, 400, { error: 'Invalid URL' });
+    return;
+  }
+  const clientId = parts[clientIdx + 1];
+  const insuranceId = parts[insuranceIdx + 1];
+
+  const client = await resolveAuthorizedClient(request, response, clientId, session, 'client.insurance.eligibility');
+  if (!client) return;
+
+  if (request.method === 'GET') {
+    const cached = await getCachedEligibility(insuranceId, client.tenantId);
+    writeJson(response, 200, { cached });
+    return;
+  }
+
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  // Load the insurance record
+  const insuranceResult = await pool.query(
+    'SELECT * FROM client_insurance WHERE id = ? AND client_id = ? AND tenant_id = ?',
+    [insuranceId, clientId, client.tenantId],
+  );
+  const insuranceRow = Array.isArray(insuranceResult) ? insuranceResult[0]?.[0] : insuranceResult.rows?.[0];
+  if (!insuranceRow) {
+    writeJson(response, 404, { error: 'Insurance record not found' });
+    return;
+  }
+
+  // Load practice/provider NPI
+  const practiceResult = await pool.query(
+    'SELECT * FROM practices WHERE tenant_id = ? LIMIT 1',
+    [client.tenantId],
+  );
+  const practiceRow = Array.isArray(practiceResult) ? practiceResult[0]?.[0] : practiceResult.rows?.[0];
+
+  try {
+    const { decrypt: decryptField } = await import('./lib/encrypt.js');
+    const insuranceData = {
+      id: insuranceRow.id,
+      payerCode: insuranceRow.payer_code ?? '',
+      payerName: insuranceRow.payer_name ?? '',
+      memberId: insuranceRow.member_id_enc ? decryptField(insuranceRow.member_id_enc) : (insuranceRow.member_id ?? ''),
+    };
+    const clientData = {
+      firstName: client.firstName ?? '',
+      lastName: client.lastName ?? '',
+      dateOfBirth: client.dateOfBirth ?? null,
+    };
+    const providerData = {
+      practiceName: practiceRow?.name ?? '',
+      npi: practiceRow?.npi ?? '',
+      taxId: practiceRow?.tax_id ?? null,
+      addressLine1: practiceRow?.address_line1 ?? '',
+      city: practiceRow?.city ?? '',
+      state: practiceRow?.state ?? '',
+      postalCode: practiceRow?.postal_code ?? '',
+    };
+
+    const result = await verifyEligibility({
+      clientInsuranceId: insuranceId,
+      tenantId: client.tenantId,
+      client: clientData,
+      insurance: insuranceData,
+      provider: providerData,
+    });
+
+    emitAudit(request, 'client.insurance.eligibility_checked', 'client_insurance', insuranceId, session);
+    writeJson(response, 200, { eligibility: result });
+  } catch (err) {
+    emitAudit(request, 'client.insurance.eligibility_error', 'client_insurance', insuranceId, session);
+    writeJson(response, 503, { error: 'Eligibility service unavailable' });
+  }
+}
+
+async function handleProgressNoteDraft(request, response, requestUrl, session) {
+  if (!process.env.AI_NOTES_ENABLED || process.env.AI_NOTES_ENABLED !== 'true') {
+    writeJson(response, 404, { error: 'Not found' });
+    return;
+  }
+
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const clientId = extractClientIdForSegment(requestUrl.pathname, 'progress-notes');
+  const client = await resolveAuthorizedClient(request, response, clientId, session, 'chart.progress_note.draft');
+  if (!client) return;
+
+  const payload = await readJsonBody(request);
+  const format = sanitizeStr(payload.format, 32);
+  const VALID_FORMATS = ['SOAP', 'DAP', 'BIRP', 'FAITH_INTEGRATED'];
+  if (!format || !VALID_FORMATS.includes(format)) {
+    writeJson(response, 400, { error: 'format must be one of SOAP, DAP, BIRP, FAITH_INTEGRATED' });
+    return;
+  }
+
+  const sessionContext = sanitizeStr(payload.sessionContext, 2000);
+  if (!sessionContext) {
+    writeJson(response, 400, { error: 'sessionContext is required' });
+    return;
+  }
+
+  let faithIntegrationLevel = 'none';
+  if (process.env.DB_NAME) {
+    try {
+      const result = await pool.query(
+        'SELECT faith_integration_level FROM client_faith_profiles WHERE client_id = $1 AND tenant_id = $2',
+        [clientId, client.tenantId],
+      );
+      if (result.rows.length > 0) {
+        faithIntegrationLevel = result.rows[0].faith_integration_level ?? 'none';
+      }
+    } catch (_) {
+      // faith profile is optional — proceed with no faith context
+    }
+  }
+
+  try {
+    const result = await draftSessionNote({ format, sessionContext, faithIntegrationLevel });
+    emitAudit(request, 'chart.progress_note.draft', 'client', clientId, session);
+    writeJson(response, 200, result);
+  } catch (err) {
+    emitAudit(request, 'chart.progress_note.draft.error', 'client', clientId, session);
+    if (err.message === 'ANTHROPIC_API_KEY not configured') {
+      writeJson(response, 503, { error: 'AI service unavailable' });
+    } else {
+      writeJson(response, 503, { error: 'AI service unavailable' });
+    }
+  }
 }
 
 async function handleClientProgressNotes(request, response, requestUrl, session) {
@@ -7769,6 +8311,88 @@ async function handleClaimPlaceholders(request, response, requestUrl, session) {
   writeJson(response, 200, { item, invoice: invoice ?? null });
 }
 
+// ── POST /v1/billing/claims/:id/submit ────────────────────────────────────────
+
+async function handleClaimSubmit(request, response, claimId, session) {
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const role = callerRole(request, session);
+  if (!role) {
+    writeJson(response, 401, { error: 'Authentication required' });
+    return;
+  }
+
+  if (!process.env.STEDI_API_KEY) {
+    writeJson(response, 503, { error: 'EDI claim submission not available' });
+    return;
+  }
+
+  if (!process.env.DB_NAME) {
+    writeJson(response, 503, { error: 'EDI claim submission requires database' });
+    return;
+  }
+
+  const tenantId = callerTenant(request, session);
+  const claim = await getClaimById(claimId, tenantId);
+  if (!claim) {
+    writeJson(response, 404, { error: 'Claim not found' });
+    return;
+  }
+
+  try {
+    const result = await stediSubmitClaim({ controlNumber: claimId.replace(/\D/g, '').slice(0, 9).padStart(9, '0') });
+    await updateClaim(claimId, tenantId, {
+      stediSubmissionId: result.submissionId,
+      status: 'submitted',
+      submittedAt: new Date().toISOString(),
+    });
+    emitAudit(request, 'billing.claim.submitted', 'billing_claim', claimId, session);
+    writeJson(response, 200, { claimId, submissionId: result.submissionId, status: 'submitted' });
+  } catch {
+    writeJson(response, 503, { error: 'EDI submission failed' });
+  }
+}
+
+// ── GET /v1/billing/claims/:id/status ─────────────────────────────────────────
+
+async function handleClaimStatusGet(request, response, claimId, session) {
+  if (request.method !== 'GET') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const role = callerRole(request, session);
+  if (!role) {
+    writeJson(response, 401, { error: 'Authentication required' });
+    return;
+  }
+
+  const tenantId = callerTenant(request, session);
+
+  if (!process.env.DB_NAME) {
+    writeJson(response, 200, { claimId, status: 'unknown', stediSubmissionId: null, payerClaimNumber: null, rejectionReason: null, eraReceivedAt: null });
+    return;
+  }
+
+  const claim = await getClaimById(claimId, tenantId);
+  if (!claim) {
+    writeJson(response, 404, { error: 'Claim not found' });
+    return;
+  }
+
+  writeJson(response, 200, {
+    claimId: claim.id,
+    status: claim.status,
+    stediSubmissionId: claim.stediSubmissionId,
+    payerClaimNumber: claim.payerClaimNumber,
+    rejectionReason: claim.rejectionReason,
+    eraReceivedAt: claim.eraReceivedAt,
+  });
+}
+
 async function handleAgingReport(request, response, requestUrl, session) {
   if (request.method !== 'GET') {
     writeJson(response, 405, { error: 'Method not allowed' });
@@ -7840,7 +8464,11 @@ async function handlePortalSettings(request, response, session) {
     }
   }
 
-  const financialMode = 'offerings';
+  let financialMode = current.financialMode ?? 'offerings';
+  if (payload.financialMode !== undefined) {
+    const normalized = portalFinancialModes.includes(payload.financialMode) ? payload.financialMode : null;
+    if (normalized) financialMode = normalized;
+  }
 
   const contactPreferenceOptions = payload.contactPreferenceOptions !== undefined
     ? normalizePortalContactPreferenceOptions(payload.contactPreferenceOptions)
@@ -7873,6 +8501,9 @@ async function handlePortalSettings(request, response, session) {
       ? Boolean(payload.showPublicCounselorDirectory)
       : current.showPublicCounselorDirectory,
     financialMode,
+    insuranceBillingEnabled: payload.insuranceBillingEnabled !== undefined
+      ? Boolean(payload.insuranceBillingEnabled)
+      : (current.insuranceBillingEnabled ?? false),
     suggestedOfferingCents: typeof payload.suggestedOfferingCents === 'number' && Number.isInteger(payload.suggestedOfferingCents) && payload.suggestedOfferingCents >= 0
       ? payload.suggestedOfferingCents
       : (current.suggestedOfferingCents ?? 0),
@@ -11446,6 +12077,184 @@ async function handleTenantProvisioning(request, response, session) {
   writeJson(response, 201, { item });
 }
 
+// ─── Slug availability check (public) ────────────────────────────────────────
+
+const RESERVED_SLUGS = new Set([
+  'app', 'api', 'www', 'admin', 'platform', 'support', 'help', 'login',
+  'signup', 'billing', 'portal', 'health', 'status', 'mail', 'docs', 'blog',
+  'static', 'assets', 'cdn', 'auth', 'webhooks', 'demo', 'staging', 'test',
+]);
+
+async function handleCheckSlug(request, response, requestUrl) {
+  if (request.method !== 'GET') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const slug = sanitizeStr(requestUrl.searchParams.get('slug') ?? '', 64).toLowerCase();
+
+  if (!slug || !/^[a-z0-9][a-z0-9-]{2,29}$/.test(slug)) {
+    writeJson(response, 400, { error: 'Slug must be 3–30 lowercase alphanumeric characters or hyphens, starting with a letter or digit' });
+    return;
+  }
+
+  if (RESERVED_SLUGS.has(slug)) {
+    writeJson(response, 200, { available: false, slug });
+    return;
+  }
+
+  if (process.env.DB_NAME) {
+    const existing = await getTenantBySlug(slug);
+    writeJson(response, 200, { available: !existing, slug });
+    return;
+  }
+
+  writeJson(response, 200, { available: !tenantSlugRegistry.has(slug), slug });
+}
+
+// ─── Self-service trial signup (public) ──────────────────────────────────────
+
+async function handlePlatformSignup(request, response) {
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const practiceName = sanitizeStr(payload.practiceName, 200);
+  const slug = sanitizeStr(payload.slug ?? '', 64).toLowerCase();
+  const ownerEmail = sanitizeStr(payload.ownerEmail, 200);
+  const password = typeof payload.password === 'string' ? payload.password : '';
+  const planKey = sanitizeStr(payload.planKey ?? 'solo', 16);
+
+  if (!practiceName || !slug || !ownerEmail || !password) {
+    writeJson(response, 400, { error: 'practiceName, slug, ownerEmail, and password are required' });
+    return;
+  }
+
+  if (!/^[a-z0-9][a-z0-9-]{2,29}$/.test(slug)) {
+    writeJson(response, 400, { error: 'Invalid slug format' });
+    return;
+  }
+
+  if (!['solo', 'group'].includes(planKey)) {
+    writeJson(response, 400, { error: 'planKey must be solo or group' });
+    return;
+  }
+
+  const pwdError = validatePasswordStrength(password);
+  if (pwdError) {
+    writeJson(response, 400, { error: pwdError });
+    return;
+  }
+
+  if (RESERVED_SLUGS.has(slug)) {
+    writeJson(response, 409, { error: 'This practice URL is not available' });
+    return;
+  }
+
+  if (process.env.DB_NAME) {
+    const existing = await getTenantBySlug(slug);
+    if (existing) {
+      writeJson(response, 409, { error: 'This practice URL is already taken' });
+      return;
+    }
+  } else {
+    if (tenantSlugRegistry.has(slug)) {
+      writeJson(response, 409, { error: 'This practice URL is already taken' });
+      return;
+    }
+  }
+
+  const tenantId = slug;
+  const trialDays = 30;
+  const trialEndsAt = new Date(Date.now() + trialDays * 24 * 60 * 60 * 1000).toISOString();
+
+  let stripeCustomerId = null;
+  let stripeSubscriptionId = null;
+
+  if (process.env.STRIPE_SECRET_KEY) {
+    try {
+      const plan = getPlanByKey(planKey);
+      const customer = await createCustomer({ email: ownerEmail, name: practiceName, tenantId });
+      stripeCustomerId = customer.id;
+      const priceId = plan.priceId();
+      if (priceId) {
+        const subscription = await createSubscription({
+          customerId: stripeCustomerId,
+          priceId,
+          trialDays: plan.trialDays,
+          tenantId,
+        });
+        stripeSubscriptionId = subscription.id;
+      }
+    } catch (err) {
+      logError('signup.stripe_error', { tenantId, message: err.message });
+      writeJson(response, 503, { error: 'Billing service unavailable. Please try again.' });
+      return;
+    }
+  }
+
+  if (process.env.DB_NAME) {
+    await createTenantProvisioningRequest({
+      id: genId('tpr'),
+      tenantId: 'system',
+      requestedTenantId: tenantId,
+      requestedPracticeName: practiceName,
+      ownerEmail,
+      status: 'queued',
+    });
+    await createTenantSlug({ tenantId, slug });
+    await upsertTenantSubscription({
+      tenantId,
+      stripeCustomerId,
+      stripeSubscriptionId,
+      stripePriceId: null,
+      status: 'trial',
+      trialEndsAt,
+      currentPeriodEnd: null,
+      canceledAt: null,
+    });
+  } else {
+    const item = {
+      id: createId('tpr', tenantProvisioningRequests),
+      tenantId: 'system',
+      requestedTenantId: tenantId,
+      requestedPracticeName: practiceName,
+      ownerEmail,
+      status: 'queued',
+      requestedAt: new Date().toISOString(),
+      completedAt: null,
+    };
+    tenantProvisioningRequests.push(item);
+    tenantSlugRegistry.add(slug);
+    tenantSubscriptionRegistry.set(tenantId, {
+      tenantId,
+      stripeCustomerId,
+      stripeSubscriptionId,
+      stripePriceId: null,
+      status: 'trial',
+      trialEndsAt,
+      currentPeriodEnd: null,
+      canceledAt: null,
+    });
+  }
+
+  await emitAudit(request, 'platform.signup.created', 'tenant_provisioning_request', tenantId);
+
+  const practiceUrl = `https://${slug}.churchcorecare.com`;
+
+  // Best-effort welcome email — never fail the signup on email error
+  try {
+    const { subject, text } = trialWelcomeEmail(practiceName, practiceUrl, trialEndsAt);
+    await sendEmail({ to: ownerEmail, subject, text });
+  } catch {
+    // email failure is non-fatal
+  }
+
+  writeJson(response, 201, { tenantId, slug, trialEndsAt, practiceUrl });
+}
+
 async function handleSupportImpersonationSessions(request, response, session) {
   if (request.method === 'GET') {
     if (requirePlatformAdmin(request, response, session)) return;
@@ -12952,6 +13761,12 @@ function atToday(hours, minutes) {
   return date.toISOString();
 }
 
+function atTomorrow(hours, minutes) {
+  const now = new Date();
+  const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, hours, minutes, 0, 0);
+  return date.toISOString();
+}
+
 function createId(prefix, collection) {
   const maxNumeric = collection.reduce((max, item) => {
     const numeric = Number(item.id.replace(`${prefix}-`, ''));
@@ -13353,6 +14168,7 @@ function buildDefaultPortalSettings(tenantId = 'system') {
     allowSchedulingRequests: true,
     showPublicCounselorDirectory: false,
     financialMode: 'offerings',
+    insuranceBillingEnabled: false,
     suggestedOfferingCents: 12000,
     offeringMinistryNote: 'Your gift helps sustain this counseling ministry and expand care for others.',
     contactPreferenceOptions: [...portalContactPreferenceOptions],
@@ -14953,6 +15769,12 @@ function requirePlatformAdmin(request, response, session) {
   return true;
 }
 
+function requireInsuranceBillingEnabled(response, settings) {
+  if (settings?.insuranceBillingEnabled) return false;
+  writeJson(response, 404, { error: 'Insurance billing is not enabled for this practice' });
+  return true;
+}
+
 async function resolvePortalClient(request, response, requestedClientId, session = null) {
   const role = callerRole(request, session);
   const requested = sanitizeStr(requestedClientId, 50);
@@ -15634,6 +16456,8 @@ function resolveRoute(pathname) {
   if (pathname.startsWith('/v1/clients/') && pathname.endsWith('/intake-packets')) return '/v1/clients/:id/intake-packets';
   if (pathname.startsWith('/v1/clients/') && pathname.endsWith('/intake-preview')) return '/v1/clients/:id/intake-preview';
   if (pathname.startsWith('/v1/clients/') && pathname.endsWith('/treatment-plan')) return '/v1/clients/:id/treatment-plan';
+  if (pathname.startsWith('/v1/clients/') && pathname.endsWith('/verify-eligibility')) return '/v1/clients/:id/insurance/:insuranceId/verify-eligibility';
+  if (pathname.startsWith('/v1/clients/') && pathname.endsWith('/progress-notes/draft')) return '/v1/clients/:id/progress-notes/draft';
   if (pathname.startsWith('/v1/clients/') && pathname.endsWith('/progress-notes')) return '/v1/clients/:id/progress-notes';
   if (pathname.startsWith('/v1/document-templates/')) return '/v1/document-templates/:id';
   if (pathname === '/v1/document-templates') return '/v1/document-templates';
@@ -15647,12 +16471,21 @@ function resolveRoute(pathname) {
   if (pathname === '/v1/operations/summary') return '/v1/operations/summary';
   if (pathname === '/v1/reference/dsm5-tr') return '/v1/reference/dsm5-tr';
   if (pathname === '/v1/monitoring/db') return '/v1/monitoring/db';
+  if (pathname === '/v1/billing/subscription') return '/v1/billing/subscription';
+  if (pathname === '/v1/billing/subscription/activate') return '/v1/billing/subscription/activate';
+  if (pathname === '/v1/billing/subscription/upgrade') return '/v1/billing/subscription/upgrade';
+  if (pathname === '/v1/billing/portal') return '/v1/billing/portal';
+  if (pathname === '/v1/platform/check-slug') return '/v1/platform/check-slug';
+  if (pathname === '/v1/platform/signup') return '/v1/platform/signup';
+  if (pathname === '/webhooks/stripe') return '/webhooks/stripe';
   if (pathname === '/v1/billing/service-codes') return '/v1/billing/service-codes';
   if (pathname === '/v1/billing/fee-schedules') return '/v1/billing/fee-schedules';
   if (pathname === '/v1/billing/invoices') return '/v1/billing/invoices';
   if (pathname === '/v1/billing/payments') return '/v1/billing/payments';
   if (pathname === '/v1/billing/superbills') return '/v1/billing/superbills';
   if (pathname === '/v1/billing/claims') return '/v1/billing/claims';
+  if (pathname.match(/^\/v1\/billing\/claims\/[^/]+\/submit$/)) return '/v1/billing/claims/:id/submit';
+  if (pathname.match(/^\/v1\/billing\/claims\/[^/]+\/status$/)) return '/v1/billing/claims/:id/status';
   if (pathname === '/v1/billing/reports/aging') return '/v1/billing/reports/aging';
   if (pathname === '/v1/portal/public-config') return '/v1/portal/public-config';
   if (pathname === '/v1/portal/settings') return '/v1/portal/settings';

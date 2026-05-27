@@ -197,6 +197,39 @@ ANTHROPIC_API_KEY=sk-ant-...
 
 Restart the API server after adding the key. The AI Observations card will appear automatically in the Audit Intelligence tab after every successful query.
 
+### AI Session Note Drafting (Phase B1)
+
+Counselors can now generate a structured session note draft using AI. The **AI Draft Assistant** panel appears inside the session note composer (toggle "Open"). Enter brief session context, choose a format (SOAP, DAP, BIRP, or Faith Integrated), and click **Generate Draft**. The draft populates the note summary field for review and editing before saving.
+
+To enable:
+
+```env
+ANTHROPIC_API_KEY=sk-ant-...
+AI_NOTES_ENABLED=true
+```
+
+Faith integration level is read from the client's faith profile and shapes the prompt automatically — clients with `actively_integrated` or `preferred` faith levels receive a prompt that incorporates scripture themes and spiritual practice references. Clients with `none` receive a secular clinical prompt. The session context is never logged or stored.
+
+### Stripe Subscription Billing (Phase A2)
+
+Subscription billing is wired via Stripe. The platform creates a Stripe customer and subscription for each tenant during signup. Configure in `.env`:
+
+```env
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_PRICE_SOLO=price_...
+STRIPE_PRICE_GROUP=price_...
+STRIPE_PRICE_SEAT=price_...
+APP_BASE_URL=https://app.churchcorecare.com
+```
+
+Webhook endpoint: `POST /webhooks/stripe` — register this in the Stripe Dashboard. It handles `customer.subscription.created/updated/deleted`, `invoice.paid`, `invoice.payment_failed`, and `customer.subscription.trial_will_end`.
+
+Billing API routes (authenticated):
+
+- `GET /v1/billing/subscription` — current subscription status for the tenant
+- `POST /v1/billing/portal` — create a Stripe Billing Portal session URL
+
 ## Date Picker Behavior
 
 All `DateInput` components (Mantine v8) across the application accept dates in `MM/DD/YYYY` format for manual entry and display. The calendar popover closes automatically when a day is selected. Date values are stored internally as `YYYY-MM-DD` strings. Affected forms: intake/form runner, client demographics, legal/admin, insurance, diagnoses, employment, certifications, and licenses.
@@ -545,7 +578,7 @@ The README now includes a narrative `LATEST LOOK` section with embedded screensh
 
 Recurring scheduling no longer starts with raw RRULE syntax. Staff now get readable cadence choices, weekday selection, and a live preview first, with advanced rule text kept available only when needed.
 
-## Nightly Security Checks
+### Nightly Security Scans (April 6, 2026)
 
 Faith Counseling runs automated nightly security scans at **23:00 UTC** via GitHub Actions. Each run produces two complementary reports:
 

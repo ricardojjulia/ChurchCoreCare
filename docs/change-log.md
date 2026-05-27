@@ -2,6 +2,221 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## May 27, 2026 — Phase A/B completion: subscription upgrade, eligibility tests, EDI claims, ADRs
+
+### feat: POST /v1/billing/subscription/upgrade (A2-10)
+
+**Date:** May 27, 2026  
+**Affected area:** `apps/api/src/index.js`
+
+Adds plan upgrade route for solo→group (or any plan key change) via Stripe subscription update.
+
+- `POST /v1/billing/subscription/upgrade` — authenticated practice_admin/owner; accepts `{ planKey }` body; retrieves active Stripe subscription, swaps the price item with proration, emits `billing.subscription.upgraded` audit event
+- Route is `STRIPE_SECRET_KEY`-gated; returns 503 when billing not configured
+- URL normalizer entry added: `/v1/billing/subscription/upgrade`
+
+### feat: insurance eligibility test suite (B3-7)
+
+**Date:** May 27, 2026  
+**Affected area:** `apps/api/test/insurance-eligibility.test.mjs`
+
+New test file covering GET and POST `/v1/clients/:id/insurance/:insuranceId/verify-eligibility`:
+
+- 401 when unauthenticated (GET and POST)
+- 503 when `STEDI_API_KEY` not set (GET and POST)
+- 405 for disallowed methods
+- Non-401 shape when authenticated (with STEDI key placeholder)
+
+### feat: complete Phase B2 EDI claims and B3 eligibility UI
+
+**Date:** May 27, 2026  
+**Affected area:** `apps/api/src/db/queries/billing.js`, `apps/api/src/db/migrate.js`, `apps/worker/src/edi-status-poller.js`, `apps/web/src/components/Billing/`, `apps/web/src/components/ClientDetail/tabs/EligibilityCard.jsx`
+
+- `rowToClaim` extended with `stediSubmissionId`, `payerClaimNumber`, `rejectionReason`, `eraReceivedAt`
+- `updateClaim` handles all four stedi fields
+- `getClaimById` and `listClaimsByStatus` exports added
+- `practices.npi` column migration added
+- `POST /v1/billing/claims/:id/submit` and `GET /v1/billing/claims/:id/status` routes
+- `apps/worker/src/edi-status-poller.js` — polls submitted claims, transitions to accepted/rejected
+- EDI status poller wired into worker poll loop
+- `EligibilityCard.jsx` — live eligibility fetch, "Verify Now" button, stale warning
+- `InsuranceTab.jsx` updated to render `EligibilityCard` per insurance record
+- Stale eligibility advisory alert added to appointment composer (SchedulingPage.jsx)
+- `apps/web/src/components/Billing/ClaimCard.jsx`, `ClaimsList.jsx`, `ClaimSubmitButton.jsx`
+
+### feat: subscription gate, provisioning worker tests, email templates (A1-5, A1-6, A2-12, A4-5)
+
+**Date:** May 27, 2026  
+**Affected area:** `apps/api/src/middleware/tenant.js`, `apps/api/src/index.js`, `apps/api/src/lib/email.js`, `apps/worker/src/notify.js`, `apps/worker/src/provision.js`
+
+- `isSubscriptionGateExempt` added to `middleware/tenant.js`; `enforceSubscriptionGate` in `index.js` blocks suspended/churned tenants from clinical routes (returns 402)
+- `platform_admin` bypasses the gate; auth, billing, portal, health routes are exempt
+- `apps/api/src/lib/email.js` created with SendGrid `sendEmail`, `trialWelcomeEmail`, `paymentFailedEmail`
+- `trialWelcomeEmail` wired into `handlePlatformSignup`; `paymentFailedEmail` wired into `handleInvoicePaymentFailed`
+- `runProvisioningCycle` exported from `provision.js` for unit testing
+- `apps/api/test/tenant-provisioning-worker.test.mjs` — 8 tests with mock pool (dotAll regex fix for multi-line SQL)
+- `apps/api/test/tenant-subscription-gate.test.mjs` — 9 tests covering 402 responses, exemptions, role bypass
+- `apps/api/test/stripe-webhooks.test.mjs` — 10 tests for `handleStripeWebhookEvent`
+
+### docs: Phase A/B ADRs (ADR-0003 through ADR-0007)
+
+**Date:** May 27, 2026  
+**Affected area:** `docs/adr/`
+
+Five new Architecture Decision Records documenting the Phase A/B technology choices:
+
+- `0003-stripe-for-subscriptions.md` — Stripe chosen for subscription billing; HIPAA BAA, Billing Portal, webhook-driven lifecycle
+- `0004-stedi-clearinghouse.md` — Stedi chosen for EDI; API-first, unified 837P/270/271/835 via single key
+- `0005-platform-db-separation.md` — Platform DB (slugs, subscriptions) physically separated from tenant PHI DBs
+- `0006-ai-notes-claude.md` — Claude claude-sonnet-4-6 for AI note drafting; faith-integrated prompt path; no PHI in audit trail
+- `0007-trial-no-cc-required.md` — 30-day trial with no credit card to reduce signup friction for solo counselors
+
+### docs: surface monitoring registry updated
+
+**Date:** May 27, 2026  
+**Affected area:** `PLANS/FULL-SURFACE-MONITORING.md`
+
+Added new surfaces to the canonical registry:
+
+- `client.insurance` — insurance tab + EligibilityCard
+- `clinical.session_notes`, `clinical.ai_note_draft` — clinical chart AI notes panel
+- `billing.claims`, `billing.subscription` — EDI claims workflow and subscription management
+- `signup`, `trial_expired`, `trial_banner` — SaaS trial lifecycle surfaces
+- Appointment composer updated to note stale eligibility advisory alert
+
+## May 27, 2026 — A4 trial signup flow; dunning worker; signup page
+
+### feat: self-service 30-day trial signup (A4)
+
+**Date:** May 27, 2026
+**Affected area:** `apps/api/src/index.js`, `apps/api/src/lib/security.js`, `apps/worker/src/`, `apps/web/src/components/SignupPage.jsx`, `apps/web/src/App.jsx`
+
+Complete A4 trial signup flow from landing page through provisioning.
+
+- `GET /v1/platform/check-slug` — public endpoint validates slug format and uniqueness; reserved slugs blocked (admin, api, www, portal, etc.)
+- `POST /v1/platform/signup` — public endpoint creates provisioning request, reserves slug, creates Stripe customer + trial subscription (when `STRIPE_SECRET_KEY` present), returns `{ tenantId, slug, trialEndsAt, practiceUrl }`
+- `POST /v1/billing/subscription/activate` — authenticated practice_admin/owner; creates Stripe Billing Portal session for adding a payment method to convert trial to paid
+- `apps/worker/src/trial-reminders.js` — polls `tenant_subscriptions` for trials ≤7 days from expiry; sends 7-day and 1-day reminder emails; marks expired trials as `trial_expired`
+- `apps/worker/src/subscription-billing.js` — dunning worker: `past_due` → sets 3-day grace period → `suspended`; `trial_expired` + 60 days → `churned`
+- `apps/web/src/components/SignupPage.jsx` — Mantine v9 signup form with real-time slug availability check, plan selector, password validation
+- Both `/v1/platform/check-slug` and `/v1/platform/signup` added to `PUBLIC_ROUTES` in `security.js`
+- Worker poll loop wires in trial-reminders and subscription-billing alongside existing reminder jobs
+- `apps/web/src/App.jsx` detects `window.location.pathname === '/signup'` and renders `SignupPage` before auth bootstrapping
+
+### fix: firebase.json serviceId, Dockerfile NODE_ENV, .firebaserc.example
+
+- `firebase.json`: corrected stale `serviceId` from `faithcounseling-api` → `churchcore-care-api`
+- `apps/api/Dockerfile`, `apps/worker/Dockerfile`: added `ENV NODE_ENV=production`
+- `.firebaserc` added to `.gitignore`; `.firebaserc.example` added as template
+
+---
+
+## May 26, 2026 — Insurance billing gate; ministry financial model
+
+### feat: insurance_billing_enabled per-practice gate
+
+**Date:** May 26, 2026
+**Affected area:** `apps/api/src/db/migrate.js`, `apps/api/src/db/queries/portal.js`, `apps/api/src/index.js`
+
+ChurchCore Care is a faith-based Christian counseling platform where most practices run on church subsidies and voluntary offerings, not client invoicing or insurance billing. Added `insurance_billing_enabled` as an explicit opt-in flag in `portal_settings` (default `false`).
+
+- Migration: `portal_settings.insurance_billing_enabled BOOLEAN NOT NULL DEFAULT FALSE`
+- `rowToPortalSettings` and `upsertPortalSettings` updated to read/write the new field
+- All client-billing API routes now return 404 when the flag is off: `/v1/billing/service-codes`, `/v1/billing/fee-schedules`, `/v1/billing/invoices`, `/v1/billing/payments`, `/v1/billing/superbills`, `/v1/billing/claims`, `/v1/billing/reports/aging`, and `/v1/clients/:id/verify-eligibility`
+- SaaS subscription routes (`GET /v1/billing/subscription`, `POST /v1/billing/portal`) are always available regardless of the flag
+- Added `requireInsuranceBillingEnabled(response, settings)` guard function
+- Fixed `financialMode` hardcode in the PATCH handler — was always writing `'offerings'`; now correctly reads current value and allows admin to change it via `PATCH /v1/portal/settings`
+
+### fix: intake-preview appointment sort flakiness (two cases)
+
+**Date:** May 26, 2026
+**Affected area:** `apps/api/src/lib/intake-preview.js`
+
+Extended the `futureAppointments` filter with two additional inclusion rules so tests pass at any time of day:
+
+1. `checked_in` / `in_progress` appointments always count as current (the session is actively happening)
+2. `scheduled` appointments that are on TODAY's calendar always count, even if their start time has passed (a missed/late appointment is still on today's schedule)
+
+This fixes two time-of-day test failures: `futureAppointmentCount` returning 0 for c-003 after 1pm, and intake preview sort returning `['c-001','c-004']` instead of `['c-004','c-001']` after 3:15pm.
+
+---
+
+## May 26, 2026 — Phase A/B sprint complete; test-suite fix
+
+### fix: intake-preview futureAppointmentCount time-of-day flakiness
+
+**Date:** May 26, 2026
+**Affected area:** `apps/api/src/lib/intake-preview.js`
+
+The `futureAppointments` filter in `buildIntakePreview` only included appointments whose `startsAt >= now`. Appointments with status `checked_in` (currently in session) were treated as past once the clock passed their scheduled start time, causing `futureAppointmentCount` to return 0 instead of 1 in the `intake-preview` test when run after 1pm. Fixed by adding an early-pass for `checked_in` and `in_progress` statuses — an active session always counts as a current appointment regardless of its scheduled start time.
+
+---
+
+## May 26, 2026 — Phase A2 Stripe billing + Phase B1 AI session note drafting
+
+### feat: AI session note drafting (Phase B1)
+
+**Date:** May 26, 2026
+**Affected area:** `apps/api/src/lib/ai-notes.js`, `apps/api/src/index.js`, `apps/api/src/db/migrate.js`, `apps/web/src/components/ClinicalChart/`
+
+Implemented AI-assisted session note drafting using Claude claude-sonnet-4-6.
+
+- Added `apps/api/src/lib/ai-notes.js` — service with `draftSessionNote()` and exported `buildPrompt()` for testability. Supports SOAP, DAP, BIRP, and Faith Integrated formats. Faith-aware prompting: `preferred` and `actively_integrated` faith levels receive prompts with scripture and spiritual practice context; `none` receives a strictly secular clinical prompt.
+- Added `POST /v1/clients/:id/progress-notes/draft` — gated by `AI_NOTES_ENABLED=true` env var; returns 404 when disabled. Looks up client faith profile to determine faith integration level. Returns 503 on Anthropic errors — never exposes raw error messages. Audit event emitted on every call.
+- Added migration: `progress_notes.note_format VARCHAR(32)` and `progress_notes.ai_draft_used BOOLEAN`.
+- Added `apps/web/src/components/ClinicalChart/AiNoteDraftPanel.jsx` — collapsible Mantine v9 panel with format select, session context textarea, and generated draft viewer.
+- Integrated `AiNoteDraftPanel` into `SessionNotesTab.jsx` via a Collapse toggle. Accepting a draft populates the summary field.
+- Added 8 unit tests in `apps/api/test/ai-notes.test.mjs` covering: key guard, SOAP/DAP/BIRP/FAITH_INTEGRATED prompt shapes, faith level gating, format validation.
+- New env vars: `ANTHROPIC_API_KEY`, `AI_NOTES_ENABLED`.
+- Installed `@anthropic-ai/sdk ^0.98.0` in `apps/api`.
+
+### feat: Stripe subscription billing infrastructure (Phase A2)
+
+**Date:** May 26, 2026
+**Affected area:** `apps/api/src/lib/stripe.js`, `apps/api/src/lib/billing-webhooks.js`, `apps/api/src/index.js`, `apps/api/src/db/migrate.js`
+
+Wired Stripe subscription billing as the payment backbone for multi-tenant SaaS.
+
+- Added `apps/api/src/lib/stripe.js` — Stripe client wrapper with `createCustomer`, `createSubscription`, `cancelSubscription`, `reactivateSubscription`, `createBillingPortalSession`, `createCheckoutSession`, and `constructWebhookEvent`.
+- Added `apps/api/src/lib/billing-webhooks.js` — handles 6 Stripe event types: `customer.subscription.created/updated/deleted`, `invoice.paid`, `invoice.payment_failed`, `customer.subscription.trial_will_end`. Maps Stripe status to internal status and upserts `tenant_subscriptions`.
+- Added `POST /webhooks/stripe` — raw body endpoint, runs before CORS/auth. Verifies Stripe signature; returns 400 on verification failure.
+- Added `GET /v1/billing/subscription` — returns current subscription status for the authenticated tenant.
+- Added `POST /v1/billing/portal` — creates Stripe Billing Portal session URL for self-service plan changes.
+- Added migration: `tenant_subscriptions` table (tenant_id UNIQUE, stripe_customer_id, stripe_subscription_id, stripe_price_id, status, trial_ends_at, current_period_end, canceled_at).
+- New env vars: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_SOLO`, `STRIPE_PRICE_GROUP`, `STRIPE_PRICE_SEAT`, `APP_BASE_URL`.
+- Installed `stripe ^22.1.1` in `apps/api`.
+
+## May 26, 2026 — AI development factory and GitHub discipline
+
+### feat: establish structured AI software factory and full GitHub delivery discipline
+
+**Date:** May 26, 2026
+**Affected area:** `CLAUDE.md`, `.claude/`, `AGENTS.md`, `CONTRIBUTING.md`, `.github/`
+
+Established the structured AI development factory and mirrored the full GitHub delivery discipline from ChurchCore-Ops.
+
+**AI factory (`CLAUDE.md` + `.claude/`):**
+
+- Added `CLAUDE.md` — project knowledge file loaded into every Claude Code session automatically. Covers stack, commands, architecture rules, security/PHI constraints, UI conventions, and testing standards.
+- Added seven specialized Claude Code agents: `codebase-researcher` (read-only mapper), `story-writer`, `spec-writer`, `backend-builder`, `frontend-builder`, `test-verifier`, and `implementation-validator` (independent read-only pre-PR auditor).
+- Added two skills: `build-with-tests` (single-agent feature build with tests) and `orchestrate-feature` (full seven-agent pipeline with three human approval gates).
+- Added `.claude/hooks/pre-commit.sh` — blocks credential, key, and `.env` files from being committed. Wired to fire on `git commit` commands via `settings.json`.
+
+**GitHub delivery discipline (mirrored from ChurchCore-Ops):**
+
+- Added `.github/pull_request_template.md` — structured PR template covering what/why/plan alignment/validation/security/factory checklist/follow-ups.
+- Added `.github/ISSUE_TEMPLATE/bug-report.md` and `feature-request.md` — issue templates with PHI, security, tenant, and monitoring impact sections.
+- Added `.github/CODEOWNERS` — all files require `@ricardojjulia` review; security-critical files explicitly listed.
+- Added `.github/workflows/ci.yml` — lint + test + tenant policy guard on every PR and push to `main`.
+- Added `.github/workflows/codeql.yml` — weekly + PR/push CodeQL static analysis.
+- Added `.github/workflows/secret-scan.yml` — gitleaks secret scanning on every PR and push to `main`.
+- Added `.github/workflows/dependency-review.yml` — dependency review on every PR to `main`.
+
+**Documentation:**
+
+- Updated `AGENTS.md` — factory reference table, invocation examples, factory rules for agents, expanded execution checklist.
+- Updated `CONTRIBUTING.md` — new `AI Development Factory` section explaining the pipeline, agents, invocation patterns, and why the structure matters for clinical software.
+
 ## April 25, 2026 — Workspace Studio surface tab expansion
 
 ### feat: extend Workspace Studio shared surface primitives across core tabs
@@ -305,14 +520,13 @@ When a counselor generates a video join link (scheduled or ad-hoc), the client n
 - **VideoSessionModal**: Now accepts either `appointmentId` (scheduled) or `clientId` (ad-hoc) props and routes to the appropriate API call.
 - **Security**: Room names are opaque hex strings — no PHI in room identifiers or JWT claims. Client role is denied access to the ad-hoc endpoint.
 
-
-
 ### feat: wire LicensureProgressBars into CounselorHomePage and add PHI-safe CSV export
 
 **Date:** April 17, 2026
 **Affected area:** `apps/web/src/components/CounselorHomePage.jsx`, `apps/web/src/components/TimeTracking/TimeTrackingPage.jsx`, `apps/api/src/index.js`
 
 **What changed:**
+
 - **Counselor Home dashboard:** `LicensureProgressBars` component is now rendered below the main dashboard panels so counselors see live licensure-hours progress without navigating to the Time Tracking page.
 - **PHI-safe CSV export:** `GET /api/v1/time-entries/export` returns a downloadable CSV containing only `entry_id`, `date`, `category`, and `duration_minutes` — no descriptions, no client identifiers, no free-text fields. The endpoint is auth-gated, role-scoped, and emits a `time_entry.export` audit event.
 - **Export button:** `TimeTrackingPage` now includes an "Export CSV" button (respects the current category filter).
@@ -327,6 +541,7 @@ When a counselor generates a video join link (scheduled or ad-hoc), the client n
 **Affected area:** `apps/api/src/db/migrate.js`, `apps/api/src/db/queries/clinical.js`, `apps/api/src/db/queries/timeTracking.js` (new), `apps/api/src/index.js`, `apps/web/src/components/ClinicalChart/tabs/SessionNotesTab.jsx`, `apps/web/src/components/TimeTracking/` (new), `apps/web/src/App.jsx`, `apps/web/src/components/Sidebar.jsx`, `packages/domain/src/index.js`, `packages/i18n/src/index.js`
 
 **What changed:**
+
 - **Telehealth Phase 2 (Faith-integrated clinical notes):** Session notes now include scripture reference and spiritual practices checkboxes (prayer journaling, scripture reading, church attendance, small group, spiritual direction, fasting, sabbath practice).
 - **Telehealth Phase 3 (Supervision cosign):** Intern counselors can submit notes for supervisor review; supervisors can cosign or return notes for revision. `supervisor_assignments` table tracks supervision relationships. Audit ledger records all cosign events.
 - **Time Tracking:** New `TimeTrackingPage` with Quick Log modal for direct clinical, indirect/admin, individual/group supervision, CE/spiritual formation, and ministry coordination hours. Summary cards and category filter. Delete unlocked entries.
@@ -371,8 +586,6 @@ Phase 1 of the telehealth integration. Remote appointments now show a **Join Vid
 - Audit event `session.video_started` is written to the ledger on every session start
 
 **Why:** Platform differentiation via integrated telehealth; enables faith-based practices to conduct HIPAA-conscious video sessions without leaving the platform.
-
-
 
 ### fix: commit referenced public web bundle artifacts and publish the latest es-MX locale status
 
