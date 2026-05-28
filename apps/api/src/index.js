@@ -1682,6 +1682,21 @@ export async function handleApiRequest(request, response) {
       return;
     }
 
+    if (requestUrl.pathname === '/v1/notifications/subscribe') {
+      await handlePushSubscribe(request, response, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/notifications/unsubscribe') {
+      await handlePushUnsubscribe(request, response, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/notifications/vapid-public-key') {
+      writeJson(response, 200, { key: process.env.VAPID_PUBLIC_KEY ?? null });
+      return;
+    }
+
     if (requestUrl.pathname === '/v1/waitlist') {
       await handleWaitlist(request, response, session);
       return;
@@ -6008,6 +6023,7 @@ async function handleAppointmentsCollection(request, response, session) {
       if (!client) return;
     }
     const filterSeriesId = sanitizeStr(requestUrl.searchParams.get('seriesId') ?? '', 64) || null;
+    const filterDate = sanitizeStr(requestUrl.searchParams.get('date') ?? '', 10) || null;
     const counselorScopeId = await resolveEffectiveCounselorFilterId(request, response, requestUrl, session, 'appointment.list.read');
     if (counselorScopeId === false) return;
     let items;
@@ -6016,13 +6032,15 @@ async function handleAppointmentsCollection(request, response, session) {
         clientId: filterClientId,
         counselorId: counselorScopeId,
         seriesId: filterSeriesId,
+        date: filterDate,
       });
     } else {
       const all = [...appointments].sort((left, right) => (left.startsAt || '').localeCompare(right.startsAt || ''));
       items = all
         .filter((appointment) => !filterClientId || appointment.clientId === filterClientId)
         .filter((appointment) => !counselorScopeId || appointment.counselorId === counselorScopeId)
-        .filter((appointment) => !filterSeriesId || appointment.seriesId === filterSeriesId);
+        .filter((appointment) => !filterSeriesId || appointment.seriesId === filterSeriesId)
+        .filter((appointment) => !filterDate || (appointment.startsAt ?? '').slice(0, 10) === filterDate);
     }
     await emitAudit(request, 'appointment.list.read', 'appointment', 'collection', session);
     writeJson(response, 200, { items });
@@ -6906,6 +6924,65 @@ async function handleSchedulingCalendar(request, response, requestUrl, session) 
     locationCalendars,
     availability,
   });
+}
+
+// ── Push notification subscription handlers ──────────────────────────────────
+
+async function handlePushSubscribe(request, response, session) {
+  const role = callerRole(request, session);
+  if (!role) { writeJson(response, 401, { error: 'Authentication required' }); return; }
+  if (request.method !== 'POST') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+
+  const payload = await readJsonBody(request);
+  const sub = payload?.subscription;
+  if (!sub?.endpoint || !sub?.keys?.p256dh || !sub?.keys?.auth) {
+    writeJson(response, 400, { error: 'Invalid push subscription object' });
+    return;
+  }
+
+  const tenantId = callerTenant(request, session);
+  const staffAccountId = session?.staffAccountId ?? session?.id ?? 'unknown';
+
+  if (process.env.DB_NAME) {
+    const { pool } = await import('./db/pool.js').catch(() => ({ pool: null }));
+    if (pool) {
+      await pool.query(
+        `INSERT INTO push_subscriptions (tenant_id, staff_account_id, endpoint, p256dh, auth)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT (endpoint) DO UPDATE SET
+           staff_account_id = EXCLUDED.staff_account_id,
+           tenant_id        = EXCLUDED.tenant_id,
+           p256dh           = EXCLUDED.p256dh,
+           auth             = EXCLUDED.auth`,
+        [tenantId, staffAccountId, sub.endpoint, sub.keys.p256dh, sub.keys.auth],
+      );
+    }
+  }
+
+  await emitAudit(request, 'push.subscription.created', 'push_subscription', staffAccountId, session);
+  writeJson(response, 200, { ok: true });
+}
+
+async function handlePushUnsubscribe(request, response, session) {
+  const role = callerRole(request, session);
+  if (!role) { writeJson(response, 401, { error: 'Authentication required' }); return; }
+  if (request.method !== 'POST') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+
+  const payload = await readJsonBody(request);
+  const endpoint = payload?.endpoint;
+  if (!endpoint) { writeJson(response, 400, { error: 'endpoint required' }); return; }
+
+  if (process.env.DB_NAME) {
+    const { pool } = await import('./db/pool.js').catch(() => ({ pool: null }));
+    if (pool) {
+      await pool.query(
+        `DELETE FROM push_subscriptions WHERE endpoint = ? AND tenant_id = ?`,
+        [endpoint, callerTenant(request, session)],
+      );
+    }
+  }
+
+  writeJson(response, 200, { ok: true });
 }
 
 async function handleReminders(request, response, requestUrl, session) {
@@ -16467,6 +16544,9 @@ function resolveRoute(pathname) {
   if (pathname === '/v1/inventory-assignments') return '/v1/inventory-assignments';
   if (pathname === '/v1/scheduling/calendar') return '/v1/scheduling/calendar';
   if (pathname === '/v1/reminders') return '/v1/reminders';
+  if (pathname === '/v1/notifications/subscribe') return '/v1/notifications/subscribe';
+  if (pathname === '/v1/notifications/unsubscribe') return '/v1/notifications/unsubscribe';
+  if (pathname === '/v1/notifications/vapid-public-key') return '/v1/notifications/vapid-public-key';
   if (pathname === '/v1/waitlist') return '/v1/waitlist';
   if (pathname === '/v1/operations/summary') return '/v1/operations/summary';
   if (pathname === '/v1/reference/dsm5-tr') return '/v1/reference/dsm5-tr';

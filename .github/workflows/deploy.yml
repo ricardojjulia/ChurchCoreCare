@@ -93,6 +93,9 @@ jobs:
       - name: Build platform admin
         run: pnpm --filter @churchcore/platform build
 
+      - name: Build mobile PWA
+        run: pnpm --filter @churchcore/mobile build
+
       - name: Upload web dist artifact
         uses: actions/upload-artifact@v4
         with:
@@ -105,6 +108,13 @@ jobs:
         with:
           name: platform-dist-${{ github.sha }}
           path: apps/platform/dist/
+          retention-days: 1
+
+      - name: Upload mobile dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-dist-${{ github.sha }}
+          path: apps/mobile/dist/
           retention-days: 1
 
   # ─── Deploy to staging ─────────────────────────────────────────────────────
@@ -169,6 +179,12 @@ jobs:
           name: platform-dist-${{ github.sha }}
           path: apps/platform/dist/
 
+      - name: Download mobile dist
+        uses: actions/download-artifact@v4
+        with:
+          name: mobile-dist-${{ github.sha }}
+          path: apps/mobile/dist/
+
       - name: Deploy web to Firebase Hosting (staging)
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
@@ -186,6 +202,15 @@ jobs:
           channelId: staging
           projectId: ${{ secrets.FIREBASE_PROJECT_ID }}
           target: platform
+
+      - name: Deploy mobile PWA to Firebase Hosting (staging)
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_STAGING }}
+          channelId: staging
+          projectId: ${{ secrets.FIREBASE_PROJECT_ID }}
+          target: mobile
 
       - name: Smoke test staging
         run: |
@@ -245,7 +270,7 @@ jobs:
             --region="${{ vars.GCP_REGION }}" \
             --platform=managed \
             --allow-unauthenticated \
-            --set-secrets="DB_ENCRYPTION_KEY=prod-db-encryption-key:latest,SESSION_SECRET=prod-session-secret:latest,TENANT_DB_MAP=prod-tenant-db-map:latest,STRIPE_SECRET_KEY=prod-stripe-secret-key:latest,STRIPE_WEBHOOK_SECRET=prod-stripe-webhook-secret:latest,STRIPE_PRICE_SOLO=prod-stripe-price-solo:latest,STRIPE_PRICE_GROUP=prod-stripe-price-group:latest,STRIPE_PRICE_SEAT=prod-stripe-price-seat:latest,STEDI_API_KEY=prod-stedi-api-key:latest,ANTHROPIC_API_KEY=prod-anthropic-api-key:latest,JITSI_APP_ID=prod-jitsi-app-id:latest,JITSI_API_KEY_ID=prod-jitsi-api-key-id:latest,JITSI_PRIVATE_KEY_BASE64=prod-jitsi-private-key:latest,SENDGRID_API_KEY=prod-sendgrid-api-key:latest,TWILIO_AUTH_TOKEN=prod-twilio-auth-token:latest" \
+            --set-secrets="DB_ENCRYPTION_KEY=prod-db-encryption-key:latest,SESSION_SECRET=prod-session-secret:latest,TENANT_DB_MAP=prod-tenant-db-map:latest,STRIPE_SECRET_KEY=prod-stripe-secret-key:latest,STRIPE_WEBHOOK_SECRET=prod-stripe-webhook-secret:latest,STRIPE_PRICE_SOLO=prod-stripe-price-solo:latest,STRIPE_PRICE_GROUP=prod-stripe-price-group:latest,STRIPE_PRICE_SEAT=prod-stripe-price-seat:latest,STEDI_API_KEY=prod-stedi-api-key:latest,ANTHROPIC_API_KEY=prod-anthropic-api-key:latest,JITSI_APP_ID=prod-jitsi-app-id:latest,JITSI_API_KEY_ID=prod-jitsi-api-key-id:latest,JITSI_PRIVATE_KEY_BASE64=prod-jitsi-private-key:latest,SENDGRID_API_KEY=prod-sendgrid-api-key:latest,TWILIO_AUTH_TOKEN=prod-twilio-auth-token:latest,VAPID_PUBLIC_KEY=prod-vapid-public-key:latest,VAPID_PRIVATE_KEY=prod-vapid-private-key:latest" \
             --set-env-vars="NODE_ENV=production,AI_NOTES_ENABLED=true,ENABLE_TENANT_HOST_ROUTING=true,TENANT_STRICT_HOST_ROUTING=true,JITSI_DOMAIN=8x8.vc,SENDGRID_FROM_EMAIL=noreply@churchcorecare.com" \
             --min-instances=1 \
             --max-instances=20 \
@@ -278,6 +303,12 @@ jobs:
           name: platform-dist-${{ github.sha }}
           path: apps/platform/dist/
 
+      - name: Download mobile dist
+        uses: actions/download-artifact@v4
+        with:
+          name: mobile-dist-${{ github.sha }}
+          path: apps/mobile/dist/
+
       - name: Deploy web to Firebase Hosting (production)
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
@@ -295,6 +326,15 @@ jobs:
           channelId: live
           projectId: ${{ secrets.FIREBASE_PROJECT_ID }}
           target: platform
+
+      - name: Deploy mobile PWA to Firebase Hosting (production)
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_PROD }}
+          channelId: live
+          projectId: ${{ secrets.FIREBASE_PROJECT_ID }}
+          target: mobile
 
       - name: Production smoke test
         run: |

@@ -168,7 +168,7 @@ function rowToSeries(row) {
 // Appointments
 // ---------------------------------------------------------------------------
 
-export async function listAppointments(tenantId, { clientId, counselorId, seriesId } = {}) {
+export async function listAppointments(tenantId, { clientId, counselorId, seriesId, date } = {}) {
   const conditions = ['a.tenant_id = ?'];
   const args = [tenantId];
 
@@ -183,6 +183,10 @@ export async function listAppointments(tenantId, { clientId, counselorId, series
   if (seriesId) {
     conditions.push('a.series_id = ?');
     args.push(seriesId);
+  }
+  if (date) {
+    conditions.push("DATE(COALESCE(a.starts_at, a.scheduled_at)) = ?");
+    args.push(date);
   }
 
   const [rows] = await pool.query(

@@ -1,6 +1,6 @@
 # Phase C–F: Competitive Parity Sprint
 
-**Status:** Planning  
+**Status:** Phase C complete (2026-05-28) — Phase D–F pending  
 **Prepared:** 2026-05-27  
 **Follows:** PHASE-A-B-SAAS-LAUNCH.md (completed 2026-05-27)  
 **Owners:** Product, Engineering  
@@ -469,12 +469,12 @@ are complete. D1 and E1 have no dependencies on each other or on C.
 
 | ID | Story | Status |
 |---|---|---|
-| C1 | PWA scaffold | ☐ |
-| C2 | Mobile auth | ☐ |
-| C3 | Today's schedule | ☐ |
-| C4 | Client quick search | ☐ |
-| C5 | Quick note entry | ☐ |
-| C6 | Push notifications | ☐ |
+| C1 | PWA scaffold | ✅ |
+| C2 | Mobile auth | ✅ |
+| C3 | Today's schedule | ✅ |
+| C4 | Client quick search | ✅ |
+| C5 | Quick note entry | ✅ |
+| C6 | Push notifications | ✅ |
 | C7 | Capacitor wrapper | ☐ optional |
 | D1 | Analytics API | ☐ |
 | D2 | Practice dashboard | ☐ |

@@ -476,6 +476,22 @@ async function applyColumnMigrations(conn) {
   await conn.query(`CREATE INDEX IF NOT EXISTS idx_sa_tenant_intern ON supervisor_assignments (tenant_id, intern_id)`);
   await conn.query(`CREATE INDEX IF NOT EXISTS idx_sa_supervisor ON supervisor_assignments (tenant_id, supervisor_id)`);
 
+  // ── Phase C6: PWA push notification subscriptions ────────────────────────
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      id                CHAR(36)      NOT NULL DEFAULT gen_random_uuid(),
+      tenant_id         VARCHAR(64)   NOT NULL,
+      staff_account_id  VARCHAR(64)   NOT NULL,
+      endpoint          TEXT          NOT NULL,
+      p256dh            TEXT          NOT NULL,
+      auth              TEXT          NOT NULL,
+      created_at        TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (id),
+      UNIQUE (endpoint)
+    )
+  `);
+  await conn.query(`CREATE INDEX IF NOT EXISTS idx_push_subs_staff ON push_subscriptions (tenant_id, staff_account_id)`);
+
   console.log('Column migrations done.');
 }
 

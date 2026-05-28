@@ -5,6 +5,7 @@ import { startProvisioningWorker } from './provision.js';
 import { processTrialReminders } from './trial-reminders.js';
 import { processDunning } from './subscription-billing.js';
 import { pollClaimStatuses } from './edi-status-poller.js';
+import { sendAppointmentPushReminders } from './push-notifications.js';
 
 const workerName = 'reminder-worker';
 const { Pool } = pg;
@@ -241,6 +242,7 @@ async function pollAllTenants() {
         processTrialReminders(pool, tenantId),
         processDunning(pool, tenantId),
         pollClaimStatuses(pool, tenantId),
+        sendAppointmentPushReminders(pool, tenantId),
       ]);
     }),
   );

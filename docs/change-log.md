@@ -2,6 +2,56 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## May 28, 2026 — Phase C: Mobile PWA (C1–C6)
+
+### feat: Mobile PWA — @churchcore/mobile
+
+**Date:** 2026-05-28  
+**Affected area:** `apps/mobile/`, `apps/api/src/index.js`, `apps/worker/src/`, `firebase.json`, `.firebaserc`, `deploy.yml`
+
+New `apps/mobile` Progressive Web App for counselors. Bottom-tab navigation (Schedule, Clients, Notes, Profile), installable via Add to Home Screen, service worker with offline app shell.
+
+**C1 — PWA scaffold** (`apps/mobile/`)
+- Vite 8 + React 19 + Mantine v9 project with `vite-plugin-pwa` (service worker + web manifest)
+- Bottom-tab shell: Schedule / Clients / Notes / Profile
+- `apps/mobile/public/icons/` for 192 and 512px app icons (placeholders)
+- Firebase Hosting target `mobile` added to `firebase.json` and `.firebaserc`
+- Build + deploy steps added to `deploy.yml` (staging + production)
+
+**C2 — Mobile auth**
+- `src/lib/api.js` — shared API client (same `credentials: include` pattern as platform app)
+- `src/lib/useAuth.js` — auth hook; loads session on mount, exposes login/logout
+- `src/pages/LoginPage.jsx` — mobile-optimized sign-in form, inline error, no alert dialogs
+
+**C3 — Today's schedule**
+- `GET /v1/appointments?date=YYYY-MM-DD` — added `date` query param to `handleAppointmentsCollection`; propagated to `listAppointments` DB query
+- `src/pages/ScheduleTab.jsx` — time-ordered appointment list, status badges, past appointments greyed, pull-to-refresh
+
+**C4 — Client quick search**
+- `src/pages/ClientsTab.jsx` — debounced 300ms search, result list
+- Deep link to full web chart via `<a target="_blank">`
+- PHI excluded from service worker cache via `NetworkOnly` workbox rule on `/api/`
+
+**C5 — Quick note entry**
+- `src/pages/NotesTab.jsx` — client picker, format selector (SOAP/DAP/BIRP/Faith Integrated), textarea with 5000 char limit
+- Auto-saves draft to `localStorage` every 10 seconds; clears on successful submit
+- Submits to existing `POST /v1/clients/:id/progress-notes`
+
+**C6 — Push notifications**
+- DB migration: `push_subscriptions` table + index on `(tenant_id, staff_account_id)`
+- `POST /v1/notifications/subscribe` — stores Web Push subscription (upsert on `endpoint`)
+- `POST /v1/notifications/unsubscribe` — removes subscription
+- `GET /v1/notifications/vapid-public-key` — returns public key for client-side subscribe
+- `apps/worker/src/push-notifications.js` — fires push 15 min before appointments; removes expired endpoints (410/404)
+- Worker wired into poll loop alongside existing jobs
+- `src/lib/usePushNotifications.js` — requests permission 5s after first login, subscribes via VAPID
+- Environment variables required: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`
+- `web-push@^3.6.7` added to `apps/worker/package.json`
+
+**Tests:** 148/148 passing (no regressions)
+
+---
+
 ## May 27, 2026 — Phase C–F competitive parity plan + ADRs + deploy.yml fixes
 
 ### docs: Phase C–F competitive parity roadmap
