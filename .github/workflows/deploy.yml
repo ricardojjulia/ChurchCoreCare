@@ -33,7 +33,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "pnpm"
 
       - name: Install dependencies
@@ -83,13 +83,23 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build web static files
-        run: pnpm --filter web build
+        run: pnpm --filter @churchcore/web build
+
+      - name: Build platform admin
+        run: pnpm --filter @churchcore/platform build
 
       - name: Upload web dist artifact
         uses: actions/upload-artifact@v4
         with:
           name: web-dist-${{ github.sha }}
           path: apps/web/public/
+          retention-days: 1
+
+      - name: Upload platform dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform-dist-${{ github.sha }}
+          path: apps/platform/dist/
           retention-days: 1
 
   # ─── Deploy to staging ─────────────────────────────────────────────────────
@@ -198,8 +208,8 @@ jobs:
             --region="${{ secrets.GCP_REGION }}" \
             --platform=managed \
             --allow-unauthenticated \
-            --set-secrets="DB_ENCRYPTION_KEY=prod-db-encryption-key:latest,SESSION_SECRET=prod-session-secret:latest,TENANT_DB_MAP=prod-tenant-db-map:latest,JITSI_APP_ID=prod-jitsi-app-id:latest,JITSI_API_KEY_ID=prod-jitsi-api-key-id:latest,JITSI_PRIVATE_KEY_BASE64=prod-jitsi-private-key:latest,SENDGRID_API_KEY=prod-sendgrid-api-key:latest,TWILIO_AUTH_TOKEN=prod-twilio-auth-token:latest" \
-            --set-env-vars="NODE_ENV=production,ENABLE_TENANT_HOST_ROUTING=true,TENANT_STRICT_HOST_ROUTING=true,JITSI_DOMAIN=8x8.vc,SENDGRID_FROM_EMAIL=noreply@churchcorecare.com" \
+            --set-secrets="DB_ENCRYPTION_KEY=prod-db-encryption-key:latest,SESSION_SECRET=prod-session-secret:latest,TENANT_DB_MAP=prod-tenant-db-map:latest,STRIPE_SECRET_KEY=prod-stripe-secret-key:latest,STRIPE_WEBHOOK_SECRET=prod-stripe-webhook-secret:latest,STRIPE_PRICE_SOLO=prod-stripe-price-solo:latest,STRIPE_PRICE_GROUP=prod-stripe-price-group:latest,STRIPE_PRICE_SEAT=prod-stripe-price-seat:latest,STEDI_API_KEY=prod-stedi-api-key:latest,ANTHROPIC_API_KEY=prod-anthropic-api-key:latest,JITSI_APP_ID=prod-jitsi-app-id:latest,JITSI_API_KEY_ID=prod-jitsi-api-key-id:latest,JITSI_PRIVATE_KEY_BASE64=prod-jitsi-private-key:latest,SENDGRID_API_KEY=prod-sendgrid-api-key:latest,TWILIO_AUTH_TOKEN=prod-twilio-auth-token:latest" \
+            --set-env-vars="NODE_ENV=production,AI_NOTES_ENABLED=true,ENABLE_TENANT_HOST_ROUTING=true,TENANT_STRICT_HOST_ROUTING=true,JITSI_DOMAIN=8x8.vc,SENDGRID_FROM_EMAIL=noreply@churchcorecare.com" \
             --min-instances=1 \
             --max-instances=20 \
             --timeout=30 \
@@ -212,7 +222,7 @@ jobs:
             --region="${{ secrets.GCP_REGION }}" \
             --platform=managed \
             --no-allow-unauthenticated \
-            --set-secrets="DB_ENCRYPTION_KEY=prod-db-encryption-key:latest,TENANT_DB_MAP=prod-tenant-db-map:latest,SENDGRID_API_KEY=prod-sendgrid-api-key:latest,TWILIO_ACCOUNT_SID=prod-twilio-account-sid:latest,TWILIO_AUTH_TOKEN=prod-twilio-auth-token:latest" \
+            --set-secrets="DB_ENCRYPTION_KEY=prod-db-encryption-key:latest,TENANT_DB_MAP=prod-tenant-db-map:latest,STRIPE_SECRET_KEY=prod-stripe-secret-key:latest,STEDI_API_KEY=prod-stedi-api-key:latest,ANTHROPIC_API_KEY=prod-anthropic-api-key:latest,SENDGRID_API_KEY=prod-sendgrid-api-key:latest,TWILIO_ACCOUNT_SID=prod-twilio-account-sid:latest,TWILIO_AUTH_TOKEN=prod-twilio-auth-token:latest" \
             --set-env-vars="NODE_ENV=production,TWILIO_FROM_NUMBER=${{ secrets.TWILIO_FROM_NUMBER }},SENDGRID_FROM_EMAIL=noreply@churchcorecare.com" \
             --min-instances=1 \
             --max-instances=1 \
@@ -225,6 +235,12 @@ jobs:
           name: web-dist-${{ github.sha }}
           path: apps/web/public/
 
+      - name: Download platform dist
+        uses: actions/download-artifact@v4
+        with:
+          name: platform-dist-${{ github.sha }}
+          path: apps/platform/dist/
+
       - name: Deploy web to Firebase Hosting (production)
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
@@ -232,6 +248,15 @@ jobs:
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_PROD }}
           channelId: live
           projectId: ${{ secrets.FIREBASE_PROJECT_ID }}
+
+      - name: Deploy platform admin to Firebase Hosting (production)
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_PROD }}
+          channelId: live
+          projectId: ${{ secrets.FIREBASE_PROJECT_ID }}
+          target: platform
 
       - name: Production smoke test
         run: |

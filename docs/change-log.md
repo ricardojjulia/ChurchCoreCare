@@ -2,6 +2,48 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## May 27, 2026 — Platform admin SPA, tenant schema bootstrap, CI/CD deploy pipeline
+
+### feat: apps/platform/ — Platform Admin React SPA (A3-1)
+
+**Date:** May 27, 2026  
+**Affected area:** `apps/platform/`
+
+New standalone Vite + React + Mantine v9 application for ChurchCore Care platform operators.
+
+- **LoginPage** — platform_admin auth against `/v1/auth/login`
+- **DashboardPage** — summary stats (tenants, queued/in-progress provisioning, failures) + recent activity feed
+- **TenantsPage** — full provisioning request table with filter, status badges, and operator status-change actions (queued → in_progress → completed / failed) via `PATCH /v1/platform/tenant-provisioning`
+- AppShell layout with responsive navbar, sign-out
+- Deployed as a second Firebase Hosting target (`platform`) at `tenantadmin.churchcorecare.com`
+- Wired into `firebase.json` with separate hosting target and `apps/platform/dist` output directory
+
+### feat: apps/api/src/lib/tenant-setup.js — per-tenant schema bootstrap (A1-4)
+
+**Date:** May 27, 2026  
+**Affected area:** `apps/api/src/lib/tenant-setup.js`, `apps/worker/src/provision.js`
+
+Implements per-tenant PostgreSQL DB bootstrap for the provisioning worker.
+
+- `bootstrapTenantSchema({ tenantId, practiceName, ownerEmailEnc, ownerEmailHash, ownerPasswordHash, pool? })` — creates all core tables (schema_migrations, tenants, practices, staff_members, staff_accounts, sessions, audit_events, clients, portal_settings) idempotently via PostgreSQL-compatible DDL
+- Seeds initial tenant, practice, owner staff_member and staff_account records
+- Accepts an injected pool for testing
+- Wired into `provision.js` `provisionRequest()` — called when provisioning request contains owner credentials
+
+### feat: .github/workflows/deploy.yml — CI/CD pipeline (A3-7)
+
+**Date:** May 27, 2026  
+**Affected area:** `.github/workflows/deploy.yml`
+
+Updated deploy pipeline with Phase A+B integrations:
+
+- Node.js 20 → 22 (matches CI)
+- Stripe, Stedi, Anthropic secrets added to both staging and production Cloud Run deploys
+- `AI_NOTES_ENABLED=true` added to production env vars
+- Platform admin app (`@churchcore/platform`) build step added
+- Platform dist artifact uploaded and deployed to Firebase `platform` target
+- Worker secrets updated with Stripe + Stedi keys
+
 ## May 27, 2026 — Phase A/B completion: subscription upgrade, eligibility tests, EDI claims, ADRs
 
 ### feat: POST /v1/billing/subscription/upgrade (A2-10)
