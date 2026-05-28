@@ -2,6 +2,56 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## May 28, 2026 — Phase D: Analytics & Reporting (D1–D5)
+
+### feat: Practice analytics dashboard
+
+**Date:** 2026-05-28  
+**Affected area:** `apps/api/src/lib/analytics.js`, `apps/api/src/index.js`, `apps/web/src/`, `packages/i18n/src/index.js`
+
+Full analytics and reporting layer: backend query service, REST endpoints, React dashboard with charts and CSV export.
+
+#### D1 — Analytics API (`apps/api/src/lib/analytics.js`)
+
+- `getSessionVolume` — daily session buckets with optional counselor filter
+- `getRevenueStats` — billed / collected / outstanding from claims table
+- `getNoShowRate` — total appointments + no-show count + rate %
+- `getOutcomeTrends` — PHQ-9 (or any scored form) score time-series
+- `getCounselorProductivity` — per-counselor sessions / completions / no-shows / avg duration
+- All functions enforce `tenantId` in every query; return empty/zero in in-memory mode
+- CSV builders: `buildSessionsCsv`, `buildRevenueCsv`
+- `parseDateRange` — preset (week / month / quarter / year) or explicit from/to
+- Routes: `GET /v1/reports/sessions`, `/revenue`, `/outcomes`, `/counselors` + `/sessions/export`, `/revenue/export`
+
+#### D2 — Practice analytics dashboard (`apps/web/src/components/Analytics/`)
+
+- `StatCard.jsx` — metric card with trend icon
+- `SessionVolumeChart.jsx` — `@mantine/charts` AreaChart for daily session volume
+- `AnalyticsDashboard.jsx` — preset selector (week/month/quarter/year), 4 stat cards, volume chart, counselor table, outcome chart, CSV export buttons
+- `useAnalytics.js` — 4 data hooks + `exportCsv` helper
+- `nav.analytics` i18n key added; "Analytics" nav item wired for admin role
+- Lazy-loaded in `App.jsx`
+
+#### D3 — Outcome trends (`apps/web/src/components/ClinicalChart/OutcomeTrendChart.jsx`)
+
+- `@mantine/charts` LineChart with PHQ-9 severity bands (minimal / mild / moderate / mod-severe / severe)
+- Y-axis fixed 0–27; reference lines at thresholds 5, 10, 15, 20
+- Embedded in `AnalyticsDashboard` for aggregate view; reusable in clinical chart
+
+#### D4 — Counselor productivity (`apps/web/src/components/Analytics/CounselorProductivityTable.jsx`)
+
+- Sortable table (click any column header to sort asc/desc)
+- Columns: sessions / completed / no-shows / no-show rate / avg duration
+
+#### D5 — CSV export
+
+- Export buttons in `AnalyticsDashboard` trigger browser download via `<a>` element
+- API streams plain-text CSV with `Content-Disposition: attachment`
+
+Tests: `apps/api/test/analytics.test.mjs` — 14 tests covering in-memory empty states, CSV builders, and `parseDateRange` presets. All 162 API tests pass.
+
+---
+
 ## May 28, 2026 — Phase C: Mobile PWA (C1–C6)
 
 ### feat: Mobile PWA — @churchcore/mobile

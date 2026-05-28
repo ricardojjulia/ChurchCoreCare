@@ -45,6 +45,16 @@ import { logError, logInfo, logWarn, serializeError } from './lib/log.js';
 import { translateMessages } from './lib/translate.js';
 import { handleCors, checkRateLimit, enforceRbac, enforceTenantScope, callerIdentity } from './lib/security.js';
 import { searchDsm5TrDiagnoses } from './lib/dsm5-tr-reference.js';
+import {
+  getSessionVolume,
+  getRevenueStats,
+  getNoShowRate,
+  getOutcomeTrends,
+  getCounselorProductivity,
+  buildSessionsCsv,
+  buildRevenueCsv,
+  parseDateRange,
+} from './lib/analytics.js';
 import pool, { verifyConnection, runWithTenantContext, closeAllPools } from './db/pool.js';
 import { getKnownTenantSlugs } from './db/pools.js';
 import {
@@ -1924,6 +1934,36 @@ export async function handleApiRequest(request, response) {
 
     if (requestUrl.pathname === '/v1/reporting/overview') {
       await handleReportingOverview(request, response, requestUrl, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/reports/sessions') {
+      await handleReportSessions(request, response, requestUrl, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/reports/sessions/export') {
+      await handleReportSessionsExport(request, response, requestUrl, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/reports/revenue') {
+      await handleReportRevenue(request, response, requestUrl, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/reports/revenue/export') {
+      await handleReportRevenueExport(request, response, requestUrl, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/reports/outcomes') {
+      await handleReportOutcomes(request, response, requestUrl, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/reports/counselors') {
+      await handleReportCounselors(request, response, requestUrl, session);
       return;
     }
 
@@ -11312,6 +11352,84 @@ async function handleReportingOverview(request, response, requestUrl, session) {
   writeJson(response, 200, { summary });
 }
 
+// ── Analytics report handlers (Phase D) ──────────────────────────────────────
+
+async function handleReportSessions(request, response, requestUrl, session) {
+  if (request.method !== 'GET') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+  if (requirePracticeAdmin(request, response, session)) return;
+  const tenantId = callerTenant(request, session);
+  const { from, to } = parseDateRange(requestUrl.searchParams);
+  const counselorId = sanitizeStr(requestUrl.searchParams.get('counselorId') ?? '', 64) || null;
+  const [volume, noShow] = await Promise.all([
+    getSessionVolume({ tenantId, from, to, counselorId }),
+    getNoShowRate({ tenantId, from, to }),
+  ]);
+  await emitAudit(request, 'reports.sessions.read', 'report', 'sessions', session);
+  writeJson(response, 200, { from, to, ...volume, noShowRate: noShow });
+}
+
+async function handleReportSessionsExport(request, response, requestUrl, session) {
+  if (request.method !== 'GET') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+  if (requirePracticeAdmin(request, response, session)) return;
+  const tenantId = callerTenant(request, session);
+  const { from, to } = parseDateRange(requestUrl.searchParams);
+  const { buckets } = await getSessionVolume({ tenantId, from, to });
+  await emitAudit(request, 'reports.export.downloaded', 'report', 'sessions_csv', session);
+  response.writeHead(200, {
+    'Content-Type': 'text/csv',
+    'Content-Disposition': `attachment; filename="sessions-${from}-${to}.csv"`,
+  });
+  response.end(buildSessionsCsv(buckets));
+}
+
+async function handleReportRevenue(request, response, requestUrl, session) {
+  if (request.method !== 'GET') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+  if (requirePracticeAdmin(request, response, session)) return;
+  const tenantId = callerTenant(request, session);
+  const { from, to } = parseDateRange(requestUrl.searchParams);
+  const stats = await getRevenueStats({ tenantId, from, to });
+  await emitAudit(request, 'reports.revenue.read', 'report', 'revenue', session);
+  writeJson(response, 200, { from, to, ...stats });
+}
+
+async function handleReportRevenueExport(request, response, requestUrl, session) {
+  if (request.method !== 'GET') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+  if (requirePracticeAdmin(request, response, session)) return;
+  const tenantId = callerTenant(request, session);
+  const { from, to } = parseDateRange(requestUrl.searchParams);
+  const stats = await getRevenueStats({ tenantId, from, to });
+  await emitAudit(request, 'reports.export.downloaded', 'report', 'revenue_csv', session);
+  response.writeHead(200, {
+    'Content-Type': 'text/csv',
+    'Content-Disposition': `attachment; filename="revenue-${from}-${to}.csv"`,
+  });
+  response.end(buildRevenueCsv(stats));
+}
+
+async function handleReportOutcomes(request, response, requestUrl, session) {
+  if (request.method !== 'GET') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+  const role = callerRole(request, session);
+  if (!role) { writeJson(response, 401, { error: 'Authentication required' }); return; }
+  const tenantId = callerTenant(request, session);
+  const clientId = sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 64) || null;
+  const formKey  = sanitizeStr(requestUrl.searchParams.get('formKey')  ?? '', 64) || 'PHQ-9';
+  const from = requestUrl.searchParams.get('from') || null;
+  const to   = requestUrl.searchParams.get('to')   || null;
+  const result = await getOutcomeTrends({ tenantId, clientId, formKey, from, to });
+  await emitAudit(request, 'reports.outcomes.read', 'report', formKey, session);
+  writeJson(response, 200, { formKey, clientId, ...result });
+}
+
+async function handleReportCounselors(request, response, requestUrl, session) {
+  if (request.method !== 'GET') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+  if (requirePracticeAdmin(request, response, session)) return;
+  const tenantId = callerTenant(request, session);
+  const { from, to } = parseDateRange(requestUrl.searchParams);
+  const result = await getCounselorProductivity({ tenantId, from, to });
+  await emitAudit(request, 'reports.counselors.read', 'report', 'counselors', session);
+  writeJson(response, 200, { from, to, ...result });
+}
+
 async function handleAuditIntelligence(request, response, requestUrl, session) {
   if (request.method !== 'GET') {
     writeJson(response, 405, { error: 'Method not allowed' });
@@ -16594,6 +16712,12 @@ function resolveRoute(pathname) {
   if (pathname === '/v1/faith/referral-coordination') return '/v1/faith/referral-coordination';
   if (pathname === '/v1/faith/language-preferences') return '/v1/faith/language-preferences';
   if (pathname === '/v1/reporting/overview') return '/v1/reporting/overview';
+  if (pathname === '/v1/reports/sessions') return '/v1/reports/sessions';
+  if (pathname === '/v1/reports/sessions/export') return '/v1/reports/sessions/export';
+  if (pathname === '/v1/reports/revenue') return '/v1/reports/revenue';
+  if (pathname === '/v1/reports/revenue/export') return '/v1/reports/revenue/export';
+  if (pathname === '/v1/reports/outcomes') return '/v1/reports/outcomes';
+  if (pathname === '/v1/reports/counselors') return '/v1/reports/counselors';
   if (pathname === '/v1/audit/intelligence' || pathname === '/v1/audit/intelligence/') return '/v1/audit/intelligence';
   if (pathname === '/v1/platform/overview') return '/v1/platform/overview';
   if (pathname === '/v1/platform/tenant-provisioning') return '/v1/platform/tenant-provisioning';

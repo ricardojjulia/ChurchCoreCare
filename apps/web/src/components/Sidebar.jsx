@@ -33,6 +33,7 @@ function getNavItemsForRole(role) {
       { key: 'documents', labelKey: 'nav.documents' },
       { key: 'offerings', labelKey: 'nav.offerings' },
       { key: 'portal', labelKey: 'nav.portal' },
+      { key: 'analytics', labelKey: 'nav.analytics' },
       { key: 'workspace-studio', labelKey: 'nav.workspaceStudio' },
       { key: 'operations', labelKey: 'nav.operationsStudio', href: '/operations.html' },
       { key: 'faith', labelKey: 'nav.faithWorkflows' },

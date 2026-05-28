@@ -539,6 +539,7 @@ export const baseMessages = Object.freeze({
   'nav.workspaceStudio': 'Workspace Studio',
   'nav.operationsStudio': 'Practice Operations',
   'nav.faithWorkflows': 'Faithful Workflows',
+  'nav.analytics': 'Analytics',
   'nav.about': 'About',
 
   // ─── Faithful Workflows ────────────────────────────────────────────────────

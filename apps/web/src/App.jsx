@@ -34,6 +34,7 @@ const ClientPortalPage = lazy(() => import('./components/Portal/ClientPortalPage
 const OfferingsPage = lazy(() => import('./components/Offerings/OfferingsPage.jsx'));
 const ClinicalChartPage = lazy(() => import('./components/ClinicalChart/ClinicalChartPage.jsx'));
 const FaithWorkflowsPage = lazy(() => import('./components/FaithWorkflows/FaithWorkflowsPage.jsx'));
+const AnalyticsDashboard = lazy(() => import('./components/Analytics/AnalyticsDashboard.jsx'));
 
 function firstString(...values) {
   for (const value of values) {
@@ -482,8 +483,9 @@ export default function App() {
   const showOfferings        = currentView === 'offerings';
   const showClinical         = currentView === 'clinical';
   const showFaith            = currentView === 'faith';
+  const showAnalytics        = currentView === 'analytics';
   const showTimeTracking     = currentView === 'time-tracking';
-  const showFallbackWorkspace = !showDashboard && !showCounselorHome && !showTasks && !showUsers && !showCounselors && !showClients && !showScheduling && !showWorkspaceStudio && !showDocuments && !showPortal && !showOfferings && !showClinical && !showFaith;
+  const showFallbackWorkspace = !showDashboard && !showCounselorHome && !showTasks && !showUsers && !showCounselors && !showClients && !showScheduling && !showWorkspaceStudio && !showDocuments && !showPortal && !showOfferings && !showClinical && !showFaith && !showAnalytics;
   if (window.location.pathname === '/signup') {
     return <SignupPage />;
   }
@@ -662,6 +664,8 @@ export default function App() {
               currentUser={currentUser}
               sharedOperationsSummary={operationsSummaryData.summary ?? null}
             />
+          ) : showAnalytics ? (
+            <AnalyticsDashboard />
           ) : showTimeTracking ? (
             <TimeTrackingPage currentUser={currentUser} />
           ) : showClinical ? (
