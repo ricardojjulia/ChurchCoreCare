@@ -1,6 +1,6 @@
 {
   "name": "@churchcore/web",
-  "version": "5.8.0",
+  "version": "6.2.0",
   "private": true,
   "type": "module",
   "dependencies": {

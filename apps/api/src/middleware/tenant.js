@@ -52,3 +52,28 @@ export function denyUnknownTenantHost(response, tenantContext, knownTenantSlugs)
   writeJson(response, 404, { error: 'Unknown tenant' });
   return true;
 }
+
+// ---------------------------------------------------------------------------
+// Subscription gate exemptions
+// ---------------------------------------------------------------------------
+
+// Routes that bypass the subscription status gate regardless of tenant status.
+// Suspended/churned tenants must still be able to log in, access billing to
+// reactivate, access client portal for data portability, and process payments.
+const SUBSCRIPTION_GATE_EXEMPT_PREFIXES = [
+  '/health',        // infrastructure probes
+  '/v1/auth/',      // login/logout — must work to reach billing settings
+  '/v1/billing/',   // subscription status + portal — needed to reactivate
+  '/v1/platform/',  // signup + platform admin (already public or admin-only)
+  '/v1/portal/',    // client portal — data portability rights
+  '/v1/i18n/',      // locale catalog — not tenant-specific
+  '/webhooks/',     // Stripe payment webhooks — must work for suspended tenants
+  '/openapi',       // API docs
+  '/docs',          // API docs
+  '/bootstrap',     // app bootstrap metadata
+];
+
+export function isSubscriptionGateExempt(route) {
+  if (!route) return true;
+  return SUBSCRIPTION_GATE_EXEMPT_PREFIXES.some((p) => route.startsWith(p));
+}

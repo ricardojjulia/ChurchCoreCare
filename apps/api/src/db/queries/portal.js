@@ -175,6 +175,7 @@ function rowToPortalSettings(row) {
     allowSchedulingRequests: Boolean(row.allow_scheduling_requests),
     showPublicCounselorDirectory: Boolean(row.show_public_counselor_directory),
     financialMode: row.financial_mode ?? 'offerings',
+    insuranceBillingEnabled: Boolean(row.insurance_billing_enabled),
     suggestedOfferingCents: Number(row.suggested_offering_cents ?? 0),
     offeringMinistryNote: row.offering_ministry_note ?? '',
     contactPreferenceOptions: parseJsonArray(row.contact_preference_options),
@@ -323,6 +324,7 @@ export async function upsertPortalSettings({
   allowSchedulingRequests,
   showPublicCounselorDirectory,
   financialMode,
+  insuranceBillingEnabled,
   suggestedOfferingCents,
   offeringMinistryNote,
   contactPreferenceOptions,
@@ -338,8 +340,8 @@ export async function upsertPortalSettings({
     `INSERT INTO portal_settings
       (id, tenant_id, practice_name, logo_url, brand_color, accent_color, welcome_headline, welcome_message, help_message,
        support_email_enc, registration_mode, allow_create_account, allow_care_requests, allow_scheduling_requests,
-       show_public_counselor_directory, financial_mode, suggested_offering_cents, offering_ministry_note, contact_preference_options, default_signup_form_keys)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       show_public_counselor_directory, financial_mode, insurance_billing_enabled, suggested_offering_cents, offering_ministry_note, contact_preference_options, default_signup_form_keys)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT (id) DO UPDATE SET
        practice_name = EXCLUDED.practice_name,
        logo_url = EXCLUDED.logo_url,
@@ -355,6 +357,7 @@ export async function upsertPortalSettings({
        allow_scheduling_requests = EXCLUDED.allow_scheduling_requests,
        show_public_counselor_directory = EXCLUDED.show_public_counselor_directory,
        financial_mode = EXCLUDED.financial_mode,
+       insurance_billing_enabled = EXCLUDED.insurance_billing_enabled,
        suggested_offering_cents = EXCLUDED.suggested_offering_cents,
        offering_ministry_note = EXCLUDED.offering_ministry_note,
        contact_preference_options = EXCLUDED.contact_preference_options,
@@ -376,6 +379,7 @@ export async function upsertPortalSettings({
       allowSchedulingRequests ? 1 : 0,
       showPublicCounselorDirectory ? 1 : 0,
       financialMode,
+      insuranceBillingEnabled ? 1 : 0,
       suggestedOfferingCents ?? 0,
       offeringMinistryNote ?? '',
       JSON.stringify(contactPreferenceOptions ?? []),

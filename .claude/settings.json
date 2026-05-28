@@ -2,7 +2,26 @@
   "permissions": {
     "allow": [
       "Bash(node -e ':*)",
-      "Bash(git commit -m ':*)"
+      "Bash(git commit -m ':*)",
+      "Bash(pnpm test*)",
+      "Bash(pnpm lint*)",
+      "Bash(pnpm run lint*)",
+      "Bash(node --test*)",
+      "Bash(git diff --cached*)",
+      "Bash(git diff --name-only*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash(git commit*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/pre-commit.sh"
+          }
+        ]
+      }
     ]
   }
 }
