@@ -2,6 +2,20 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## May 28, 2026 — v7.0.0 Release
+
+### release: Competitive Parity Sprint complete — Phases C–F, 195 tests passing
+
+**Date:** 2026-05-28
+**Version:** 6.2.0 → 7.0.0
+**Packages bumped:** `churchcore-care` (root), `@churchcore/api`, `@churchcore/web`, `@churchcore/worker`, `@churchcore/mobile`
+
+All four phases of the competitive parity sprint are shipped and tested. ChurchCore Care v7.0.0 reaches feature parity with the market's best general-purpose EHR platforms on every dimension except native iOS/Android apps. See `docs/v7.0.0-RELEASE-SUMMARY.md` for full detail and `docs/competitive-evaluation-2026.md` for the updated market assessment.
+
+Remaining work before commercial launch: GCP Cloud Run deploy (ops), Stripe product setup (admin), HIPAA BAA signing (legal), and `apps/platform/` platform admin web app (code).
+
+---
+
 ## May 28, 2026 — Phase F: Group & Family Therapy (F1–F5)
 
 ### feat: group therapy, relational units, group notes, group billing
