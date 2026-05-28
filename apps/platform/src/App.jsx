@@ -1,15 +1,17 @@
 import { useState } from 'react';
 import { AppShell, Burger, Center, Group, Loader, NavLink, Text, Title } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { LayoutDashboard, LogOut, Users } from 'lucide-react';
+import { LayoutDashboard, LogOut, Shield, Users } from 'lucide-react';
 import { useAuth } from './lib/useAuth.js';
 import LoginPage from './components/LoginPage.jsx';
 import DashboardPage from './components/DashboardPage.jsx';
 import TenantsPage from './components/TenantsPage.jsx';
+import ImpersonationPage from './components/ImpersonationPage.jsx';
 
 const NAV_ITEMS = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'tenants',   label: 'Tenants',   icon: Users },
+  { id: 'dashboard',     label: 'Dashboard',     icon: LayoutDashboard },
+  { id: 'tenants',       label: 'Tenants',       icon: Users },
+  { id: 'impersonation', label: 'Impersonation', icon: Shield },
 ];
 
 export default function App() {
@@ -33,7 +35,8 @@ export default function App() {
     );
   }
 
-  const ActivePage = page === 'tenants' ? TenantsPage : DashboardPage;
+  const PAGES = { dashboard: DashboardPage, tenants: TenantsPage, impersonation: ImpersonationPage };
+  const ActivePage = PAGES[page] ?? DashboardPage;
 
   return (
     <AppShell

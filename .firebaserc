@@ -1,0 +1,13 @@
+{
+  "projects": {
+    "default": "churchcore-care-prod"
+  },
+  "targets": {
+    "churchcore-care-prod": {
+      "hosting": {
+        "app": ["churchcore-care-app"],
+        "platform": ["churchcore-care-platform"]
+      }
+    }
+  }
+}
