@@ -2,6 +2,25 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## May 28, 2026 — Platform Admin App complete (apps/platform/)
+
+### feat: platform admin web app — impersonation, data exports, retention policies
+
+**Date:** 2026-05-28
+**Affected area:** `apps/platform/src/`
+
+Completes the last remaining code item before commercial launch. The platform admin app now has five fully functional pages.
+
+- **ImpersonationPage** — list active/ended sessions; "Start Session" modal (target tenant, role select, reason ≥ 10 chars, audit-logged); "End" button per active row; orange audit warning displayed
+- **DataExportsPage** — list export jobs with status badges; "Request Export" modal (type: clinical_records/billing/documents/audit_log, format: JSON/CSV)
+- **RetentionPoliciesPage** — view current policy (clinical/billing/audit-log schedules, document versions, legal hold); "Edit Policy" modal with Select dropdowns and Checkbox toggles; configures new policy when none exists
+- **api.js** extended with 6 new methods: `startImpersonationSession`, `endImpersonationSession`, `listDataExports`, `requestDataExport`, `getRetentionPolicy`, `upsertRetentionPolicy`
+- **App.jsx** — 2 new nav items (Data Exports with Database icon, Retention Policies with ShieldCheck icon)
+
+All existing pages (Dashboard, Tenants) unchanged. 195/195 API tests still passing.
+
+---
+
 ## May 28, 2026 — v7.0.0 Release
 
 ### release: Competitive Parity Sprint complete — Phases C–F, 195 tests passing

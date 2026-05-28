@@ -64,7 +64,7 @@ ChurchCore Care v7.0.0 is a **complete, commercially ready product** that closes
 | GCP Cloud Run production deploy | 🔴 LAUNCH GATE | Ops task — Dockerfiles exist, deploy scripts exist; requires GCP account setup and env secrets |
 | Stripe product/price setup | 🔴 LAUNCH GATE | Admin task — API keys and price IDs need to be set in env vars |
 | HIPAA BAA signed | 🔴 LAUNCH GATE | Legal task — must be signed with GCP and Stedi before PHI touches production |
-| Platform admin web app | 🟠 NEAR-LAUNCH | `apps/platform/` not yet built; backend routes exist; needed to manage tenant lifecycle in production |
+| Platform admin web app | ✅ Complete | `apps/platform/` — 5 pages: Dashboard, Tenants, Impersonation, Data Exports, Retention Policies |
 | Native iOS/Android apps | 🟡 MEDIUM | PWA delivered; native apps are TherapyNotes' 2026 push. SimplePractice has full native. Not a faith-niche blocker. |
 | Client self-scheduling | 🟡 MEDIUM | Portal has appointment requests; direct real-time booking slot selection is not yet implemented |
 
@@ -146,7 +146,6 @@ No competitor does items 2, 6 (faith-integrated), 12, 13, 14, or 15 (operations 
 | GCP Cloud Run deploy | Run deploy scripts; configure env secrets; wire DNS | Low-medium (scripts exist) |
 | Stripe product/price setup | Create Solo/Group/Seat prices in Stripe Dashboard | Low (30 mins) |
 | HIPAA BAA | Sign BAAs with GCP and Stedi | Admin/legal (no code) |
-| Platform admin web app | Build `apps/platform/` — tenant list, provision/suspend UI | Medium (backend routes already exist) |
 
 ---
 
@@ -171,12 +170,11 @@ AI notes are included in base pricing (competitors charge $35–50/month as an a
 
 ### Roadmap priority order — updated
 
-**Immediate (before first customer):**
+**Immediate (before first customer) — admin/ops tasks only, no code remaining:**
 
 - GCP Cloud Run production deploy
 - Stripe product/price setup
 - HIPAA BAA signing
-- Platform admin web app (`apps/platform/`)
 
 **Post-launch within 30 days:**
 

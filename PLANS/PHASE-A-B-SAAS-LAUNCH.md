@@ -1065,7 +1065,7 @@ Legend: ✅ Done  ☐ Pending (ops/admin/code)  🔧 Admin task only
 
 [A3] GCP PRODUCTION DEPLOYMENT
   Infrastructure (code)
-  ✅ A3-1  Create apps/platform/ React SPA scaffold (Vite + Mantine v9, 3 pages)
+  ✅ A3-1  Complete apps/platform/ React SPA (5 pages: Dashboard, Tenants, Impersonation, Data Exports, Retention Policies)
   ✅ A3-2  Update apps/api/Dockerfile — add ENV NODE_ENV=production
   ✅ A3-3  docs/runbooks/gcp-deployment.md — full GCP project setup guide
   ✅ A3-4  Create ops/secrets-setup.sh — seed GCP Secret Manager
@@ -1160,7 +1160,7 @@ Legend: ✅ Done  ☐ Pending (ops/admin/code)  🔧 Admin task only
 PHASE B TOTAL: 23 tasks  |  ✅ 21 done  |  🔧 1 admin task  |  ☐ 2 optional splits
 COMBINED TOTAL: 54 tasks  |  ✅ 48 done  |  🔧 5 admin tasks  |  ☐ 2 optional
 
-Last updated: May 27, 2026 — 148/148 unit tests pass
+Last updated: May 28, 2026 — 195/195 unit tests pass — apps/platform/ complete
 ```
 
 ---

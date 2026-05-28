@@ -39,4 +39,34 @@ export const api = {
 
   listImpersonationSessions: () =>
     request('/v1/platform/impersonation-sessions'),
+
+  startImpersonationSession: (targetTenantId, targetRole, reason) =>
+    request('/v1/platform/impersonation-sessions', {
+      method: 'POST',
+      body: JSON.stringify({ targetTenantId, targetRole, reason }),
+    }),
+
+  endImpersonationSession: (id) =>
+    request(`/v1/platform/impersonation-sessions/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'ended' }),
+    }),
+
+  listDataExports: () =>
+    request('/v1/platform/data-exports'),
+
+  requestDataExport: (exportType, format) =>
+    request('/v1/platform/data-exports', {
+      method: 'POST',
+      body: JSON.stringify({ exportType, format, status: 'queued' }),
+    }),
+
+  getRetentionPolicy: () =>
+    request('/v1/platform/retention-policies'),
+
+  upsertRetentionPolicy: (policy) =>
+    request('/v1/platform/retention-policies', {
+      method: 'POST',
+      body: JSON.stringify(policy),
+    }),
 };

@@ -1,17 +1,21 @@
 import { useState } from 'react';
 import { AppShell, Burger, Center, Group, Loader, NavLink, Text, Title } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { LayoutDashboard, LogOut, Shield, Users } from 'lucide-react';
+import { Database, LayoutDashboard, LogOut, Shield, ShieldCheck, Users } from 'lucide-react';
 import { useAuth } from './lib/useAuth.js';
 import LoginPage from './components/LoginPage.jsx';
 import DashboardPage from './components/DashboardPage.jsx';
 import TenantsPage from './components/TenantsPage.jsx';
 import ImpersonationPage from './components/ImpersonationPage.jsx';
+import DataExportsPage from './components/DataExportsPage.jsx';
+import RetentionPoliciesPage from './components/RetentionPoliciesPage.jsx';
 
 const NAV_ITEMS = [
-  { id: 'dashboard',     label: 'Dashboard',     icon: LayoutDashboard },
-  { id: 'tenants',       label: 'Tenants',       icon: Users },
-  { id: 'impersonation', label: 'Impersonation', icon: Shield },
+  { id: 'dashboard',   label: 'Dashboard',          icon: LayoutDashboard },
+  { id: 'tenants',     label: 'Tenants',             icon: Users },
+  { id: 'impersonation', label: 'Impersonation',     icon: Shield },
+  { id: 'exports',     label: 'Data Exports',        icon: Database },
+  { id: 'retention',   label: 'Retention Policies',  icon: ShieldCheck },
 ];
 
 export default function App() {
@@ -35,7 +39,13 @@ export default function App() {
     );
   }
 
-  const PAGES = { dashboard: DashboardPage, tenants: TenantsPage, impersonation: ImpersonationPage };
+  const PAGES = {
+    dashboard:    DashboardPage,
+    tenants:      TenantsPage,
+    impersonation: ImpersonationPage,
+    exports:      DataExportsPage,
+    retention:    RetentionPoliciesPage,
+  };
   const ActivePage = PAGES[page] ?? DashboardPage;
 
   return (
