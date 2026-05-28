@@ -2,6 +2,39 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## May 27, 2026 — Phase C–F competitive parity plan + ADRs + deploy.yml fixes
+
+### docs: Phase C–F competitive parity roadmap
+
+**Date:** 2026-05-27  
+**Affected area:** `PLANS/`, `docs/adr/`
+
+- `PLANS/PHASE-C-F-COMPETITIVE-PARITY.md` — 21-item software factory plan covering:
+  - Phase C: Mobile PWA (PWA scaffold, auth, schedule, client search, quick notes, push notifications, Capacitor)
+  - Phase D: Analytics & Reporting (API, dashboard, outcome trends, counselor productivity, CSV export)
+  - Phase E: Billing Reconciliation (ERA parsing, payment posting UI, aging report, patient statements)
+  - Phase F: Group & Family Therapy (data model, scheduling, group notes, relational units, group billing)
+- `docs/adr/0008-pwa-mobile-strategy.md` — PWA in `apps/mobile` vs React Native vs responsive; chose PWA + Capacitor option
+- `docs/adr/0009-in-app-analytics.md` — in-app analytics vs BI tool; chose in-app Postgres queries + `@mantine/charts`
+- `docs/adr/0010-group-therapy-model.md` — group/family therapy data model; separate tables, split note encryption, relational units
+
+### fix: deploy.yml — 8 bugs corrected
+
+**Date:** 2026-05-27  
+**Affected area:** `.github/workflows/deploy.yml`
+
+- `pnpm --filter api test` → `pnpm --filter @churchcore/api test`
+- `secrets.GCP_REGION` / `secrets.GCP_PROJECT` → `vars.GCP_REGION` / `vars.GCP_PROJECT_ID` (non-sensitive config belongs in vars, not secrets)
+- Added `google-github-actions/setup-gcloud@v2` to build, deploy-staging, and deploy-production jobs (gcloud CLI was unavailable)
+- Added Node.js + pnpm setup steps to deploy-production before migration step
+- Added Phase A+B secrets (Stripe, Stedi, Anthropic) to staging API and Worker deploys
+- Added platform dist download + Firebase platform deploy to staging job
+- Added `target: app` / `target: platform` to all Firebase Hosting deploy steps
+- Fixed production smoke test URL: `system.churchcorecare.com` → `app.churchcorecare.com`
+- Fixed `workflow_dispatch` options from JSON inline array to YAML list
+
+---
+
 ## May 27, 2026 — Runbooks, E2E tests, platform SPA impersonation page, plan tracker sync
 
 ### feat: ops runbooks A3-13 and A3-14
