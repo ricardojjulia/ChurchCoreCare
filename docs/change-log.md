@@ -2,6 +2,51 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## May 27, 2026 — Runbooks, E2E tests, platform SPA impersonation page, plan tracker sync
+
+### feat: ops runbooks A3-13 and A3-14
+
+**Date:** May 27, 2026  
+**Affected area:** `docs/runbooks/`
+
+- `gcp-incident-response.md` — P0/P1/P2/security incident playbooks, rollback procedure, post-incident checklist
+- `tenant-provisioning-manual.md` — step-by-step manual provisioning recovery for failed/stuck worker
+
+### feat: E2E tests for Phase A+B surfaces
+
+**Date:** May 27, 2026  
+**Affected area:** `tests/e2e/`
+
+- `saas-signup-trial.spec.mjs` — signup page field validation, slug format, reserved slug, trial banner absence
+- `billing-claims.spec.mjs` — claim submit/status auth boundaries, STEDI gate, UI accessibility
+- `insurance-eligibility.spec.mjs` — eligibility verify-eligibility auth boundaries, feature gate, insurance tab UI
+
+### feat: platform admin — Impersonation Sessions page
+
+**Date:** May 27, 2026  
+**Affected area:** `apps/platform/src/components/ImpersonationPage.jsx`
+
+Adds a third page to the platform admin SPA showing all support impersonation sessions with tenant, reason, actor, timing, and status. Wired into App.jsx nav alongside Dashboard and Tenants.
+
+### chore: sync PHASE-A-B-SAAS-LAUNCH.md tracker to actual completion
+
+**Date:** May 27, 2026  
+**Affected area:** `PLANS/PHASE-A-B-SAAS-LAUNCH.md`
+
+Updated master TODO tracker from 28/54 done to **48/54 done**. The 5 remaining items are all admin tasks (GCP setup, Stripe products, Stedi account, HIPAA BAA) — no code remaining.
+
+### chore: .firebaserc with app + platform hosting targets
+
+**Date:** May 27, 2026  
+**Affected area:** `.firebaserc`
+
+Creates `.firebaserc` with two hosting targets (`app` → practice SPA, `platform` → admin console).
+
+### chore: v6.2.0-RELEASE-SUMMARY.md updated to 148/148 tests and accurate PRs
+
+**Date:** May 27, 2026  
+**Affected area:** `docs/v6.2.0-RELEASE-SUMMARY.md`
+
 ## May 27, 2026 — Platform admin SPA, tenant schema bootstrap, CI/CD deploy pipeline
 
 ### feat: apps/platform/ — Platform Admin React SPA (A3-1)
