@@ -2,6 +2,58 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## May 28, 2026 — Phase F: Group & Family Therapy (F1–F5)
+
+### feat: group therapy, relational units, group notes, group billing
+
+**Date:** 2026-05-28  
+**Affected area:** `apps/api/src/db/`, `apps/api/src/lib/`, `apps/api/src/index.js`, `apps/web/src/components/Groups/`, `apps/web/src/components/ClinicalChart/`, `packages/i18n/src/index.js`
+
+Full group and family therapy module: data model, scheduling with RRULE support, per-session notes (shared + per-member), relational units (couples/family), and CPT-aware group billing.
+
+#### F1 — Group therapy data model
+
+- DB migration: 7 new tables — `therapy_groups`, `group_members`, `group_sessions`, `group_session_notes`, `group_member_notes`, `relational_units`, `relational_unit_members`
+- All tables scoped to `tenant_id`; notes encrypted at rest via `encrypt()`
+- `group_session_notes`: UNIQUE per session (shared note per session); `group_member_notes`: UNIQUE per session+client (individual note per member)
+- `apps/api/src/db/queries/groups.js` — full CRUD: `listGroups`, `getGroupById`, `createGroup`, `updateGroup`, `addGroupMember`, `removeGroupMember`, `getActiveGroupMembers`, `listGroupSessions`, `createGroupSession`, `updateGroupSession`, `upsertGroupNote`, `upsertMemberNote`, `getGroupSessionNotes`, `listRelationalUnits`, `getRelationalUnitById`, `createRelationalUnit`, `addRelationalUnitMember`, `removeRelationalUnitMember`, `getClientRelationalUnits`, `listUnitSessions`
+- All read functions return empty/null in in-memory mode via `DB_MODE()` guard
+
+#### F2 — Group scheduling
+
+- `POST /v1/groups` — create group; `GET/PATCH /v1/groups/:id` — read/update
+- `POST /v1/groups/:id/sessions` — schedule one or recurring session (RRULE support)
+- `expandRrule(dtstart, rruleStr, maxCount=52)` — native RRULE expansion (no npm dependency); supports FREQ=WEEKLY with INTERVAL, COUNT, BYDAY, UNTIL; caps at 52 sessions per series
+- `PATCH /v1/groups/sessions/:id` — update status (cancel, etc.)
+
+#### F3 — Group session notes
+
+- `GET/POST /v1/groups/sessions/:id/notes` — load and save session notes
+- Shared note (visible to all counselors) + per-member notes (encrypted individually)
+- Format selector: SOAP / DAP / BIRP stored per session
+- `GroupSessionNotesForm.jsx` — shared note textarea + collapsible per-member sections
+- `GroupDetailPage.jsx` — sessions tab (schedule, cancel, notes, billing buttons) + members tab (add/remove)
+- `GroupsPage.jsx` — group list with create modal; "Therapy Groups" in counselor + admin nav
+
+#### F4 — Relational units (couples/family)
+
+- `GET/POST /v1/relational-units` — list and create units (couple/family/other)
+- `POST/DELETE /v1/relational-units/:id/members` — add/remove unit members
+- `GET /v1/clients/:id/relational-units` — units for a given client
+- `RelationalUnitCard.jsx` — shows unit badge + label in clinical chart; returns null when no units
+- `nav.groups` i18n key added; Sidebar wired for counselor and admin roles
+- `App.jsx` — lazy-loaded `GroupsPage` and `GroupDetailPage` with `selectedGroupId` state; Groups resets on nav away
+
+#### F5 — Group billing
+
+- `apps/api/src/lib/group-billing.js` — `buildGroupClaims()`: one claim per active member; CPT code by unit type: 90853 (group), 90849 (family), 90847 (couple)
+- `POST /v1/groups/sessions/:id/billing/submit` — idempotency guard via `notes LIKE '%group_session:ID%'`; creates draft claims for all active members; returns `{ claimIds, alreadySubmitted }`
+- `requireGroupRole` enforces counselor/admin for group writes
+
+**Tests:** `groups.test.mjs` (12 tests — in-memory stubs + expandRrule coverage), `group-billing.test.mjs` (6 tests — CPT mapping + in-memory stubs). All 195 API tests pass.
+
+---
+
 ## May 28, 2026 — Phase E: Billing Reconciliation (E1–E4)
 
 ### feat: ERA reconciliation, aging report, patient statements

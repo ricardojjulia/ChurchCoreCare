@@ -540,6 +540,7 @@ export const baseMessages = Object.freeze({
   'nav.operationsStudio': 'Practice Operations',
   'nav.faithWorkflows': 'Faithful Workflows',
   'nav.analytics': 'Analytics',
+  'nav.groups': 'Therapy Groups',
   'nav.about': 'About',
   'client.tab.billing': 'Billing',
 
