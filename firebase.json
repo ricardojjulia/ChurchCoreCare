@@ -10,7 +10,7 @@
       {
         "source": "/api/**",
         "run": {
-          "serviceId": "faithcounseling-api",
+          "serviceId": "churchcore-care-api",
           "region": "us-central1"
         }
       },

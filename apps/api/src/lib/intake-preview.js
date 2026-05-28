@@ -169,12 +169,17 @@ export function buildIntakePreview({
   const intakeResponses = mergeResponses(latestForms, INTAKE_FORM_KEYS);
   const hasCompletedPacket = ['completed', 'reviewed'].includes(String(intakePacket?.status ?? '').toLowerCase());
   const hasIntakeFormSubmission = INTAKE_FORM_KEYS.some((formKey) => latestForms.has(formKey));
-  const now = Date.now();
+  const now = new Date();
+  const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const futureAppointments = appointments
     .filter((item) => !isCancelledAppointment(item))
     .filter((item) => {
+      const status = String(item?.status ?? '').toLowerCase();
+      if (status === 'checked_in' || status === 'in_progress') return true;
       const startsAt = normalizeDate(item.startsAt ?? item.scheduledAt);
-      return Boolean(startsAt && startsAt.getTime() >= now);
+      if (!startsAt) return false;
+      if (status === 'scheduled' && startsAt.getTime() >= todayMidnight) return true;
+      return startsAt.getTime() >= now.getTime();
     })
     .sort((left, right) => String(left.startsAt ?? left.scheduledAt).localeCompare(String(right.startsAt ?? right.scheduledAt)));
 

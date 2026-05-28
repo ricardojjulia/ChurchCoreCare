@@ -11,5 +11,6 @@ RUN pnpm install --frozen-lockfile --filter @churchcore/api...
 
 COPY apps/api/src/ ./apps/api/src/
 
+ENV NODE_ENV=production
 EXPOSE 3001
 CMD ["node", "apps/api/src/index.js"]

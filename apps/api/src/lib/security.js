@@ -215,6 +215,8 @@ const PUBLIC_ROUTES = new Set([
   '/docs',
   '/v1/i18n/locales',
   '/v1/i18n/catalog',
+  '/v1/platform/check-slug',
+  '/v1/platform/signup',
 ]);
 
 // Extra roles allowed for write (POST/PATCH/DELETE) operations

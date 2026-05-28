@@ -1,0 +1,17 @@
+# CODEOWNERS
+# All files require review from the project owner.
+# Add team members below as the project grows.
+
+* @ricardojjulia
+
+# Security and compliance — owner review always required
+PLANS/FULL-SECURITY-AND-AUDITING.md @ricardojjulia
+PLANS/FULL-SURFACE-MONITORING.md @ricardojjulia
+apps/api/src/middleware/ @ricardojjulia
+apps/api/src/lib/auth.js @ricardojjulia
+apps/api/src/lib/encrypt.js @ricardojjulia
+apps/api/src/db/schema.sql @ricardojjulia
+.github/workflows/ @ricardojjulia
+.claude/ @ricardojjulia
+AGENTS.md @ricardojjulia
+CLAUDE.md @ricardojjulia

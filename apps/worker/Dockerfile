@@ -11,4 +11,5 @@ RUN pnpm install --frozen-lockfile --filter @churchcore/worker...
 
 COPY apps/worker/src/ ./apps/worker/src/
 
+ENV NODE_ENV=production
 CMD ["node", "apps/worker/src/index.js"]
