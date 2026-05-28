@@ -20,10 +20,10 @@
  * On any failure: mark request as failed and preserve error message for ops review.
  */
 
-import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
+import { bootstrapTenantSchema } from '../../api/src/lib/tenant-setup.js';
 
 const { Pool } = pg;
 
@@ -107,7 +107,14 @@ async function createTrialSubscription(client, tenantId) {
 }
 
 async function provisionRequest(platformClient, request) {
-  const { id, requested_tenant_id: tenantId, requested_practice_name: practiceName } = request;
+  const {
+    id,
+    requested_tenant_id:    tenantId,
+    requested_practice_name: practiceName,
+    owner_email_enc:         ownerEmailEnc,
+    owner_email_hash:        ownerEmailHash,
+    owner_password_hash:     ownerPasswordHash,
+  } = request;
 
   console.log(`[provision-worker] Starting provisioning for tenant ${tenantId} (request ${id})`);
 
@@ -116,6 +123,17 @@ async function provisionRequest(platformClient, request) {
   const available = await isTenantIdAvailable(platformClient, tenantId);
   if (!available) {
     throw new Error(`Tenant ID ${tenantId} is already registered`);
+  }
+
+  // Bootstrap the tenant DB schema if we have owner credentials
+  if (ownerEmailEnc && ownerEmailHash && ownerPasswordHash) {
+    await bootstrapTenantSchema({
+      tenantId,
+      practiceName,
+      ownerEmailEnc,
+      ownerEmailHash,
+      ownerPasswordHash,
+    });
   }
 
   await registerTenantSlug(platformClient, tenantId, slug);
