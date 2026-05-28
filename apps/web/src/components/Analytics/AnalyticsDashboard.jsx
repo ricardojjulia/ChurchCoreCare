@@ -11,6 +11,7 @@ import StatCard from './StatCard.jsx';
 import SessionVolumeChart from './SessionVolumeChart.jsx';
 import CounselorProductivityTable from './CounselorProductivityTable.jsx';
 import OutcomeTrendChart from '../ClinicalChart/OutcomeTrendChart.jsx';
+import AgingReport from '../Billing/AgingReport.jsx';
 
 const PRESETS = [
   { label: 'Week', value: 'week' },
@@ -109,6 +110,8 @@ export default function AnalyticsDashboard() {
       <CounselorProductivityTable data={counselors.data} loading={counselors.loading} />
 
       <OutcomeTrendChart data={outcomes.data} loading={outcomes.loading} title="Aggregate PHQ-9 Outcomes" />
+
+      <AgingReport />
     </Stack>
   );
 }

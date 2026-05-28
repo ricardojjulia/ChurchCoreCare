@@ -125,6 +125,8 @@ function rowToClaim(row) {
     payerClaimNumber: row.payer_claim_number ?? null,
     rejectionReason: row.rejection_reason ?? null,
     eraReceivedAt: row.era_received_at instanceof Date ? row.era_received_at.toISOString() : (row.era_received_at ?? null),
+    paidAmount: row.paid_amount != null ? Number(row.paid_amount) : null,
+    adjustmentReason: row.adjustment_reason ?? null,
     createdAt: row.created_at,
   };
 }
@@ -527,6 +529,8 @@ export async function updateClaim(id, tenantId, fields) {
   if (fields.payerClaimNumber !== undefined) { setClauses.push('payer_claim_number = ?'); values.push(fields.payerClaimNumber); }
   if (fields.rejectionReason !== undefined) { setClauses.push('rejection_reason = ?'); values.push(fields.rejectionReason); }
   if (fields.eraReceivedAt !== undefined) { setClauses.push('era_received_at = ?'); values.push(toSqlTimestamp(fields.eraReceivedAt)); }
+  if (fields.paidAmount !== undefined) { setClauses.push('paid_amount = ?'); values.push(fields.paidAmount); }
+  if (fields.adjustmentReason !== undefined) { setClauses.push('adjustment_reason = ?'); values.push(fields.adjustmentReason); }
 
   if (setClauses.length > 0) {
     values.push(id, tenantId);

@@ -541,6 +541,7 @@ export const baseMessages = Object.freeze({
   'nav.faithWorkflows': 'Faithful Workflows',
   'nav.analytics': 'Analytics',
   'nav.about': 'About',
+  'client.tab.billing': 'Billing',
 
   // ─── Faithful Workflows ────────────────────────────────────────────────────
   'workflow.title': 'Faithful Workflows',

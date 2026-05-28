@@ -1,6 +1,6 @@
 # Phase C–F: Competitive Parity Sprint
 
-**Status:** Phase C complete (2026-05-28) — Phase D complete (2026-05-28) — Phase E–F pending  
+**Status:** Phase C complete (2026-05-28) — Phase D complete (2026-05-28) — Phase E complete (2026-05-28) — Phase F pending  
 **Prepared:** 2026-05-27  
 **Follows:** PHASE-A-B-SAAS-LAUNCH.md (completed 2026-05-27)  
 **Owners:** Product, Engineering  
@@ -481,10 +481,10 @@ are complete. D1 and E1 have no dependencies on each other or on C.
 | D3 | Outcome trends | ✅ |
 | D4 | Counselor productivity | ✅ |
 | D5 | Export CSV | ✅ |
-| E1 | ERA parsing | ☐ |
-| E2 | Payment posting UI | ☐ |
-| E3 | Aging report | ☐ |
-| E4 | Patient statements | ☐ |
+| E1 | ERA parsing | ✅ |
+| E2 | Payment posting UI | ✅ |
+| E3 | Aging report | ✅ |
+| E4 | Patient statements | ✅ |
 | F1 | Group data model | ☐ |
 | F2 | Group scheduling | ☐ |
 | F3 | Group notes | ☐ |

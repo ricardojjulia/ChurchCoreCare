@@ -2,6 +2,44 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## May 28, 2026 — Phase E: Billing Reconciliation (E1–E4)
+
+### feat: ERA reconciliation, aging report, patient statements
+
+**Date:** 2026-05-28  
+**Affected area:** `apps/api/src/lib/`, `apps/api/src/db/`, `apps/worker/src/`, `apps/web/src/components/Billing/`, `apps/web/src/components/ClientDetail/`
+
+Full billing reconciliation layer: automated ERA processing, enriched claim UI, claims aging report, and HTML patient statements.
+
+#### E1 — ERA parsing + worker reconciler
+
+- `apps/api/src/lib/era-parser.js` — `parseEra(payload)`: extracts payment lines from Stedi 835 JSON; handles multiple response shapes (claims, claimPayments, transactions wrapper); derives `eraStatus` (paid / partially_paid / denied) and adjustment reason code
+- `apps/worker/src/era-reconciler.js` — `processEraReconciliation(pool, tenantId)`: polls Stedi for pending ERAs, matches by `payer_claim_number` or claim `id`, posts paid amount + adjustment reason, acknowledges ERA only after DB write succeeds (idempotent via `era_received_at`)
+- Worker poll loop extended: `processEraReconciliation` runs alongside EDI status poller
+- DB migration: `claims.paid_amount NUMERIC(10,2) NULL`, `claims.adjustment_reason VARCHAR(256) NULL`
+- `rowToClaim` and `updateClaim` in `billing.js` extended with `paidAmount` and `adjustmentReason` fields
+
+#### E2 — Payment posting UI
+
+- `EraReconciliationBadge.jsx` — color-coded badge (teal=Paid, yellow=Partially Paid, red=Denied) with tooltip showing ERA date and adjustment code
+- `ClaimCard.jsx` — shows paid amount, adjustment reason, ERA received date alongside existing status badge
+- `ClaimsList.jsx` — status filter dropdown (all / draft / submitted / accepted / paid / partially_paid / denied / rejected)
+
+#### E3 — Aging report UI
+
+- `AgingReport.jsx` — six-bucket aging display (Current, 1–30, 31–60, 61–90, 90+, Total); fetches `/v1/billing/reports/aging`; added to `AnalyticsDashboard` billing section
+
+#### E4 — Patient statements
+
+- `apps/api/src/lib/statement-generator.js` — `generateStatement()`: produces print-ready HTML with embedded CSS; practice header, claims table, balance table with totals; PHI decrypted only for this response, never logged
+- `GET /v1/clients/:id/statement` — streams HTML with `Content-Disposition: inline`; billing role required; audit event `billing.statement.generated` fires even on empty statements; in-memory mode returns empty statement
+- `BillingTab.jsx` added to `ClientDetailTabs` — shows ClaimsList + "Generate Statement" button (opens in new tab)
+- `client.tab.billing` i18n key added
+
+**Tests:** `era-parser.test.mjs` (6 tests), `statement-generator.test.mjs` (9 tests). All 177 API tests pass.
+
+---
+
 ## May 28, 2026 — Phase D: Analytics & Reporting (D1–D5)
 
 ### feat: Practice analytics dashboard
@@ -61,33 +99,39 @@ Tests: `apps/api/test/analytics.test.mjs` — 14 tests covering in-memory empty 
 
 New `apps/mobile` Progressive Web App for counselors. Bottom-tab navigation (Schedule, Clients, Notes, Profile), installable via Add to Home Screen, service worker with offline app shell.
 
-**C1 — PWA scaffold** (`apps/mobile/`)
+#### C1 — PWA scaffold (`apps/mobile/`)
+
 - Vite 8 + React 19 + Mantine v9 project with `vite-plugin-pwa` (service worker + web manifest)
 - Bottom-tab shell: Schedule / Clients / Notes / Profile
 - `apps/mobile/public/icons/` for 192 and 512px app icons (placeholders)
 - Firebase Hosting target `mobile` added to `firebase.json` and `.firebaserc`
 - Build + deploy steps added to `deploy.yml` (staging + production)
 
-**C2 — Mobile auth**
+#### C2 — Mobile auth
+
 - `src/lib/api.js` — shared API client (same `credentials: include` pattern as platform app)
 - `src/lib/useAuth.js` — auth hook; loads session on mount, exposes login/logout
 - `src/pages/LoginPage.jsx` — mobile-optimized sign-in form, inline error, no alert dialogs
 
-**C3 — Today's schedule**
+#### C3 — Today's schedule
+
 - `GET /v1/appointments?date=YYYY-MM-DD` — added `date` query param to `handleAppointmentsCollection`; propagated to `listAppointments` DB query
 - `src/pages/ScheduleTab.jsx` — time-ordered appointment list, status badges, past appointments greyed, pull-to-refresh
 
-**C4 — Client quick search**
+#### C4 — Client quick search
+
 - `src/pages/ClientsTab.jsx` — debounced 300ms search, result list
 - Deep link to full web chart via `<a target="_blank">`
 - PHI excluded from service worker cache via `NetworkOnly` workbox rule on `/api/`
 
-**C5 — Quick note entry**
+#### C5 — Quick note entry
+
 - `src/pages/NotesTab.jsx` — client picker, format selector (SOAP/DAP/BIRP/Faith Integrated), textarea with 5000 char limit
 - Auto-saves draft to `localStorage` every 10 seconds; clears on successful submit
 - Submits to existing `POST /v1/clients/:id/progress-notes`
 
-**C6 — Push notifications**
+#### C6 — Push notifications
+
 - DB migration: `push_subscriptions` table + index on `(tenant_id, staff_account_id)`
 - `POST /v1/notifications/subscribe` — stores Web Push subscription (upsert on `endpoint`)
 - `POST /v1/notifications/unsubscribe` — removes subscription
@@ -98,7 +142,7 @@ New `apps/mobile` Progressive Web App for counselors. Bottom-tab navigation (Sch
 - Environment variables required: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`
 - `web-push@^3.6.7` added to `apps/worker/package.json`
 
-**Tests:** 148/148 passing (no regressions)
+Tests: 148/148 passing (no regressions)
 
 ---
 

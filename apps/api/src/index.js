@@ -55,6 +55,7 @@ import {
   buildRevenueCsv,
   parseDateRange,
 } from './lib/analytics.js';
+import { generateStatement } from './lib/statement-generator.js';
 import pool, { verifyConnection, runWithTenantContext, closeAllPools } from './db/pool.js';
 import { getKnownTenantSlugs } from './db/pools.js';
 import {
@@ -1599,6 +1600,11 @@ export async function handleApiRequest(request, response) {
       const eligibilitySettings = await ensurePortalSettings(callerTenant(request, session));
       if (requireInsuranceBillingEnabled(response, eligibilitySettings)) return;
       await handleVerifyEligibility(request, response, requestUrl, session);
+      return;
+    }
+
+    if (requestUrl.pathname.startsWith('/v1/clients/') && requestUrl.pathname.endsWith('/statement')) {
+      await handleClientStatement(request, response, requestUrl, session);
       return;
     }
 
@@ -8530,6 +8536,111 @@ async function handleAgingReport(request, response, requestUrl, session) {
   emitAudit(request, 'billing.report.aging.read', 'billing_report', 'aging');
   writeJson(response, 200, { asOf, report });
 }
+
+async function handleClientStatement(request, response, requestUrl, session) {
+  if (request.method !== 'GET') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+
+  const pathParts = requestUrl.pathname.split('/');
+  const clientId = pathParts[3] ?? null;
+  if (!clientId) { writeJson(response, 400, { error: 'Missing client ID' }); return; }
+
+  const tenantId = callerTenant(request, session);
+  const role = callerRole(request, session);
+  if (!['practice_owner', 'practice_admin', 'scheduler_biller', 'platform_admin'].includes(role)) {
+    writeJson(response, 403, { error: 'Billing role required' });
+    return;
+  }
+
+  emitAudit(request, 'billing.statement.generated', 'client', clientId, session);
+
+  if (!process.env.DB_NAME) {
+    // In-memory mode: return empty statement HTML
+    const html = generateStatement({
+      practice: { name: 'Demo Practice' },
+      client: { firstName: 'Demo', lastName: 'Client' },
+      claims: [],
+      invoices: [],
+      generatedAt: new Date().toISOString(),
+    });
+    response.writeHead(200, {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Content-Disposition': `inline; filename="statement-${clientId}.html"`,
+      'Cache-Control': 'no-store',
+    });
+    response.end(html);
+    return;
+  }
+
+  try {
+    const [[clientRow]] = await pool.query(
+      'SELECT first_name_enc, last_name_enc FROM clients WHERE id = ? AND tenant_id = ? LIMIT 1',
+      [clientId, tenantId],
+    );
+    if (!clientRow) { writeJson(response, 404, { error: 'Client not found' }); return; }
+
+    const { decrypt: dec } = await import('./lib/encrypt.js');
+    const client = {
+      firstName: dec(clientRow.first_name_enc),
+      lastName: dec(clientRow.last_name_enc),
+    };
+
+    const [[practiceRow]] = await pool.query(
+      'SELECT name, address_line1, city, state, postal_code, phone FROM practices WHERE tenant_id = ? LIMIT 1',
+      [tenantId],
+    );
+    const practice = practiceRow ?? {};
+
+    const [claimRows] = await pool.query(
+      `SELECT id, status, paid_amount, adjustment_reason, submitted_at AS service_date
+       FROM claims WHERE tenant_id = ? AND client_id = ? ORDER BY submitted_at DESC LIMIT 50`,
+      [tenantId, clientId],
+    );
+    const claims = claimRows.map((r) => ({
+      id: r.id,
+      status: r.status,
+      paidAmount: r.paid_amount != null ? Number(r.paid_amount) : null,
+      adjustmentReason: r.adjustment_reason ?? null,
+      serviceDate: r.service_date,
+    }));
+
+    const [invRows] = await pool.query(
+      'SELECT amount, balance, status, due_at, created_at FROM invoices WHERE tenant_id = ? AND client_id = ? ORDER BY due_at DESC LIMIT 50',
+      [tenantId, clientId],
+    );
+    const invoices = invRows.map((r) => ({
+      amount: Number(r.amount ?? 0),
+      balance: Number(r.balance ?? 0),
+      status: r.status,
+      dueAt: r.due_at,
+    }));
+
+    const html = generateStatement({
+      practice: {
+        name: practice.name ?? '',
+        addressLine1: practice.address_line1 ?? '',
+        city: practice.city ?? '',
+        state: practice.state ?? '',
+        postalCode: practice.postal_code ?? '',
+        phone: practice.phone ?? '',
+      },
+      client,
+      claims,
+      invoices,
+      generatedAt: new Date().toISOString(),
+    });
+
+    response.writeHead(200, {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Content-Disposition': `inline; filename="statement-${clientId}.html"`,
+      'Cache-Control': 'no-store',
+    });
+    response.end(html);
+  } catch (err) {
+    console.error('[statement] Error generating statement:', err.message);
+    writeJson(response, 500, { error: 'Failed to generate statement' });
+  }
+}
+
 
 async function handlePortalPublicConfig(request, response, requestUrl, session) {
   if (request.method !== 'GET') {
@@ -16652,6 +16763,7 @@ function resolveRoute(pathname) {
   if (pathname.startsWith('/v1/clients/') && pathname.endsWith('/intake-preview')) return '/v1/clients/:id/intake-preview';
   if (pathname.startsWith('/v1/clients/') && pathname.endsWith('/treatment-plan')) return '/v1/clients/:id/treatment-plan';
   if (pathname.startsWith('/v1/clients/') && pathname.endsWith('/verify-eligibility')) return '/v1/clients/:id/insurance/:insuranceId/verify-eligibility';
+  if (pathname.startsWith('/v1/clients/') && pathname.endsWith('/statement')) return '/v1/clients/:id/statement';
   if (pathname.startsWith('/v1/clients/') && pathname.endsWith('/progress-notes/draft')) return '/v1/clients/:id/progress-notes/draft';
   if (pathname.startsWith('/v1/clients/') && pathname.endsWith('/progress-notes')) return '/v1/clients/:id/progress-notes';
   if (pathname.startsWith('/v1/document-templates/')) return '/v1/document-templates/:id';

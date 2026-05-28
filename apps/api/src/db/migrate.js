@@ -416,6 +416,10 @@ async function applyColumnMigrations(conn) {
   await addColumnIfMissing('claims', 'payer_claim_number', 'VARCHAR(64) NULL');
   await addColumnIfMissing('claims', 'rejection_reason', 'TEXT NULL');
   await addColumnIfMissing('claims', 'era_received_at', 'TIMESTAMPTZ NULL');
+
+  // ── Phase E1: ERA reconciliation ─────────────────────────────────────────
+  await addColumnIfMissing('claims', 'paid_amount', 'NUMERIC(10,2) NULL');
+  await addColumnIfMissing('claims', 'adjustment_reason', 'VARCHAR(256) NULL');
   await addColumnIfMissing('practices', 'npi', 'VARCHAR(10) NULL');
 
   // ── Phase B3: Insurance eligibility ──────────────────────────────────────
