@@ -29,8 +29,17 @@ export default defineConfig({
           ) {
             return 'vendor-react';
           }
-          if (normalizedId.includes('/@mantine/')) {
-            return 'vendor-mantine';
+          // @mantine/charts bundles recharts which uses CJS factory modules
+          // that Rolldown's var-hoisting interop cannot handle in a manual chunk.
+          // Leave it un-chunked so Rolldown code-splits it with the lazy
+          // components (AnalyticsDashboard, ClinicalChartPage) that import it.
+          if (normalizedId.includes('/@mantine/charts/')) {
+            return undefined;
+          }
+          // Split each other Mantine package into its own chunk.
+          const mantineMatch = normalizedId.match(/\/@mantine\/([^/]+)\//);
+          if (mantineMatch) {
+            return `vendor-mantine-${mantineMatch[1]}`;
           }
         },
       },

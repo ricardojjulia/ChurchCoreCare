@@ -1,5 +1,5 @@
 import { Paper, Text, Skeleton, Stack } from '@mantine/core';
-import { LineChart, ReferenceLine } from '@mantine/charts';
+import { LineChart } from '@mantine/charts';
 
 // PHQ-9 severity thresholds: 0-4 minimal, 5-9 mild, 10-14 moderate, 15-19 mod-severe, 20+ severe
 const PHQ9_BANDS = [

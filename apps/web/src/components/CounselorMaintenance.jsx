@@ -10,6 +10,7 @@ import {
   fetchStaff, createStaffUser, updateStaffUser, runStaffAccountAction,
 } from '../lib/clientApi.js';
 import { useState } from 'react';
+import { useI18n } from '../lib/i18nContext.jsx';
 
 const COUNSELOR_ROLE_OPTIONS = [
   { value: 'counselor', label: 'Counselor' },
@@ -44,6 +45,7 @@ const ROLE_COLORS = {
 const COUNSELOR_ROLES = new Set(['counselor', 'intern']);
 
 export default function CounselorMaintenance({ userRole, onViewCounselor }) {
+  const { t } = useI18n();
   const [items,   setItems]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null);
@@ -61,9 +63,9 @@ export default function CounselorMaintenance({ userRole, onViewCounselor }) {
       licenseType: 'pastoral_counselor', supervisionStatus: 'not_required', initialPassword: '',
     },
     validate: {
-      firstName: (v) => v.trim() ? null : 'First name is required',
-      lastName:  (v) => v.trim() ? null : 'Last name is required',
-      email:     (v, vals) => (!editing && !v.trim()) ? 'Email is required' : null,
+      firstName: (v) => v.trim() ? null : t('counselor.form.firstNameRequired'),
+      lastName:  (v) => v.trim() ? null : t('counselor.form.lastNameRequired'),
+      email:     (v, vals) => (!editing && !v.trim()) ? t('counselor.form.emailRequired') : null,
     },
   });
 
@@ -74,7 +76,7 @@ export default function CounselorMaintenance({ userRole, onViewCounselor }) {
       const all = Array.isArray(payload?.items) ? payload.items : [];
       setItems(all.filter((s) => COUNSELOR_ROLES.has(s.role)));
     } catch (err) {
-      notifications.show({ title: 'Error', message: err.message || 'Unable to load counselors', color: 'red' });
+      notifications.show({ title: t('state.error'), message: err.message || t('counselors.unableToLoad'), color: 'red' });
     } finally {
       setLoading(false);
     }
@@ -109,7 +111,7 @@ export default function CounselorMaintenance({ userRole, onViewCounselor }) {
           role: values.role, licenseType: values.licenseType,
           supervisionStatus: values.supervisionStatus,
         });
-        notifications.show({ title: 'Saved', message: 'Counselor updated.', color: 'green' });
+        notifications.show({ title: t('counselors.saved'), message: t('counselors.updatedMessage'), color: 'green' });
         close();
       } else {
         const result = await createStaffUser({
@@ -120,10 +122,10 @@ export default function CounselorMaintenance({ userRole, onViewCounselor }) {
         });
         const tempPassword = result?.accountProvisioning?.temporaryPassword;
         notifications.show({
-          title: 'Counselor created',
+          title: t('counselors.createdTitle'),
           message: tempPassword
-            ? `Temporary password for ${result.accountProvisioning.email}: ${tempPassword}`
-            : 'Counselor created successfully.',
+            ? t('counselor.tempPasswordNotice', { email: result.accountProvisioning.email, password: tempPassword })
+            : t('counselor.createdSuccess'),
           color: 'green',
           autoClose: tempPassword ? false : 4000,
         });
@@ -131,35 +133,35 @@ export default function CounselorMaintenance({ userRole, onViewCounselor }) {
       }
       await loadStaff();
     } catch (err) {
-      notifications.show({ title: 'Error', message: err.message || 'Unable to save counselor', color: 'red' });
+      notifications.show({ title: t('state.error'), message: err.message || t('counselor.unableToSave'), color: 'red' });
     } finally {
       setSaving(false);
     }
   };
 
   const runAction = async (staffId, actionLabel, action) => {
-    if (!window.confirm(`${actionLabel} for this counselor?`)) return;
+    if (!window.confirm(t('counselor.confirmAction', { action: actionLabel }))) return;
     try {
       const result = await runStaffAccountAction(staffId, action);
       await loadStaff();
       notifications.show({
         title: actionLabel,
         message: result?.generatedTemporaryPassword
-          ? `Generated temporary password: ${result.generatedTemporaryPassword}`
-          : `${actionLabel} completed.`,
+          ? t('counselor.generatedTempPassword', { password: result.generatedTemporaryPassword })
+          : t('counselor.actionCompleted', { action: actionLabel }),
         color: 'green',
         autoClose: result?.generatedTemporaryPassword ? false : 4000,
       });
     } catch (err) {
-      notifications.show({ title: 'Error', message: err.message || `${actionLabel} failed`, color: 'red' });
+      notifications.show({ title: t('state.error'), message: err.message || t('counselor.actionFailed', { action: actionLabel }), color: 'red' });
     }
   };
 
   if (!canManageUsers) {
     return (
       <Paper p="md" radius="lg" withBorder>
-        <Title order={2} fz="lg" mb="xs">Counselor Maintenance</Title>
-        <Text c="dimmed">Admin access is required.</Text>
+        <Title order={2} fz="lg" mb="xs">{t('counselors.title')}</Title>
+        <Text c="dimmed">{t('counselors.adminRequired')}</Text>
       </Paper>
     );
   }
@@ -167,25 +169,25 @@ export default function CounselorMaintenance({ userRole, onViewCounselor }) {
   return (
     <Paper p="md" radius="lg" withBorder component="section" aria-labelledby="cmTitle">
       <Group justify="space-between" mb="md">
-        <Title order={2} fz="lg" id="cmTitle">Counselor Maintenance</Title>
-        <Button onClick={openCreate}>New Counselor</Button>
+        <Title order={2} fz="lg" id="cmTitle">{t('counselors.title')}</Title>
+        <Button onClick={openCreate}>{t('counselors.newCounselor')}</Button>
       </Group>
 
       {loading ? (
         <Group justify="center" py="xl"><Loader size="sm" /></Group>
       ) : items.length === 0 ? (
-        <Text c="dimmed">No counselors found.</Text>
+        <Text c="dimmed">{t('counselors.noneFound')}</Text>
       ) : (
         <Table striped highlightOnHover withTableBorder withColumnBorders>
           <Table.Thead>
             <Table.Tr>
-              <Table.Th>Name</Table.Th>
-              <Table.Th>Role</Table.Th>
-              <Table.Th>License Type</Table.Th>
-              <Table.Th>Email</Table.Th>
-              <Table.Th>Status</Table.Th>
-              <Table.Th>Last Login</Table.Th>
-              <Table.Th>Actions</Table.Th>
+              <Table.Th>{t('table.name')}</Table.Th>
+              <Table.Th>{t('table.role')}</Table.Th>
+              <Table.Th>{t('table.licenseType')}</Table.Th>
+              <Table.Th>{t('table.email')}</Table.Th>
+              <Table.Th>{t('table.status')}</Table.Th>
+              <Table.Th>{t('table.lastLogin')}</Table.Th>
+              <Table.Th>{t('table.actions')}</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
@@ -201,7 +203,7 @@ export default function CounselorMaintenance({ userRole, onViewCounselor }) {
                 <Table.Td>{item.email || '—'}</Table.Td>
                 <Table.Td>
                   <Badge color={item.accountLocked ? 'red' : 'green'} variant="light" size="sm">
-                    {item.accountLocked ? 'Locked' : 'Active'}
+                    {item.accountLocked ? t('status.locked') : t('status.active')}
                   </Badge>
                 </Table.Td>
                 <Table.Td fz="xs">
@@ -211,23 +213,23 @@ export default function CounselorMaintenance({ userRole, onViewCounselor }) {
                   <Group gap="xs" wrap="nowrap">
                     {onViewCounselor && (
                       <Button size="xs" variant="filled" onClick={() => onViewCounselor(item.id)}>
-                        View Profile
+                        {t('actions.viewProfile')}
                       </Button>
                     )}
                     <Button size="xs" variant="default" onClick={() => openEdit(item)}>
-                      Edit
+                      {t('actions.edit')}
                     </Button>
                     <Button size="xs" variant="default"
                       onClick={() => runAction(item.id, 'Reset password', 'reset_password')}>
-                      Reset Password
+                      {t('actions.resetPassword')}
                     </Button>
                     <Button size="xs" variant="default"
                       onClick={() => runAction(item.id, 'Unlock account', 'unlock')}>
-                      Unlock
+                      {t('actions.unlock')}
                     </Button>
                     <Button size="xs" color="red" variant="light"
                       onClick={() => runAction(item.id, 'Deactivate account', 'deactivate')}>
-                      Deactivate
+                      {t('actions.deactivate')}
                     </Button>
                   </Group>
                 </Table.Td>
@@ -237,32 +239,32 @@ export default function CounselorMaintenance({ userRole, onViewCounselor }) {
         </Table>
       )}
 
-      <Modal opened={opened} onClose={() => { if (!saving) close(); }} title={editing ? 'Edit Counselor' : 'Add Counselor'}>
+      <Modal opened={opened} onClose={() => { if (!saving) close(); }} title={editing ? t('counselors.editTitle') : t('counselors.addTitle')}>
         <form onSubmit={form.onSubmit(handleSave)}>
           <Stack gap="sm">
-            <TextInput label="First name" required {...form.getInputProps('firstName')} />
-            <TextInput label="Last name"  required {...form.getInputProps('lastName')} />
+            <TextInput label={t('counselors.form.firstName')} required {...form.getInputProps('firstName')} />
+            <TextInput label={t('counselors.form.lastName')}  required {...form.getInputProps('lastName')} />
             <TextInput
-              label="Email" type="email"
+              label={t('auth.email')} type="email"
               required={!editing} disabled={Boolean(editing)}
               {...form.getInputProps('email')}
             />
-            <Select label="Role"              data={COUNSELOR_ROLE_OPTIONS} {...form.getInputProps('role')} />
-            <Select label="License type"      data={LICENSE_OPTIONS}        {...form.getInputProps('licenseType')} />
-            <Select label="Supervision status" data={SUPERVISION_OPTIONS}   {...form.getInputProps('supervisionStatus')} />
+            <Select label={t('auth.roleLabel')}                   data={COUNSELOR_ROLE_OPTIONS} {...form.getInputProps('role')} />
+            <Select label={t('counselors.form.licenseType')}      data={LICENSE_OPTIONS}        {...form.getInputProps('licenseType')} />
+            <Select label={t('counselors.form.supervisionStatus')} data={SUPERVISION_OPTIONS}   {...form.getInputProps('supervisionStatus')} />
 
             {!editing && (
               <PasswordInput
-                label="Initial password (optional)"
-                placeholder="Auto-generated if left blank"
+                label={t('counselors.form.initialPassword')}
+                placeholder={t('counselor.form.passwordPlaceholder')}
                 minLength={14}
                 {...form.getInputProps('initialPassword')}
               />
             )}
 
             <Group justify="flex-end" mt="xs">
-              <Button variant="default" onClick={close} disabled={saving}>Cancel</Button>
-              <Button type="submit" loading={saving}>Save</Button>
+              <Button variant="default" onClick={close} disabled={saving}>{t('actions.cancel')}</Button>
+              <Button type="submit" loading={saving}>{t('actions.save')}</Button>
             </Group>
           </Stack>
         </form>

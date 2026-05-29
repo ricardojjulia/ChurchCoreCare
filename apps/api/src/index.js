@@ -10262,7 +10262,7 @@ async function fulfillPortalDeletionRequest(client, requestItem) {
         failedAttempts: 0,
         lockedUntil: null,
       });
-      await pool.query('UPDATE portal_sessions SET revoked = 1 WHERE portal_account_id = ?', [account.id]);
+      await pool.query('UPDATE portal_sessions SET revoked = TRUE WHERE portal_account_id = ?', [account.id]);
       await pool.query('DELETE FROM portal_password_resets WHERE portal_account_id = ?', [account.id]);
     }
 

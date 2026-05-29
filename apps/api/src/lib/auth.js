@@ -346,18 +346,18 @@ export async function logout(request, response, session = null) {
   const rawStaffToken = cookies[STAFF_SESSION_COOKIE];
   if (rawStaffToken) {
     const tokenHash = hashToken(rawStaffToken);
-    await pool.query('UPDATE sessions SET revoked = 1 WHERE id = ?', [tokenHash]);
+    await pool.query('UPDATE sessions SET revoked = TRUE WHERE id = ?', [tokenHash]);
   }
   const rawPortalToken = cookies[PORTAL_SESSION_COOKIE];
   if (rawPortalToken) {
     const tokenHash = hashToken(rawPortalToken);
-    await pool.query('UPDATE portal_sessions SET revoked = 1 WHERE id = ?', [tokenHash]);
+    await pool.query('UPDATE portal_sessions SET revoked = TRUE WHERE id = ?', [tokenHash]);
   }
   if (session?.actor_type === 'staff' && session?.staff_account_id) {
-    await pool.query('UPDATE sessions SET revoked = 1 WHERE staff_account_id = ?', [session.staff_account_id]);
+    await pool.query('UPDATE sessions SET revoked = TRUE WHERE staff_account_id = ?', [session.staff_account_id]);
   }
   if (session?.actor_type === 'client' && session?.portal_account_id) {
-    await pool.query('UPDATE portal_sessions SET revoked = 1 WHERE portal_account_id = ?', [session.portal_account_id]);
+    await pool.query('UPDATE portal_sessions SET revoked = TRUE WHERE portal_account_id = ?', [session.portal_account_id]);
   }
   setAuthCookies(response, [
     clearSessionCookie(STAFF_SESSION_COOKIE),
@@ -381,7 +381,7 @@ export async function resolveSession(request) {
     const [rows] = await pool.query(
       `SELECT id, staff_account_id, tenant_id, role, last_active_at, expires_at
        FROM sessions
-       WHERE id = ? AND revoked = 0 AND expires_at > NOW()`,
+       WHERE id = ? AND revoked = FALSE AND expires_at > NOW()`,
       [tokenHash],
     );
 
@@ -392,7 +392,7 @@ export async function resolveSession(request) {
         : IDLE_TIMEOUT_MS.default;
       const lastActive = new Date(session.last_active_at).getTime();
       if (Date.now() - lastActive > idleLimit) {
-        await pool.query('UPDATE sessions SET revoked = 1 WHERE id = ?', [tokenHash]);
+        await pool.query('UPDATE sessions SET revoked = TRUE WHERE id = ?', [tokenHash]);
         return null;
       }
       await pool.query('UPDATE sessions SET last_active_at = NOW() WHERE id = ?', [tokenHash]);
@@ -411,7 +411,7 @@ export async function resolveSession(request) {
   const [portalRows] = await pool.query(
     `SELECT id, portal_account_id, client_id, tenant_id, role, last_active_at, expires_at
      FROM portal_sessions
-     WHERE id = ? AND revoked = 0 AND expires_at > NOW()`,
+     WHERE id = ? AND revoked = FALSE AND expires_at > NOW()`,
     [tokenHash],
   );
   const portalSession = portalRows[0];
@@ -419,7 +419,7 @@ export async function resolveSession(request) {
 
   const lastActive = new Date(portalSession.last_active_at).getTime();
   if (Date.now() - lastActive > IDLE_TIMEOUT_MS.default) {
-    await pool.query('UPDATE portal_sessions SET revoked = 1 WHERE id = ?', [tokenHash]);
+    await pool.query('UPDATE portal_sessions SET revoked = TRUE WHERE id = ?', [tokenHash]);
     return null;
   }
 
@@ -468,7 +468,7 @@ export async function changePassword(staffAccountId, currentPassword, newPasswor
 
   // Revoke all active sessions (session fixation / compromise mitigation)
   await pool.query(
-    'UPDATE sessions SET revoked = 1 WHERE staff_account_id = ?',
+    'UPDATE sessions SET revoked = TRUE WHERE staff_account_id = ?',
     [staffAccountId],
   );
 }
@@ -502,7 +502,7 @@ export async function changePortalPassword(portalAccountId, currentPassword, new
     [newHash, 'active', portalAccountId],
   );
   await pool.query(
-    'UPDATE portal_sessions SET revoked = 1 WHERE portal_account_id = ?',
+    'UPDATE portal_sessions SET revoked = TRUE WHERE portal_account_id = ?',
     [portalAccountId],
   );
 }
@@ -600,7 +600,7 @@ export async function completePortalPasswordReset(email, token, newPassword) {
     [resetRow.id],
   );
   await pool.query(
-    'UPDATE portal_sessions SET revoked = 1 WHERE portal_account_id = ?',
+    'UPDATE portal_sessions SET revoked = TRUE WHERE portal_account_id = ?',
     [resetRow.portal_account_id],
   );
 
@@ -669,7 +669,7 @@ export async function adminResetStaffPassword({ tenantId, staffMemberId, newPass
     'UPDATE staff_accounts SET password_hash = ?, failed_attempts = 0, locked_until = NULL WHERE id = ?',
     [hash, account.id],
   );
-  await pool.query('UPDATE sessions SET revoked = 1 WHERE staff_account_id = ?', [account.id]);
+  await pool.query('UPDATE sessions SET revoked = TRUE WHERE staff_account_id = ?', [account.id]);
 }
 
 export async function adminUnlockStaffAccount({ tenantId, staffMemberId }) {
@@ -700,5 +700,5 @@ export async function adminDeactivateStaffAccount({ tenantId, staffMemberId }) {
     'UPDATE staff_accounts SET failed_attempts = 0, locked_until = ? WHERE id = ?',
     [DEACTIVATED_LOCK_DATE, account.id],
   );
-  await pool.query('UPDATE sessions SET revoked = 1 WHERE staff_account_id = ?', [account.id]);
+  await pool.query('UPDATE sessions SET revoked = TRUE WHERE staff_account_id = ?', [account.id]);
 }

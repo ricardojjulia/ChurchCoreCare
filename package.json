@@ -42,6 +42,7 @@
     "demo:sql:generate": "node --env-file=.env ops/demo-dataset/generate-sql.mjs",
     "demo:sql:apply": "node --env-file=.env ops/demo-dataset/apply-sql.mjs",
     "demo:sql:refresh": "pnpm demo:sql:generate && pnpm demo:sql:apply",
+    "test:smoke": "node ops/smoke-auth.mjs",
     "agent:translation:build": "docker compose --profile agent build translation-guardian",
     "agent:translation:run": "docker compose --profile agent up translation-guardian",
     "agent:translation:run:detached": "docker compose --profile agent up -d translation-guardian",
