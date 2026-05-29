@@ -1,6 +1,6 @@
 # 04 — Scheduling
 
-**Faith Counseling User Manual**
+**ChurchCore Care User Manual**
 
 ---
 

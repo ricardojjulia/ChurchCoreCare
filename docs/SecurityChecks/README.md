@@ -1,6 +1,6 @@
 # Security Checks
 
-This directory contains nightly automated security reports for the Faith Counseling platform.
+This directory contains nightly automated security reports for the ChurchCore Care platform.
 
 ## Report Structure
 

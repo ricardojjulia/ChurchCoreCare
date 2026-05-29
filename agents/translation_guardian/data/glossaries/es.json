@@ -32,9 +32,9 @@
       "rejected": ["Clinical Chart"]
     },
     {
-      "source": "Faith Counseling",
+      "source": "ChurchCore Care",
       "accepted": ["Consejeria de Fe", "Consejeria Cristiana"],
-      "rejected": ["Faith Counseling"]
+      "rejected": ["ChurchCore Care"]
     }
   ]
 }

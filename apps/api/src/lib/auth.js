@@ -1,5 +1,5 @@
 /**
- * Session-based authentication for Faith Counseling API.
+ * Session-based authentication for ChurchCore Care API.
  *
  * Implements:
  *  - login(email, password)  → set HttpOnly session cookie, return staff profile

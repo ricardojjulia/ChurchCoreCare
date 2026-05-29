@@ -1,6 +1,6 @@
 # 02 — Dashboard and Home
 
-**Faith Counseling User Manual**
+**ChurchCore Care User Manual**
 
 ---
 

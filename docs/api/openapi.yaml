@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info:
-  title: Faith Counseling API
+  title: ChurchCore Care API
   version: 2.0.0
   summary: >
     Full-surface API for faith-based counseling practice management — client lifecycle,
@@ -8,7 +8,7 @@ info:
     All protected endpoints require an active HttpOnly session cookie obtained via
     POST /v1/auth/login. No Bearer tokens are used.
   contact:
-    name: Faith Counseling Engineering
+    name: ChurchCore Care Engineering
 servers:
   - url: http://localhost:3001
     description: Local development

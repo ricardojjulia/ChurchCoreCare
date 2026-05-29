@@ -1,6 +1,6 @@
 # 07 — Workspace Studio
 
-**Faith Counseling User Manual**
+**ChurchCore Care User Manual**
 
 ---
 

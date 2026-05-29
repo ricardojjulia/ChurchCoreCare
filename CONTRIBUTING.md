@@ -1,8 +1,8 @@
-# Contributing to Faith Counseling
+# Contributing to ChurchCore Care
 
 > *"Whatever you do, work at it with all your heart, as working for the Lord."* — Colossians 3:23
 
-Thank you for your interest in contributing. Faith Counseling is a practice management platform built specifically for Christian counseling organizations — and every line of code, every workflow, and every design decision should reflect that focus. We want this platform to feel like it was made for the people using it on a Monday morning in a real ministry, not adapted from a generic SaaS template.
+Thank you for your interest in contributing. ChurchCore Care is a practice management platform built specifically for Christian counseling organizations — and every line of code, every workflow, and every design decision should reflect that focus. We want this platform to feel like it was made for the people using it on a Monday morning in a real ministry, not adapted from a generic SaaS template.
 
 This document covers everything you need to contribute effectively — from your first local setup to the expectations behind every pull request.
 
@@ -31,7 +31,7 @@ This document covers everything you need to contribute effectively — from your
 
 ## The Mission
 
-Faith Counseling exists to give Christian counseling practices the operational foundation they deserve — one built on their values, not adapted from someone else's. Contributing here means you're helping ministries serve clients better, helping counselors focus on care instead of paperwork, and building something that carries the weight of real responsibility.
+ChurchCore Care exists to give Christian counseling practices the operational foundation they deserve — one built on their values, not adapted from someone else's. Contributing here means you're helping ministries serve clients better, helping counselors focus on care instead of paperwork, and building something that carries the weight of real responsibility.
 
 That context matters. This platform handles Protected Health Information (PHI), manages clinical records, and supports workflows that affect real people in vulnerable moments. We hold ourselves to a high standard — not because we have to, but because the people this platform serves deserve it.
 
@@ -39,7 +39,7 @@ That context matters. This platform handles Protected Health Information (PHI), 
 
 ## Who This Project Is For
 
-Faith Counseling is designed for:
+ChurchCore Care is designed for:
 
 - Christian counseling practices (solo, group, and multi-location)
 - Counselors, schedulers, billers, and practice administrators

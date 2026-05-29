@@ -1,12 +1,12 @@
 # 12 — Security and Compliance
 
-**Faith Counseling User Manual**
+**ChurchCore Care User Manual**
 
 ---
 
 ## Overview
 
-Faith Counseling is built with security and privacy as foundational requirements, not add-ons. This section describes the security model, how access controls work, how audit trails are maintained, and how clients can exercise their data rights.
+ChurchCore Care is built with security and privacy as foundational requirements, not add-ons. This section describes the security model, how access controls work, how audit trails are maintained, and how clients can exercise their data rights.
 
 > **For administrators:** The canonical security and auditing implementation spec is located at `PLANS/FULL-SECURITY-AND-AUDITING.md`.
 
@@ -14,7 +14,7 @@ Faith Counseling is built with security and privacy as foundational requirements
 
 ## 12.1 Role-Based Access Control (RBAC)
 
-Every action in Faith Counseling is governed by the user's role. Access controls are deny-by-default, meaning access must be explicitly granted — not just not denied.
+Every action in ChurchCore Care is governed by the user's role. Access controls are deny-by-default, meaning access must be explicitly granted — not just not denied.
 
 ### Role Hierarchy Summary
 
@@ -59,7 +59,7 @@ Encryption is transparent to users — data appears and is edited normally. Admi
 
 ## 12.4 Audit Trail
 
-Faith Counseling maintains a structured **audit ledger** for security-relevant events. Audit records capture:
+ChurchCore Care maintains a structured **audit ledger** for security-relevant events. Audit records capture:
 
 | Field | Description |
 |---|---|
@@ -78,7 +78,7 @@ Audit data is separate from telemetry. Raw audit rows are never exported through
 
 ## 12.5 PHI and Privacy Safeguards
 
-Faith Counseling follows HIPAA-oriented safeguards and GDPR-aligned privacy principles:
+ChurchCore Care follows HIPAA-oriented safeguards and GDPR-aligned privacy principles:
 
 - **Minimum necessary access** — users only see the data their role requires
 - **No PHI in logs or telemetry** — application logging never contains client-identifiable information
@@ -116,7 +116,7 @@ Staff receive data rights requests through the practice administration interface
 
 ## 12.8 Production Security Checklist (Administrators)
 
-When deploying Faith Counseling in a production environment:
+When deploying ChurchCore Care in a production environment:
 
 - [ ] Use HTTPS (TLS termination required)
 - [ ] Set `DB_SSL=true` for encrypted database transport

@@ -1,7 +1,7 @@
 /**
  * db-security-scan.mjs
  *
- * Comprehensive Database Security scan for Faith Counseling.
+ * Comprehensive Database Security scan for ChurchCore Care.
  * Covers:
  *   1. PHI/PII field compliance audit (schema analysis)
  *   2. Encryption coverage verification (all sensitive fields must use _enc suffix)

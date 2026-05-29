@@ -707,7 +707,7 @@ const practices = [
   { ...createPracticeRecord({
     id: 'p-001',
     tenantId: 'system',
-    name: 'Faith Counseling Collective',
+    name: 'ChurchCore Care Collective',
     type: 'group',
     timezone: 'America/Chicago',
     faithTradition: 'Christian',
@@ -17529,7 +17529,7 @@ function renderSwaggerUiHtml(specUrl) {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Faith Counseling API Docs</title>
+    <title>ChurchCore Care API Docs</title>
     <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
     <style>
       html, body { margin: 0; padding: 0; }

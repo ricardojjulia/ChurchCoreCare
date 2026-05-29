@@ -1,6 +1,6 @@
 # 05 — Clinical Chart
 
-**Faith Counseling User Manual**
+**ChurchCore Care User Manual**
 
 ---
 
@@ -161,7 +161,7 @@ After the client completes (or does not complete) homework, update the status an
 
 ## 5.8 Faith-Integrated Charting
 
-Faith Counseling preserves counselor clinical judgment throughout all chart surfaces. Faith-aware elements appear in the treatment plan and can be referenced in session notes, but:
+ChurchCore Care preserves counselor clinical judgment throughout all chart surfaces. Faith-aware elements appear in the treatment plan and can be referenced in session notes, but:
 
 - Spiritual interventions are **chosen by the counselor**, not automated
 - Faith content fields are **optional** in all chart tabs

@@ -1,7 +1,7 @@
 /**
  * appsec-scan.mjs
  *
- * Comprehensive Application Security (AppSec) scan for Faith Counseling.
+ * Comprehensive Application Security (AppSec) scan for ChurchCore Care.
  * Covers:
  *   1. Dependency vulnerability audit (pnpm audit)
  *   2. Hardcoded secret / credential detection

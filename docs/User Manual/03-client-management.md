@@ -1,6 +1,6 @@
 # 03 — Client Management
 
-**Faith Counseling User Manual**
+**ChurchCore Care User Manual**
 
 ---
 
@@ -88,7 +88,7 @@ The Demographics tab stores:
 
 ## 3.5 Faith Profile Tab
 
-The Faith Profile tab is unique to Faith Counseling. It captures:
+The Faith Profile tab is unique to ChurchCore Care. It captures:
 
 - **Faith tradition** — the client's stated religious or spiritual background
 - **Church or ministry affiliation**

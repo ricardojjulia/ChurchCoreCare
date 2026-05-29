@@ -1,6 +1,6 @@
 # Session and Authentication Security Policy
 
-**Scope:** Faith Counseling SaaS — all environments  
+**Scope:** ChurchCore Care SaaS — all environments  
 **Owner:** Engineering / Compliance  
 **Status:** Active — enforced at application layer
 

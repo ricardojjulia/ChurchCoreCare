@@ -1,12 +1,12 @@
 # 09 — Forms and Documents
 
-**Faith Counseling User Manual**
+**ChurchCore Care User Manual**
 
 ---
 
 ## Overview
 
-Faith Counseling includes a full-featured forms and document management system. Practice staff can assign clinical and intake forms to clients, manage submissions, and track completion status. Clients complete forms through the [Client Portal](08-client-portal.md).
+ChurchCore Care includes a full-featured forms and document management system. Practice staff can assign clinical and intake forms to clients, manage submissions, and track completion status. Clients complete forms through the [Client Portal](08-client-portal.md).
 
 ---
 

@@ -1,12 +1,12 @@
 # 11 — Monitoring and Runtime Health
 
-**Faith Counseling User Manual**
+**ChurchCore Care User Manual**
 
 ---
 
 ## Overview
 
-Faith Counseling includes built-in local monitoring so practice administrators and owners can review platform health, inspect runtime issues, and confirm that core services are responding normally.
+ChurchCore Care includes built-in local monitoring so practice administrators and owners can review platform health, inspect runtime issues, and confirm that core services are responding normally.
 
 Monitoring is local to the application. The current product does not require or expose OpenTelemetry / OTEL export, external collectors, Jaeger, or Prometheus as part of normal use.
 
@@ -49,7 +49,7 @@ The Operations Dashboard expands on raw runtime health with practice-relevant op
 
 ## 11.4 Local Monitoring Model
 
-Faith Counseling keeps monitoring inside the application:
+ChurchCore Care keeps monitoring inside the application:
 
 - health signals remain available through the built-in monitoring surfaces
 - database monitoring remains available to authorized admin roles
@@ -61,7 +61,7 @@ If you are using the product normally, no OTEL or external observability configu
 
 ## 11.5 PHI and Privacy in Monitoring
 
-Faith Counseling monitoring is designed with strict privacy safeguards:
+ChurchCore Care monitoring is designed with strict privacy safeguards:
 
 - **No PHI is emitted** — monitoring must not include client names, emails, IDs, diagnoses, or other identifiable health information
 - **No free-text values** in monitoring labels — only structured, low-cardinality operational signals

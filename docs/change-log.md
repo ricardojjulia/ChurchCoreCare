@@ -994,11 +994,11 @@ Real-time rule evaluation over the data already returned by `GET /v1/audit/intel
 **Date:** April 9, 2026
 **Affected area:** `PLANS/CHURCH-MANAGEMENT-MINISTRY-INTEGRATION.md`, `PLANS/PLAN-TRACKER.md`, `README.md`
 
-Added a dedicated planning artifact that defines how a future Church Management product should integrate with Faith Counseling without collapsing system boundaries or forcing immediate implementation.
+Added a dedicated planning artifact that defines how a future Church Management product should integrate with ChurchCore Care without collapsing system boundaries or forcing immediate implementation.
 
 **What changed:**
 
-- New `PLANS/CHURCH-MANAGEMENT-MINISTRY-INTEGRATION.md` establishes Faith Counseling as a separate protected ministry system for future Church Management integration
+- New `PLANS/CHURCH-MANAGEMENT-MINISTRY-INTEGRATION.md` establishes ChurchCore Care as a separate protected ministry system for future Church Management integration
 - Added a ChurchForge-aligned section that can be reused upstream as a `Future Ministry Integration Readiness` source section
 - Defined architectural, consent, access, audit, telemetry, AI, and UX guardrails for future cross-system work
 - Added a README cross-reference so the integration posture is visible from the main project documentation
@@ -1113,7 +1113,7 @@ Audited every screen title, page subtitle, navigation label, tab label, dashboar
 - `Client Workspace` → `Clients`; subtitle removed "without leaving the client operations surface"
 - `Client Scheduling` → `Scheduling`; subtitle rewritten
 - `Faith Workflows` title → `Faithful Workflows`; subtitle: "Counselor-facing care recommendations — review before acting" → "Care guidance and recommendations — review each suggestion with your own clinical judgment."
-- Sign-in screen: `Sign in to workspace` → `Welcome to Faith Counseling`
+- Sign-in screen: `Sign in to workspace` → `Welcome to ChurchCore Care`
 - Brand subtitle: `Practice Workspace` → `Faith-Centered Counseling`
 
 **Dashboard panel headings:**
@@ -3505,7 +3505,7 @@ None.
 
 ### Overview
 
-Refreshes the sidebar heading inside the hamburger menu. The previous header used a plain purple square plus the two-line `Faith Counseling` / `Practice Workspace` label. It now uses a compact animated counseling icon and a simpler `Options` heading.
+Refreshes the sidebar heading inside the hamburger menu. The previous header used a plain purple square plus the two-line `ChurchCore Care` / `Practice Workspace` label. It now uses a compact animated counseling icon and a simpler `Options` heading.
 
 ### Web (v2.1.18)
 
