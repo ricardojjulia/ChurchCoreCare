@@ -45,6 +45,27 @@ import { logError, logInfo, logWarn, serializeError } from './lib/log.js';
 import { translateMessages } from './lib/translate.js';
 import { handleCors, checkRateLimit, enforceRbac, enforceTenantScope, callerIdentity } from './lib/security.js';
 import { searchDsm5TrDiagnoses } from './lib/dsm5-tr-reference.js';
+import {
+  getSessionVolume,
+  getRevenueStats,
+  getNoShowRate,
+  getOutcomeTrends,
+  getCounselorProductivity,
+  buildSessionsCsv,
+  buildRevenueCsv,
+  parseDateRange,
+} from './lib/analytics.js';
+import { generateStatement } from './lib/statement-generator.js';
+import {
+  listGroups, getGroupById, createGroup, updateGroup,
+  addGroupMember, removeGroupMember, getActiveGroupMembers,
+  listGroupSessions, getGroupSessionById, createGroupSession, updateGroupSession,
+  upsertGroupNote, upsertMemberNote, getGroupSessionNotes,
+  listRelationalUnits, getRelationalUnitById, createRelationalUnit,
+  addRelationalUnitMember, removeRelationalUnitMember,
+  getClientRelationalUnits, listUnitSessions,
+} from './db/queries/groups.js';
+import { buildGroupClaims, getExistingSessionClaims } from './lib/group-billing.js';
 import pool, { verifyConnection, runWithTenantContext, closeAllPools } from './db/pool.js';
 import { getKnownTenantSlugs } from './db/pools.js';
 import {
@@ -686,7 +707,7 @@ const practices = [
   { ...createPracticeRecord({
     id: 'p-001',
     tenantId: 'system',
-    name: 'Faith Counseling Collective',
+    name: 'ChurchCore Care Collective',
     type: 'group',
     timezone: 'America/Chicago',
     faithTradition: 'Christian',
@@ -1592,6 +1613,69 @@ export async function handleApiRequest(request, response) {
       return;
     }
 
+    if (requestUrl.pathname.startsWith('/v1/clients/') && requestUrl.pathname.endsWith('/statement')) {
+      await handleClientStatement(request, response, requestUrl, session);
+      return;
+    }
+
+    if (requestUrl.pathname.startsWith('/v1/clients/') && requestUrl.pathname.endsWith('/relational-units')) {
+      await handleClientRelationalUnits(request, response, requestUrl, session);
+      return;
+    }
+
+    // ── Groups ────────────────────────────────────────────────────────────────
+    if (requestUrl.pathname === '/v1/groups' || requestUrl.pathname === '/v1/groups/') {
+      await handleGroups(request, response, session);
+      return;
+    }
+
+    if (requestUrl.pathname.startsWith('/v1/groups/sessions/')) {
+      const parts = requestUrl.pathname.split('/');
+      const sessionId = parts[4];
+      if (requestUrl.pathname.endsWith('/notes')) {
+        await handleGroupSessionNotes(request, response, sessionId, session);
+        return;
+      }
+      if (requestUrl.pathname.endsWith('/billing/submit')) {
+        await handleGroupSessionBilling(request, response, sessionId, session);
+        return;
+      }
+      await handleGroupSessionById(request, response, sessionId, session);
+      return;
+    }
+
+    if (requestUrl.pathname.startsWith('/v1/groups/') && !requestUrl.pathname.startsWith('/v1/groups/sessions/')) {
+      const parts = requestUrl.pathname.split('/');
+      const groupId = parts[3];
+      if (requestUrl.pathname.endsWith('/members') || (parts.length === 6 && parts[4] === 'members')) {
+        await handleGroupMembers(request, response, groupId, parts[5] ?? null, session);
+        return;
+      }
+      if (requestUrl.pathname.endsWith('/sessions')) {
+        await handleGroupSessions(request, response, groupId, session);
+        return;
+      }
+      await handleGroupById(request, response, groupId, session);
+      return;
+    }
+
+    // ── Relational units ──────────────────────────────────────────────────────
+    if (requestUrl.pathname === '/v1/relational-units' || requestUrl.pathname === '/v1/relational-units/') {
+      await handleRelationalUnits(request, response, session);
+      return;
+    }
+
+    if (requestUrl.pathname.startsWith('/v1/relational-units/')) {
+      const parts = requestUrl.pathname.split('/');
+      const unitId = parts[3];
+      if (requestUrl.pathname.endsWith('/members') || (parts.length === 6 && parts[4] === 'members')) {
+        await handleRelationalUnitMembers(request, response, unitId, parts[5] ?? null, session);
+        return;
+      }
+      await handleRelationalUnitById(request, response, unitId, session);
+      return;
+    }
+
     if (requestUrl.pathname.startsWith('/v1/clients/')) {
       const sub = parseClientSubresource(requestUrl.pathname);
       if (sub) {
@@ -1679,6 +1763,21 @@ export async function handleApiRequest(request, response) {
 
     if (requestUrl.pathname === '/v1/reminders') {
       await handleReminders(request, response, requestUrl, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/notifications/subscribe') {
+      await handlePushSubscribe(request, response, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/notifications/unsubscribe') {
+      await handlePushUnsubscribe(request, response, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/notifications/vapid-public-key') {
+      writeJson(response, 200, { key: process.env.VAPID_PUBLIC_KEY ?? null });
       return;
     }
 
@@ -1909,6 +2008,36 @@ export async function handleApiRequest(request, response) {
 
     if (requestUrl.pathname === '/v1/reporting/overview') {
       await handleReportingOverview(request, response, requestUrl, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/reports/sessions') {
+      await handleReportSessions(request, response, requestUrl, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/reports/sessions/export') {
+      await handleReportSessionsExport(request, response, requestUrl, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/reports/revenue') {
+      await handleReportRevenue(request, response, requestUrl, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/reports/revenue/export') {
+      await handleReportRevenueExport(request, response, requestUrl, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/reports/outcomes') {
+      await handleReportOutcomes(request, response, requestUrl, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/reports/counselors') {
+      await handleReportCounselors(request, response, requestUrl, session);
       return;
     }
 
@@ -6008,6 +6137,7 @@ async function handleAppointmentsCollection(request, response, session) {
       if (!client) return;
     }
     const filterSeriesId = sanitizeStr(requestUrl.searchParams.get('seriesId') ?? '', 64) || null;
+    const filterDate = sanitizeStr(requestUrl.searchParams.get('date') ?? '', 10) || null;
     const counselorScopeId = await resolveEffectiveCounselorFilterId(request, response, requestUrl, session, 'appointment.list.read');
     if (counselorScopeId === false) return;
     let items;
@@ -6016,13 +6146,15 @@ async function handleAppointmentsCollection(request, response, session) {
         clientId: filterClientId,
         counselorId: counselorScopeId,
         seriesId: filterSeriesId,
+        date: filterDate,
       });
     } else {
       const all = [...appointments].sort((left, right) => (left.startsAt || '').localeCompare(right.startsAt || ''));
       items = all
         .filter((appointment) => !filterClientId || appointment.clientId === filterClientId)
         .filter((appointment) => !counselorScopeId || appointment.counselorId === counselorScopeId)
-        .filter((appointment) => !filterSeriesId || appointment.seriesId === filterSeriesId);
+        .filter((appointment) => !filterSeriesId || appointment.seriesId === filterSeriesId)
+        .filter((appointment) => !filterDate || (appointment.startsAt ?? '').slice(0, 10) === filterDate);
     }
     await emitAudit(request, 'appointment.list.read', 'appointment', 'collection', session);
     writeJson(response, 200, { items });
@@ -6906,6 +7038,65 @@ async function handleSchedulingCalendar(request, response, requestUrl, session) 
     locationCalendars,
     availability,
   });
+}
+
+// ── Push notification subscription handlers ──────────────────────────────────
+
+async function handlePushSubscribe(request, response, session) {
+  const role = callerRole(request, session);
+  if (!role) { writeJson(response, 401, { error: 'Authentication required' }); return; }
+  if (request.method !== 'POST') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+
+  const payload = await readJsonBody(request);
+  const sub = payload?.subscription;
+  if (!sub?.endpoint || !sub?.keys?.p256dh || !sub?.keys?.auth) {
+    writeJson(response, 400, { error: 'Invalid push subscription object' });
+    return;
+  }
+
+  const tenantId = callerTenant(request, session);
+  const staffAccountId = session?.staffAccountId ?? session?.id ?? 'unknown';
+
+  if (process.env.DB_NAME) {
+    const { pool } = await import('./db/pool.js').catch(() => ({ pool: null }));
+    if (pool) {
+      await pool.query(
+        `INSERT INTO push_subscriptions (tenant_id, staff_account_id, endpoint, p256dh, auth)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT (endpoint) DO UPDATE SET
+           staff_account_id = EXCLUDED.staff_account_id,
+           tenant_id        = EXCLUDED.tenant_id,
+           p256dh           = EXCLUDED.p256dh,
+           auth             = EXCLUDED.auth`,
+        [tenantId, staffAccountId, sub.endpoint, sub.keys.p256dh, sub.keys.auth],
+      );
+    }
+  }
+
+  await emitAudit(request, 'push.subscription.created', 'push_subscription', staffAccountId, session);
+  writeJson(response, 200, { ok: true });
+}
+
+async function handlePushUnsubscribe(request, response, session) {
+  const role = callerRole(request, session);
+  if (!role) { writeJson(response, 401, { error: 'Authentication required' }); return; }
+  if (request.method !== 'POST') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+
+  const payload = await readJsonBody(request);
+  const endpoint = payload?.endpoint;
+  if (!endpoint) { writeJson(response, 400, { error: 'endpoint required' }); return; }
+
+  if (process.env.DB_NAME) {
+    const { pool } = await import('./db/pool.js').catch(() => ({ pool: null }));
+    if (pool) {
+      await pool.query(
+        `DELETE FROM push_subscriptions WHERE endpoint = ? AND tenant_id = ?`,
+        [endpoint, callerTenant(request, session)],
+      );
+    }
+  }
+
+  writeJson(response, 200, { ok: true });
 }
 
 async function handleReminders(request, response, requestUrl, session) {
@@ -8414,6 +8605,517 @@ async function handleAgingReport(request, response, requestUrl, session) {
   writeJson(response, 200, { asOf, report });
 }
 
+async function handleClientStatement(request, response, requestUrl, session) {
+  if (request.method !== 'GET') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+
+  const pathParts = requestUrl.pathname.split('/');
+  const clientId = pathParts[3] ?? null;
+  if (!clientId) { writeJson(response, 400, { error: 'Missing client ID' }); return; }
+
+  const tenantId = callerTenant(request, session);
+  const role = callerRole(request, session);
+  if (!['practice_owner', 'practice_admin', 'scheduler_biller', 'platform_admin'].includes(role)) {
+    writeJson(response, 403, { error: 'Billing role required' });
+    return;
+  }
+
+  emitAudit(request, 'billing.statement.generated', 'client', clientId, session);
+
+  if (!process.env.DB_NAME) {
+    // In-memory mode: return empty statement HTML
+    const html = generateStatement({
+      practice: { name: 'Demo Practice' },
+      client: { firstName: 'Demo', lastName: 'Client' },
+      claims: [],
+      invoices: [],
+      generatedAt: new Date().toISOString(),
+    });
+    response.writeHead(200, {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Content-Disposition': `inline; filename="statement-${clientId}.html"`,
+      'Cache-Control': 'no-store',
+    });
+    response.end(html);
+    return;
+  }
+
+  try {
+    const [[clientRow]] = await pool.query(
+      'SELECT first_name_enc, last_name_enc FROM clients WHERE id = ? AND tenant_id = ? LIMIT 1',
+      [clientId, tenantId],
+    );
+    if (!clientRow) { writeJson(response, 404, { error: 'Client not found' }); return; }
+
+    const { decrypt: dec } = await import('./lib/encrypt.js');
+    const client = {
+      firstName: dec(clientRow.first_name_enc),
+      lastName: dec(clientRow.last_name_enc),
+    };
+
+    const [[practiceRow]] = await pool.query(
+      'SELECT name, address_line1, city, state, postal_code, phone FROM practices WHERE tenant_id = ? LIMIT 1',
+      [tenantId],
+    );
+    const practice = practiceRow ?? {};
+
+    const [claimRows] = await pool.query(
+      `SELECT id, status, paid_amount, adjustment_reason, submitted_at AS service_date
+       FROM claims WHERE tenant_id = ? AND client_id = ? ORDER BY submitted_at DESC LIMIT 50`,
+      [tenantId, clientId],
+    );
+    const claims = claimRows.map((r) => ({
+      id: r.id,
+      status: r.status,
+      paidAmount: r.paid_amount != null ? Number(r.paid_amount) : null,
+      adjustmentReason: r.adjustment_reason ?? null,
+      serviceDate: r.service_date,
+    }));
+
+    const [invRows] = await pool.query(
+      'SELECT amount, balance, status, due_at, created_at FROM invoices WHERE tenant_id = ? AND client_id = ? ORDER BY due_at DESC LIMIT 50',
+      [tenantId, clientId],
+    );
+    const invoices = invRows.map((r) => ({
+      amount: Number(r.amount ?? 0),
+      balance: Number(r.balance ?? 0),
+      status: r.status,
+      dueAt: r.due_at,
+    }));
+
+    const html = generateStatement({
+      practice: {
+        name: practice.name ?? '',
+        addressLine1: practice.address_line1 ?? '',
+        city: practice.city ?? '',
+        state: practice.state ?? '',
+        postalCode: practice.postal_code ?? '',
+        phone: practice.phone ?? '',
+      },
+      client,
+      claims,
+      invoices,
+      generatedAt: new Date().toISOString(),
+    });
+
+    response.writeHead(200, {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Content-Disposition': `inline; filename="statement-${clientId}.html"`,
+      'Cache-Control': 'no-store',
+    });
+    response.end(html);
+  } catch (err) {
+    console.error('[statement] Error generating statement:', err.message);
+    writeJson(response, 500, { error: 'Failed to generate statement' });
+  }
+}
+
+// ── Client relational units (chart widget) ────────────────────────────────────
+
+async function handleClientRelationalUnits(request, response, requestUrl, session) {
+  if (request.method !== 'GET') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+  const pathParts = requestUrl.pathname.split('/');
+  const clientId = pathParts[3] ?? null;
+  if (!clientId) { writeJson(response, 400, { error: 'Missing client ID' }); return; }
+  const tenantId = callerTenant(request, session);
+  if (!process.env.DB_NAME) { writeJson(response, 200, { items: [] }); return; }
+  const units = await getClientRelationalUnits(clientId, tenantId);
+  writeJson(response, 200, { items: units });
+}
+
+// ── Groups ────────────────────────────────────────────────────────────────────
+
+function requireGroupRole(request, response, session) {
+  const role = callerRole(request, session);
+  if (!role) { writeJson(response, 401, { error: 'Authentication required' }); return true; }
+  if (!['practice_owner', 'practice_admin', 'counselor', 'platform_admin'].includes(role)) {
+    writeJson(response, 403, { error: 'Counselor or admin role required' }); return true;
+  }
+  return false;
+}
+
+function requireAdminRole(request, response, session) {
+  const role = callerRole(request, session);
+  if (!role) { writeJson(response, 401, { error: 'Authentication required' }); return true; }
+  if (!['practice_owner', 'practice_admin', 'platform_admin'].includes(role)) {
+    writeJson(response, 403, { error: 'Admin role required' }); return true;
+  }
+  return false;
+}
+
+function expandRrule(dtstart, rruleStr, maxCount = 52) {
+  const params = {};
+  for (const part of rruleStr.split(';')) {
+    const [k, v] = part.split('=');
+    if (k && v) params[k.toUpperCase()] = v.toUpperCase();
+  }
+  const freq = params.FREQ ?? 'WEEKLY';
+  if (freq !== 'WEEKLY') return [];
+
+  const interval = Math.max(1, Number(params.INTERVAL ?? 1));
+  const count = Math.min(maxCount, Number(params.COUNT ?? maxCount));
+
+  const DAY_MAP = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
+  const byDay = params.BYDAY
+    ? params.BYDAY.split(',').map((d) => DAY_MAP[d]).filter((n) => n != null)
+    : null;
+
+  const until = params.UNTIL
+    ? new Date(params.UNTIL.replace(/(\d{4})(\d{2})(\d{2}).*/, '$1-$2-$3'))
+    : null;
+
+  const dates = [];
+  const start = new Date(dtstart);
+  let cursor = new Date(start);
+  let weeks = 0;
+
+  while (dates.length < count) {
+    const candidates = byDay
+      ? byDay.map((d) => {
+          const c = new Date(cursor);
+          const diff = (d - c.getDay() + 7) % 7;
+          c.setDate(c.getDate() + diff);
+          return c;
+        }).filter((c) => c >= start)
+      : [new Date(cursor)];
+
+    for (const d of candidates) {
+      if (until && d > until) return dates;
+      if (dates.length >= count) return dates;
+      dates.push(new Date(d));
+    }
+
+    weeks += interval;
+    cursor = new Date(start);
+    cursor.setDate(start.getDate() + weeks * 7);
+  }
+
+  return dates;
+}
+
+async function handleGroups(request, response, session) {
+  if (requireGroupRole(request, response, session)) return;
+  const tenantId = callerTenant(request, session);
+
+  if (request.method === 'GET') {
+    if (!process.env.DB_NAME) { writeJson(response, 200, { items: [] }); return; }
+    const items = await listGroups(tenantId);
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method === 'POST') {
+    if (requireAdminRole(request, response, session)) return;
+    const body = await readJsonBody(request).catch(() => null);
+    const name = sanitizeStr(body?.name, 255);
+    if (!name) { writeJson(response, 400, { error: 'name is required' }); return; }
+    if (!process.env.DB_NAME) {
+      writeJson(response, 201, { item: { id: genId('grp'), tenantId, name, isActive: true } });
+      return;
+    }
+    const item = await createGroup({ id: genId('grp'), tenantId, name, counselorId: body.counselorId ?? null, maxMembers: body.maxMembers ?? null });
+    emitAudit(request, 'group.created', 'therapy_group', item.id, session);
+    writeJson(response, 201, { item });
+    return;
+  }
+
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+async function handleGroupById(request, response, groupId, session) {
+  if (requireGroupRole(request, response, session)) return;
+  const tenantId = callerTenant(request, session);
+
+  if (request.method === 'GET') {
+    if (!process.env.DB_NAME) { writeJson(response, 404, { error: 'Not found' }); return; }
+    const item = await getGroupById(groupId, tenantId);
+    if (!item) { writeJson(response, 404, { error: 'Group not found' }); return; }
+    writeJson(response, 200, { item });
+    return;
+  }
+
+  if (request.method === 'PATCH') {
+    if (requireAdminRole(request, response, session)) return;
+    const body = await readJsonBody(request).catch(() => ({}));
+    if (!process.env.DB_NAME) { writeJson(response, 200, { item: { id: groupId } }); return; }
+    const item = await updateGroup(groupId, tenantId, body);
+    if (!item) { writeJson(response, 404, { error: 'Group not found' }); return; }
+    emitAudit(request, 'group.updated', 'therapy_group', groupId, session);
+    writeJson(response, 200, { item });
+    return;
+  }
+
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+async function handleGroupMembers(request, response, groupId, clientIdParam, session) {
+  if (requireGroupRole(request, response, session)) return;
+  const tenantId = callerTenant(request, session);
+
+  if (request.method === 'GET') {
+    if (!process.env.DB_NAME) { writeJson(response, 200, { items: [] }); return; }
+    const items = await getActiveGroupMembers(groupId, tenantId);
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method === 'POST') {
+    const body = await readJsonBody(request).catch(() => ({}));
+    const clientId = sanitizeStr(body?.clientId, 64);
+    if (!clientId) { writeJson(response, 400, { error: 'clientId is required' }); return; }
+    if (!process.env.DB_NAME) { writeJson(response, 201, { ok: true }); return; }
+    const item = await addGroupMember({ id: genId('gm'), groupId, clientId, tenantId });
+    emitAudit(request, 'group.member.added', 'therapy_group', groupId, session);
+    writeJson(response, 201, { item });
+    return;
+  }
+
+  if (request.method === 'DELETE' && clientIdParam) {
+    if (!process.env.DB_NAME) { writeJson(response, 200, { ok: true }); return; }
+    await removeGroupMember(groupId, clientIdParam, tenantId);
+    emitAudit(request, 'group.member.removed', 'therapy_group', groupId, session);
+    writeJson(response, 200, { ok: true });
+    return;
+  }
+
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+async function handleGroupSessions(request, response, groupId, session) {
+  if (requireGroupRole(request, response, session)) return;
+  const tenantId = callerTenant(request, session);
+
+  if (request.method === 'GET') {
+    if (!process.env.DB_NAME) { writeJson(response, 200, { items: [] }); return; }
+    const items = await listGroupSessions(groupId, tenantId);
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method === 'POST') {
+    const body = await readJsonBody(request).catch(() => ({}));
+    const scheduledAt = body?.scheduledAt;
+    if (!scheduledAt) { writeJson(response, 400, { error: 'scheduledAt is required' }); return; }
+    const durationMinutes = Number(body?.durationMinutes ?? 60);
+    const rrule = sanitizeStr(body?.rrule, 256) ?? null;
+
+    if (!process.env.DB_NAME) { writeJson(response, 201, { items: [{ id: genId('gs'), groupId }] }); return; }
+
+    const seriesId = rrule ? genId('series') : null;
+    const dates = rrule ? expandRrule(new Date(scheduledAt), rrule) : [new Date(scheduledAt)];
+    if (dates.length === 0) { writeJson(response, 400, { error: 'rrule produced no dates' }); return; }
+
+    const created = [];
+    for (const d of dates) {
+      const s = await createGroupSession({
+        id: genId('gs'),
+        groupId,
+        tenantId,
+        scheduledAt: d.toISOString(),
+        durationMinutes,
+        seriesId,
+        seriesRrule: seriesId ? rrule : null,
+      });
+      created.push(s);
+    }
+    emitAudit(request, 'group.sessions.created', 'therapy_group', groupId, session);
+    writeJson(response, 201, { items: created });
+    return;
+  }
+
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+async function handleGroupSessionById(request, response, sessionId, session) {
+  if (requireGroupRole(request, response, session)) return;
+  const tenantId = callerTenant(request, session);
+
+  if (request.method === 'GET') {
+    if (!process.env.DB_NAME) { writeJson(response, 404, { error: 'Not found' }); return; }
+    const item = await getGroupSessionById(sessionId, tenantId);
+    if (!item) { writeJson(response, 404, { error: 'Session not found' }); return; }
+    writeJson(response, 200, { item });
+    return;
+  }
+
+  if (request.method === 'PATCH') {
+    const body = await readJsonBody(request).catch(() => ({}));
+    if (!process.env.DB_NAME) { writeJson(response, 200, { ok: true }); return; }
+    const item = await updateGroupSession(sessionId, tenantId, body);
+    if (!item) { writeJson(response, 404, { error: 'Session not found' }); return; }
+    emitAudit(request, 'group.session.updated', 'group_session', sessionId, session);
+    writeJson(response, 200, { item });
+    return;
+  }
+
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+async function handleGroupSessionNotes(request, response, sessionId, session) {
+  if (requireGroupRole(request, response, session)) return;
+  const tenantId = callerTenant(request, session);
+
+  if (request.method === 'GET') {
+    if (!process.env.DB_NAME) { writeJson(response, 200, { sharedNote: null, memberNotes: [] }); return; }
+    const notes = await getGroupSessionNotes(sessionId, tenantId);
+    writeJson(response, 200, notes);
+    return;
+  }
+
+  if (request.method === 'POST') {
+    const body = await readJsonBody(request).catch(() => ({}));
+    const counselorId = session?.staff_account_id ?? callerRole(request, session);
+    if (!process.env.DB_NAME) { writeJson(response, 200, { ok: true }); return; }
+
+    if (body.sharedNote !== undefined) {
+      await upsertGroupNote({
+        id: genId('gsn'),
+        groupSessionId: sessionId,
+        tenantId,
+        counselorId,
+        sharedNote: body.sharedNote ?? null,
+        noteFormat: sanitizeStr(body.noteFormat, 32) ?? 'SOAP',
+      });
+    }
+
+    if (Array.isArray(body.memberNotes)) {
+      for (const mn of body.memberNotes) {
+        if (!mn.clientId || !mn.individualNote) continue;
+        await upsertMemberNote({
+          id: genId('gmn'),
+          groupSessionId: sessionId,
+          clientId: mn.clientId,
+          tenantId,
+          individualNote: mn.individualNote,
+        });
+      }
+    }
+
+    emitAudit(request, 'group.session.notes.saved', 'group_session', sessionId, session);
+    writeJson(response, 200, { ok: true });
+    return;
+  }
+
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+async function handleGroupSessionBilling(request, response, sessionId, session) {
+  if (request.method !== 'POST') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+  const role = callerRole(request, session);
+  if (!['practice_owner', 'practice_admin', 'scheduler_biller', 'platform_admin'].includes(role)) {
+    writeJson(response, 403, { error: 'Billing role required' }); return;
+  }
+  const tenantId = callerTenant(request, session);
+
+  if (!process.env.DB_NAME) { writeJson(response, 503, { error: 'Database required for billing' }); return; }
+
+  // Idempotency: check if claims already submitted
+  const existing = await getExistingSessionClaims(sessionId, tenantId);
+  if (existing.length > 0) {
+    writeJson(response, 200, { ok: true, claimIds: existing.map((r) => r.id), alreadySubmitted: true });
+    return;
+  }
+
+  const claimSkeletons = await buildGroupClaims({ groupSessionId: sessionId, tenantId });
+  if (claimSkeletons.length === 0) { writeJson(response, 400, { error: 'No active members for session' }); return; }
+
+  const claimIds = [];
+  try {
+    for (const skeleton of claimSkeletons) {
+      const claimId = genId('clm');
+      await pool.query(
+        `INSERT INTO claims (id, tenant_id, client_id, service_date, status, notes)
+         VALUES (?, ?, ?, ?, 'draft', ?)`,
+        [claimId, tenantId, skeleton.clientId, skeleton.serviceDate, `group_session:${sessionId} cpt:${skeleton.cptCode}`],
+      );
+      claimIds.push(claimId);
+    }
+    emitAudit(request, 'billing.group.claims.created', 'group_session', sessionId, session);
+    writeJson(response, 201, { ok: true, claimIds });
+  } catch (err) {
+    console.error('[group-billing] Error creating claims:', err.message);
+    writeJson(response, 500, { error: 'Failed to create claims' });
+  }
+}
+
+// ── Relational units ──────────────────────────────────────────────────────────
+
+async function handleRelationalUnits(request, response, session) {
+  if (requireGroupRole(request, response, session)) return;
+  const tenantId = callerTenant(request, session);
+
+  if (request.method === 'GET') {
+    if (!process.env.DB_NAME) { writeJson(response, 200, { items: [] }); return; }
+    const items = await listRelationalUnits(tenantId);
+    writeJson(response, 200, { items });
+    return;
+  }
+
+  if (request.method === 'POST') {
+    const body = await readJsonBody(request).catch(() => ({}));
+    const label = sanitizeStr(body?.label, 128);
+    const unitType = ['couple', 'family', 'other'].includes(body?.unitType) ? body.unitType : 'couple';
+    if (!label) { writeJson(response, 400, { error: 'label is required' }); return; }
+
+    const unitId = genId('ru');
+    const memberInputs = Array.isArray(body?.members) ? body.members : [];
+    const members = memberInputs.map((m) => ({ id: genId('rum'), clientId: m.clientId, role: m.role ?? null }));
+
+    if (!process.env.DB_NAME) {
+      writeJson(response, 201, { item: { id: unitId, tenantId, unitType, label, members } });
+      return;
+    }
+
+    const item = await createRelationalUnit({ id: unitId, tenantId, unitType, label, counselorId: body.counselorId ?? null, members });
+    emitAudit(request, 'relational_unit.created', 'relational_unit', unitId, session);
+    writeJson(response, 201, { item });
+    return;
+  }
+
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+async function handleRelationalUnitById(request, response, unitId, session) {
+  if (requireGroupRole(request, response, session)) return;
+  const tenantId = callerTenant(request, session);
+
+  if (request.method === 'GET') {
+    if (!process.env.DB_NAME) { writeJson(response, 404, { error: 'Not found' }); return; }
+    const item = await getRelationalUnitById(unitId, tenantId);
+    if (!item) { writeJson(response, 404, { error: 'Relational unit not found' }); return; }
+    writeJson(response, 200, { item });
+    return;
+  }
+
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+async function handleRelationalUnitMembers(request, response, unitId, clientIdParam, session) {
+  if (requireGroupRole(request, response, session)) return;
+  const tenantId = callerTenant(request, session);
+
+  if (request.method === 'POST') {
+    const body = await readJsonBody(request).catch(() => ({}));
+    const clientId = sanitizeStr(body?.clientId, 64);
+    if (!clientId) { writeJson(response, 400, { error: 'clientId is required' }); return; }
+    if (!process.env.DB_NAME) { writeJson(response, 201, { ok: true }); return; }
+    await addRelationalUnitMember({ id: genId('rum'), unitId, clientId, tenantId, role: body.role ?? null });
+    emitAudit(request, 'relational_unit.member.added', 'relational_unit', unitId, session);
+    writeJson(response, 201, { ok: true });
+    return;
+  }
+
+  if (request.method === 'DELETE' && clientIdParam) {
+    if (!process.env.DB_NAME) { writeJson(response, 200, { ok: true }); return; }
+    await removeRelationalUnitMember(unitId, clientIdParam, tenantId);
+    emitAudit(request, 'relational_unit.member.removed', 'relational_unit', unitId, session);
+    writeJson(response, 200, { ok: true });
+    return;
+  }
+
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+
 async function handlePortalPublicConfig(request, response, requestUrl, session) {
   if (request.method !== 'GET') {
     writeJson(response, 405, { error: 'Method not allowed' });
@@ -9560,7 +10262,7 @@ async function fulfillPortalDeletionRequest(client, requestItem) {
         failedAttempts: 0,
         lockedUntil: null,
       });
-      await pool.query('UPDATE portal_sessions SET revoked = 1 WHERE portal_account_id = ?', [account.id]);
+      await pool.query('UPDATE portal_sessions SET revoked = TRUE WHERE portal_account_id = ?', [account.id]);
       await pool.query('DELETE FROM portal_password_resets WHERE portal_account_id = ?', [account.id]);
     }
 
@@ -11233,6 +11935,84 @@ async function handleReportingOverview(request, response, requestUrl, session) {
 
   emitAudit(request, 'reporting.overview.read', 'reporting_overview', String(days));
   writeJson(response, 200, { summary });
+}
+
+// ── Analytics report handlers (Phase D) ──────────────────────────────────────
+
+async function handleReportSessions(request, response, requestUrl, session) {
+  if (request.method !== 'GET') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+  if (requirePracticeAdmin(request, response, session)) return;
+  const tenantId = callerTenant(request, session);
+  const { from, to } = parseDateRange(requestUrl.searchParams);
+  const counselorId = sanitizeStr(requestUrl.searchParams.get('counselorId') ?? '', 64) || null;
+  const [volume, noShow] = await Promise.all([
+    getSessionVolume({ tenantId, from, to, counselorId }),
+    getNoShowRate({ tenantId, from, to }),
+  ]);
+  await emitAudit(request, 'reports.sessions.read', 'report', 'sessions', session);
+  writeJson(response, 200, { from, to, ...volume, noShowRate: noShow });
+}
+
+async function handleReportSessionsExport(request, response, requestUrl, session) {
+  if (request.method !== 'GET') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+  if (requirePracticeAdmin(request, response, session)) return;
+  const tenantId = callerTenant(request, session);
+  const { from, to } = parseDateRange(requestUrl.searchParams);
+  const { buckets } = await getSessionVolume({ tenantId, from, to });
+  await emitAudit(request, 'reports.export.downloaded', 'report', 'sessions_csv', session);
+  response.writeHead(200, {
+    'Content-Type': 'text/csv',
+    'Content-Disposition': `attachment; filename="sessions-${from}-${to}.csv"`,
+  });
+  response.end(buildSessionsCsv(buckets));
+}
+
+async function handleReportRevenue(request, response, requestUrl, session) {
+  if (request.method !== 'GET') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+  if (requirePracticeAdmin(request, response, session)) return;
+  const tenantId = callerTenant(request, session);
+  const { from, to } = parseDateRange(requestUrl.searchParams);
+  const stats = await getRevenueStats({ tenantId, from, to });
+  await emitAudit(request, 'reports.revenue.read', 'report', 'revenue', session);
+  writeJson(response, 200, { from, to, ...stats });
+}
+
+async function handleReportRevenueExport(request, response, requestUrl, session) {
+  if (request.method !== 'GET') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+  if (requirePracticeAdmin(request, response, session)) return;
+  const tenantId = callerTenant(request, session);
+  const { from, to } = parseDateRange(requestUrl.searchParams);
+  const stats = await getRevenueStats({ tenantId, from, to });
+  await emitAudit(request, 'reports.export.downloaded', 'report', 'revenue_csv', session);
+  response.writeHead(200, {
+    'Content-Type': 'text/csv',
+    'Content-Disposition': `attachment; filename="revenue-${from}-${to}.csv"`,
+  });
+  response.end(buildRevenueCsv(stats));
+}
+
+async function handleReportOutcomes(request, response, requestUrl, session) {
+  if (request.method !== 'GET') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+  const role = callerRole(request, session);
+  if (!role) { writeJson(response, 401, { error: 'Authentication required' }); return; }
+  const tenantId = callerTenant(request, session);
+  const clientId = sanitizeStr(requestUrl.searchParams.get('clientId') ?? '', 64) || null;
+  const formKey  = sanitizeStr(requestUrl.searchParams.get('formKey')  ?? '', 64) || 'PHQ-9';
+  const from = requestUrl.searchParams.get('from') || null;
+  const to   = requestUrl.searchParams.get('to')   || null;
+  const result = await getOutcomeTrends({ tenantId, clientId, formKey, from, to });
+  await emitAudit(request, 'reports.outcomes.read', 'report', formKey, session);
+  writeJson(response, 200, { formKey, clientId, ...result });
+}
+
+async function handleReportCounselors(request, response, requestUrl, session) {
+  if (request.method !== 'GET') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
+  if (requirePracticeAdmin(request, response, session)) return;
+  const tenantId = callerTenant(request, session);
+  const { from, to } = parseDateRange(requestUrl.searchParams);
+  const result = await getCounselorProductivity({ tenantId, from, to });
+  await emitAudit(request, 'reports.counselors.read', 'report', 'counselors', session);
+  writeJson(response, 200, { from, to, ...result });
 }
 
 async function handleAuditIntelligence(request, response, requestUrl, session) {
@@ -16457,6 +17237,18 @@ function resolveRoute(pathname) {
   if (pathname.startsWith('/v1/clients/') && pathname.endsWith('/intake-preview')) return '/v1/clients/:id/intake-preview';
   if (pathname.startsWith('/v1/clients/') && pathname.endsWith('/treatment-plan')) return '/v1/clients/:id/treatment-plan';
   if (pathname.startsWith('/v1/clients/') && pathname.endsWith('/verify-eligibility')) return '/v1/clients/:id/insurance/:insuranceId/verify-eligibility';
+  if (pathname.startsWith('/v1/clients/') && pathname.endsWith('/statement')) return '/v1/clients/:id/statement';
+  if (pathname.startsWith('/v1/clients/') && pathname.endsWith('/relational-units')) return '/v1/clients/:id/relational-units';
+  if (pathname === '/v1/groups' || pathname === '/v1/groups/') return '/v1/groups';
+  if (pathname.startsWith('/v1/groups/sessions/') && pathname.endsWith('/notes')) return '/v1/groups/sessions/:id/notes';
+  if (pathname.startsWith('/v1/groups/sessions/') && pathname.endsWith('/billing/submit')) return '/v1/groups/sessions/:id/billing/submit';
+  if (pathname.startsWith('/v1/groups/sessions/')) return '/v1/groups/sessions/:id';
+  if (pathname.startsWith('/v1/groups/') && pathname.endsWith('/members')) return '/v1/groups/:id/members';
+  if (pathname.startsWith('/v1/groups/') && pathname.endsWith('/sessions')) return '/v1/groups/:id/sessions';
+  if (pathname.startsWith('/v1/groups/')) return '/v1/groups/:id';
+  if (pathname === '/v1/relational-units' || pathname === '/v1/relational-units/') return '/v1/relational-units';
+  if (pathname.startsWith('/v1/relational-units/') && pathname.endsWith('/members')) return '/v1/relational-units/:id/members';
+  if (pathname.startsWith('/v1/relational-units/')) return '/v1/relational-units/:id';
   if (pathname.startsWith('/v1/clients/') && pathname.endsWith('/progress-notes/draft')) return '/v1/clients/:id/progress-notes/draft';
   if (pathname.startsWith('/v1/clients/') && pathname.endsWith('/progress-notes')) return '/v1/clients/:id/progress-notes';
   if (pathname.startsWith('/v1/document-templates/')) return '/v1/document-templates/:id';
@@ -16467,6 +17259,9 @@ function resolveRoute(pathname) {
   if (pathname === '/v1/inventory-assignments') return '/v1/inventory-assignments';
   if (pathname === '/v1/scheduling/calendar') return '/v1/scheduling/calendar';
   if (pathname === '/v1/reminders') return '/v1/reminders';
+  if (pathname === '/v1/notifications/subscribe') return '/v1/notifications/subscribe';
+  if (pathname === '/v1/notifications/unsubscribe') return '/v1/notifications/unsubscribe';
+  if (pathname === '/v1/notifications/vapid-public-key') return '/v1/notifications/vapid-public-key';
   if (pathname === '/v1/waitlist') return '/v1/waitlist';
   if (pathname === '/v1/operations/summary') return '/v1/operations/summary';
   if (pathname === '/v1/reference/dsm5-tr') return '/v1/reference/dsm5-tr';
@@ -16514,6 +17309,12 @@ function resolveRoute(pathname) {
   if (pathname === '/v1/faith/referral-coordination') return '/v1/faith/referral-coordination';
   if (pathname === '/v1/faith/language-preferences') return '/v1/faith/language-preferences';
   if (pathname === '/v1/reporting/overview') return '/v1/reporting/overview';
+  if (pathname === '/v1/reports/sessions') return '/v1/reports/sessions';
+  if (pathname === '/v1/reports/sessions/export') return '/v1/reports/sessions/export';
+  if (pathname === '/v1/reports/revenue') return '/v1/reports/revenue';
+  if (pathname === '/v1/reports/revenue/export') return '/v1/reports/revenue/export';
+  if (pathname === '/v1/reports/outcomes') return '/v1/reports/outcomes';
+  if (pathname === '/v1/reports/counselors') return '/v1/reports/counselors';
   if (pathname === '/v1/audit/intelligence' || pathname === '/v1/audit/intelligence/') return '/v1/audit/intelligence';
   if (pathname === '/v1/platform/overview') return '/v1/platform/overview';
   if (pathname === '/v1/platform/tenant-provisioning') return '/v1/platform/tenant-provisioning';
@@ -16728,7 +17529,7 @@ function renderSwaggerUiHtml(specUrl) {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Faith Counseling API Docs</title>
+    <title>ChurchCore Care API Docs</title>
     <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
     <style>
       html, body { margin: 0; padding: 0; }

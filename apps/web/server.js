@@ -179,7 +179,7 @@ const server = http.createServer(async (request, response) => {
 });
 
 server.listen(port, () => {
-  console.log(`Faith Counseling web app listening on port ${port}`);
+  console.log(`ChurchCore Care web app listening on port ${port}`);
 });
 
 function writeText(response, statusCode, text) {

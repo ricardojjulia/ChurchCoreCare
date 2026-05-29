@@ -2,6 +2,268 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## May 28, 2026 — Platform Admin App complete (apps/platform/)
+
+### feat: platform admin web app — impersonation, data exports, retention policies
+
+**Date:** 2026-05-28
+**Affected area:** `apps/platform/src/`
+
+Completes the last remaining code item before commercial launch. The platform admin app now has five fully functional pages.
+
+- **ImpersonationPage** — list active/ended sessions; "Start Session" modal (target tenant, role select, reason ≥ 10 chars, audit-logged); "End" button per active row; orange audit warning displayed
+- **DataExportsPage** — list export jobs with status badges; "Request Export" modal (type: clinical_records/billing/documents/audit_log, format: JSON/CSV)
+- **RetentionPoliciesPage** — view current policy (clinical/billing/audit-log schedules, document versions, legal hold); "Edit Policy" modal with Select dropdowns and Checkbox toggles; configures new policy when none exists
+- **api.js** extended with 6 new methods: `startImpersonationSession`, `endImpersonationSession`, `listDataExports`, `requestDataExport`, `getRetentionPolicy`, `upsertRetentionPolicy`
+- **App.jsx** — 2 new nav items (Data Exports with Database icon, Retention Policies with ShieldCheck icon)
+
+All existing pages (Dashboard, Tenants) unchanged. 195/195 API tests still passing.
+
+---
+
+## May 28, 2026 — v7.0.0 Release
+
+### release: Competitive Parity Sprint complete — Phases C–F, 195 tests passing
+
+**Date:** 2026-05-28
+**Version:** 6.2.0 → 7.0.0
+**Packages bumped:** `churchcore-care` (root), `@churchcore/api`, `@churchcore/web`, `@churchcore/worker`, `@churchcore/mobile`
+
+All four phases of the competitive parity sprint are shipped and tested. ChurchCore Care v7.0.0 reaches feature parity with the market's best general-purpose EHR platforms on every dimension except native iOS/Android apps. See `docs/v7.0.0-RELEASE-SUMMARY.md` for full detail and `docs/competitive-evaluation-2026.md` for the updated market assessment.
+
+Remaining work before commercial launch: GCP Cloud Run deploy (ops), Stripe product setup (admin), HIPAA BAA signing (legal), and `apps/platform/` platform admin web app (code).
+
+---
+
+## May 28, 2026 — Phase F: Group & Family Therapy (F1–F5)
+
+### feat: group therapy, relational units, group notes, group billing
+
+**Date:** 2026-05-28  
+**Affected area:** `apps/api/src/db/`, `apps/api/src/lib/`, `apps/api/src/index.js`, `apps/web/src/components/Groups/`, `apps/web/src/components/ClinicalChart/`, `packages/i18n/src/index.js`
+
+Full group and family therapy module: data model, scheduling with RRULE support, per-session notes (shared + per-member), relational units (couples/family), and CPT-aware group billing.
+
+#### F1 — Group therapy data model
+
+- DB migration: 7 new tables — `therapy_groups`, `group_members`, `group_sessions`, `group_session_notes`, `group_member_notes`, `relational_units`, `relational_unit_members`
+- All tables scoped to `tenant_id`; notes encrypted at rest via `encrypt()`
+- `group_session_notes`: UNIQUE per session (shared note per session); `group_member_notes`: UNIQUE per session+client (individual note per member)
+- `apps/api/src/db/queries/groups.js` — full CRUD: `listGroups`, `getGroupById`, `createGroup`, `updateGroup`, `addGroupMember`, `removeGroupMember`, `getActiveGroupMembers`, `listGroupSessions`, `createGroupSession`, `updateGroupSession`, `upsertGroupNote`, `upsertMemberNote`, `getGroupSessionNotes`, `listRelationalUnits`, `getRelationalUnitById`, `createRelationalUnit`, `addRelationalUnitMember`, `removeRelationalUnitMember`, `getClientRelationalUnits`, `listUnitSessions`
+- All read functions return empty/null in in-memory mode via `DB_MODE()` guard
+
+#### F2 — Group scheduling
+
+- `POST /v1/groups` — create group; `GET/PATCH /v1/groups/:id` — read/update
+- `POST /v1/groups/:id/sessions` — schedule one or recurring session (RRULE support)
+- `expandRrule(dtstart, rruleStr, maxCount=52)` — native RRULE expansion (no npm dependency); supports FREQ=WEEKLY with INTERVAL, COUNT, BYDAY, UNTIL; caps at 52 sessions per series
+- `PATCH /v1/groups/sessions/:id` — update status (cancel, etc.)
+
+#### F3 — Group session notes
+
+- `GET/POST /v1/groups/sessions/:id/notes` — load and save session notes
+- Shared note (visible to all counselors) + per-member notes (encrypted individually)
+- Format selector: SOAP / DAP / BIRP stored per session
+- `GroupSessionNotesForm.jsx` — shared note textarea + collapsible per-member sections
+- `GroupDetailPage.jsx` — sessions tab (schedule, cancel, notes, billing buttons) + members tab (add/remove)
+- `GroupsPage.jsx` — group list with create modal; "Therapy Groups" in counselor + admin nav
+
+#### F4 — Relational units (couples/family)
+
+- `GET/POST /v1/relational-units` — list and create units (couple/family/other)
+- `POST/DELETE /v1/relational-units/:id/members` — add/remove unit members
+- `GET /v1/clients/:id/relational-units` — units for a given client
+- `RelationalUnitCard.jsx` — shows unit badge + label in clinical chart; returns null when no units
+- `nav.groups` i18n key added; Sidebar wired for counselor and admin roles
+- `App.jsx` — lazy-loaded `GroupsPage` and `GroupDetailPage` with `selectedGroupId` state; Groups resets on nav away
+
+#### F5 — Group billing
+
+- `apps/api/src/lib/group-billing.js` — `buildGroupClaims()`: one claim per active member; CPT code by unit type: 90853 (group), 90849 (family), 90847 (couple)
+- `POST /v1/groups/sessions/:id/billing/submit` — idempotency guard via `notes LIKE '%group_session:ID%'`; creates draft claims for all active members; returns `{ claimIds, alreadySubmitted }`
+- `requireGroupRole` enforces counselor/admin for group writes
+
+**Tests:** `groups.test.mjs` (12 tests — in-memory stubs + expandRrule coverage), `group-billing.test.mjs` (6 tests — CPT mapping + in-memory stubs). All 195 API tests pass.
+
+---
+
+## May 28, 2026 — Phase E: Billing Reconciliation (E1–E4)
+
+### feat: ERA reconciliation, aging report, patient statements
+
+**Date:** 2026-05-28  
+**Affected area:** `apps/api/src/lib/`, `apps/api/src/db/`, `apps/worker/src/`, `apps/web/src/components/Billing/`, `apps/web/src/components/ClientDetail/`
+
+Full billing reconciliation layer: automated ERA processing, enriched claim UI, claims aging report, and HTML patient statements.
+
+#### E1 — ERA parsing + worker reconciler
+
+- `apps/api/src/lib/era-parser.js` — `parseEra(payload)`: extracts payment lines from Stedi 835 JSON; handles multiple response shapes (claims, claimPayments, transactions wrapper); derives `eraStatus` (paid / partially_paid / denied) and adjustment reason code
+- `apps/worker/src/era-reconciler.js` — `processEraReconciliation(pool, tenantId)`: polls Stedi for pending ERAs, matches by `payer_claim_number` or claim `id`, posts paid amount + adjustment reason, acknowledges ERA only after DB write succeeds (idempotent via `era_received_at`)
+- Worker poll loop extended: `processEraReconciliation` runs alongside EDI status poller
+- DB migration: `claims.paid_amount NUMERIC(10,2) NULL`, `claims.adjustment_reason VARCHAR(256) NULL`
+- `rowToClaim` and `updateClaim` in `billing.js` extended with `paidAmount` and `adjustmentReason` fields
+
+#### E2 — Payment posting UI
+
+- `EraReconciliationBadge.jsx` — color-coded badge (teal=Paid, yellow=Partially Paid, red=Denied) with tooltip showing ERA date and adjustment code
+- `ClaimCard.jsx` — shows paid amount, adjustment reason, ERA received date alongside existing status badge
+- `ClaimsList.jsx` — status filter dropdown (all / draft / submitted / accepted / paid / partially_paid / denied / rejected)
+
+#### E3 — Aging report UI
+
+- `AgingReport.jsx` — six-bucket aging display (Current, 1–30, 31–60, 61–90, 90+, Total); fetches `/v1/billing/reports/aging`; added to `AnalyticsDashboard` billing section
+
+#### E4 — Patient statements
+
+- `apps/api/src/lib/statement-generator.js` — `generateStatement()`: produces print-ready HTML with embedded CSS; practice header, claims table, balance table with totals; PHI decrypted only for this response, never logged
+- `GET /v1/clients/:id/statement` — streams HTML with `Content-Disposition: inline`; billing role required; audit event `billing.statement.generated` fires even on empty statements; in-memory mode returns empty statement
+- `BillingTab.jsx` added to `ClientDetailTabs` — shows ClaimsList + "Generate Statement" button (opens in new tab)
+- `client.tab.billing` i18n key added
+
+**Tests:** `era-parser.test.mjs` (6 tests), `statement-generator.test.mjs` (9 tests). All 177 API tests pass.
+
+---
+
+## May 28, 2026 — Phase D: Analytics & Reporting (D1–D5)
+
+### feat: Practice analytics dashboard
+
+**Date:** 2026-05-28  
+**Affected area:** `apps/api/src/lib/analytics.js`, `apps/api/src/index.js`, `apps/web/src/`, `packages/i18n/src/index.js`
+
+Full analytics and reporting layer: backend query service, REST endpoints, React dashboard with charts and CSV export.
+
+#### D1 — Analytics API (`apps/api/src/lib/analytics.js`)
+
+- `getSessionVolume` — daily session buckets with optional counselor filter
+- `getRevenueStats` — billed / collected / outstanding from claims table
+- `getNoShowRate` — total appointments + no-show count + rate %
+- `getOutcomeTrends` — PHQ-9 (or any scored form) score time-series
+- `getCounselorProductivity` — per-counselor sessions / completions / no-shows / avg duration
+- All functions enforce `tenantId` in every query; return empty/zero in in-memory mode
+- CSV builders: `buildSessionsCsv`, `buildRevenueCsv`
+- `parseDateRange` — preset (week / month / quarter / year) or explicit from/to
+- Routes: `GET /v1/reports/sessions`, `/revenue`, `/outcomes`, `/counselors` + `/sessions/export`, `/revenue/export`
+
+#### D2 — Practice analytics dashboard (`apps/web/src/components/Analytics/`)
+
+- `StatCard.jsx` — metric card with trend icon
+- `SessionVolumeChart.jsx` — `@mantine/charts` AreaChart for daily session volume
+- `AnalyticsDashboard.jsx` — preset selector (week/month/quarter/year), 4 stat cards, volume chart, counselor table, outcome chart, CSV export buttons
+- `useAnalytics.js` — 4 data hooks + `exportCsv` helper
+- `nav.analytics` i18n key added; "Analytics" nav item wired for admin role
+- Lazy-loaded in `App.jsx`
+
+#### D3 — Outcome trends (`apps/web/src/components/ClinicalChart/OutcomeTrendChart.jsx`)
+
+- `@mantine/charts` LineChart with PHQ-9 severity bands (minimal / mild / moderate / mod-severe / severe)
+- Y-axis fixed 0–27; reference lines at thresholds 5, 10, 15, 20
+- Embedded in `AnalyticsDashboard` for aggregate view; reusable in clinical chart
+
+#### D4 — Counselor productivity (`apps/web/src/components/Analytics/CounselorProductivityTable.jsx`)
+
+- Sortable table (click any column header to sort asc/desc)
+- Columns: sessions / completed / no-shows / no-show rate / avg duration
+
+#### D5 — CSV export
+
+- Export buttons in `AnalyticsDashboard` trigger browser download via `<a>` element
+- API streams plain-text CSV with `Content-Disposition: attachment`
+
+Tests: `apps/api/test/analytics.test.mjs` — 14 tests covering in-memory empty states, CSV builders, and `parseDateRange` presets. All 162 API tests pass.
+
+---
+
+## May 28, 2026 — Phase C: Mobile PWA (C1–C6)
+
+### feat: Mobile PWA — @churchcore/mobile
+
+**Date:** 2026-05-28  
+**Affected area:** `apps/mobile/`, `apps/api/src/index.js`, `apps/worker/src/`, `firebase.json`, `.firebaserc`, `deploy.yml`
+
+New `apps/mobile` Progressive Web App for counselors. Bottom-tab navigation (Schedule, Clients, Notes, Profile), installable via Add to Home Screen, service worker with offline app shell.
+
+#### C1 — PWA scaffold (`apps/mobile/`)
+
+- Vite 8 + React 19 + Mantine v9 project with `vite-plugin-pwa` (service worker + web manifest)
+- Bottom-tab shell: Schedule / Clients / Notes / Profile
+- `apps/mobile/public/icons/` for 192 and 512px app icons (placeholders)
+- Firebase Hosting target `mobile` added to `firebase.json` and `.firebaserc`
+- Build + deploy steps added to `deploy.yml` (staging + production)
+
+#### C2 — Mobile auth
+
+- `src/lib/api.js` — shared API client (same `credentials: include` pattern as platform app)
+- `src/lib/useAuth.js` — auth hook; loads session on mount, exposes login/logout
+- `src/pages/LoginPage.jsx` — mobile-optimized sign-in form, inline error, no alert dialogs
+
+#### C3 — Today's schedule
+
+- `GET /v1/appointments?date=YYYY-MM-DD` — added `date` query param to `handleAppointmentsCollection`; propagated to `listAppointments` DB query
+- `src/pages/ScheduleTab.jsx` — time-ordered appointment list, status badges, past appointments greyed, pull-to-refresh
+
+#### C4 — Client quick search
+
+- `src/pages/ClientsTab.jsx` — debounced 300ms search, result list
+- Deep link to full web chart via `<a target="_blank">`
+- PHI excluded from service worker cache via `NetworkOnly` workbox rule on `/api/`
+
+#### C5 — Quick note entry
+
+- `src/pages/NotesTab.jsx` — client picker, format selector (SOAP/DAP/BIRP/Faith Integrated), textarea with 5000 char limit
+- Auto-saves draft to `localStorage` every 10 seconds; clears on successful submit
+- Submits to existing `POST /v1/clients/:id/progress-notes`
+
+#### C6 — Push notifications
+
+- DB migration: `push_subscriptions` table + index on `(tenant_id, staff_account_id)`
+- `POST /v1/notifications/subscribe` — stores Web Push subscription (upsert on `endpoint`)
+- `POST /v1/notifications/unsubscribe` — removes subscription
+- `GET /v1/notifications/vapid-public-key` — returns public key for client-side subscribe
+- `apps/worker/src/push-notifications.js` — fires push 15 min before appointments; removes expired endpoints (410/404)
+- Worker wired into poll loop alongside existing jobs
+- `src/lib/usePushNotifications.js` — requests permission 5s after first login, subscribes via VAPID
+- Environment variables required: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`
+- `web-push@^3.6.7` added to `apps/worker/package.json`
+
+Tests: 148/148 passing (no regressions)
+
+---
+
+## May 27, 2026 — Phase C–F competitive parity plan + ADRs + deploy.yml fixes
+
+### docs: Phase C–F competitive parity roadmap
+
+**Date:** 2026-05-27  
+**Affected area:** `PLANS/`, `docs/adr/`
+
+- `PLANS/PHASE-C-F-COMPETITIVE-PARITY.md` — 21-item software factory plan covering:
+  - Phase C: Mobile PWA (PWA scaffold, auth, schedule, client search, quick notes, push notifications, Capacitor)
+  - Phase D: Analytics & Reporting (API, dashboard, outcome trends, counselor productivity, CSV export)
+  - Phase E: Billing Reconciliation (ERA parsing, payment posting UI, aging report, patient statements)
+  - Phase F: Group & Family Therapy (data model, scheduling, group notes, relational units, group billing)
+- `docs/adr/0008-pwa-mobile-strategy.md` — PWA in `apps/mobile` vs React Native vs responsive; chose PWA + Capacitor option
+- `docs/adr/0009-in-app-analytics.md` — in-app analytics vs BI tool; chose in-app Postgres queries + `@mantine/charts`
+- `docs/adr/0010-group-therapy-model.md` — group/family therapy data model; separate tables, split note encryption, relational units
+
+### fix: deploy.yml — 8 bugs corrected
+
+**Date:** 2026-05-27  
+**Affected area:** `.github/workflows/deploy.yml`
+
+- `pnpm --filter api test` → `pnpm --filter @churchcore/api test`
+- `secrets.GCP_REGION` / `secrets.GCP_PROJECT` → `vars.GCP_REGION` / `vars.GCP_PROJECT_ID` (non-sensitive config belongs in vars, not secrets)
+- Added `google-github-actions/setup-gcloud@v2` to build, deploy-staging, and deploy-production jobs (gcloud CLI was unavailable)
+- Added Node.js + pnpm setup steps to deploy-production before migration step
+- Added Phase A+B secrets (Stripe, Stedi, Anthropic) to staging API and Worker deploys
+- Added platform dist download + Firebase platform deploy to staging job
+- Added `target: app` / `target: platform` to all Firebase Hosting deploy steps
+- Fixed production smoke test URL: `system.churchcorecare.com` → `app.churchcorecare.com`
+- Fixed `workflow_dispatch` options from JSON inline array to YAML list
+
+---
+
 ## May 27, 2026 — Runbooks, E2E tests, platform SPA impersonation page, plan tracker sync
 
 ### feat: ops runbooks A3-13 and A3-14
@@ -732,11 +994,11 @@ Real-time rule evaluation over the data already returned by `GET /v1/audit/intel
 **Date:** April 9, 2026
 **Affected area:** `PLANS/CHURCH-MANAGEMENT-MINISTRY-INTEGRATION.md`, `PLANS/PLAN-TRACKER.md`, `README.md`
 
-Added a dedicated planning artifact that defines how a future Church Management product should integrate with Faith Counseling without collapsing system boundaries or forcing immediate implementation.
+Added a dedicated planning artifact that defines how a future Church Management product should integrate with ChurchCore Care without collapsing system boundaries or forcing immediate implementation.
 
 **What changed:**
 
-- New `PLANS/CHURCH-MANAGEMENT-MINISTRY-INTEGRATION.md` establishes Faith Counseling as a separate protected ministry system for future Church Management integration
+- New `PLANS/CHURCH-MANAGEMENT-MINISTRY-INTEGRATION.md` establishes ChurchCore Care as a separate protected ministry system for future Church Management integration
 - Added a ChurchForge-aligned section that can be reused upstream as a `Future Ministry Integration Readiness` source section
 - Defined architectural, consent, access, audit, telemetry, AI, and UX guardrails for future cross-system work
 - Added a README cross-reference so the integration posture is visible from the main project documentation
@@ -851,7 +1113,7 @@ Audited every screen title, page subtitle, navigation label, tab label, dashboar
 - `Client Workspace` → `Clients`; subtitle removed "without leaving the client operations surface"
 - `Client Scheduling` → `Scheduling`; subtitle rewritten
 - `Faith Workflows` title → `Faithful Workflows`; subtitle: "Counselor-facing care recommendations — review before acting" → "Care guidance and recommendations — review each suggestion with your own clinical judgment."
-- Sign-in screen: `Sign in to workspace` → `Welcome to Faith Counseling`
+- Sign-in screen: `Sign in to workspace` → `Welcome to ChurchCore Care`
 - Brand subtitle: `Practice Workspace` → `Faith-Centered Counseling`
 
 **Dashboard panel headings:**
@@ -3243,7 +3505,7 @@ None.
 
 ### Overview
 
-Refreshes the sidebar heading inside the hamburger menu. The previous header used a plain purple square plus the two-line `Faith Counseling` / `Practice Workspace` label. It now uses a compact animated counseling icon and a simpler `Options` heading.
+Refreshes the sidebar heading inside the hamburger menu. The previous header used a plain purple square plus the two-line `ChurchCore Care` / `Practice Workspace` label. It now uses a compact animated counseling icon and a simpler `Options` heading.
 
 ### Web (v2.1.18)
 

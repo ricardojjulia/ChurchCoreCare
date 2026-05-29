@@ -1,6 +1,6 @@
 {
   "name": "@churchcore/worker",
-  "version": "6.2.0",
+  "version": "7.0.0",
   "private": true,
   "type": "module",
   "main": "src/index.js",
@@ -10,6 +10,7 @@
     "test": "node -e \"console.log('No tests configured for @churchcore/worker yet')\""
   },
   "dependencies": {
-    "pg": "^8.20.0"
+    "pg": "^8.20.0",
+    "web-push": "^3.6.7"
   }
 }

@@ -1,14 +1,14 @@
-# Faith Counseling — User Manual
+# ChurchCore Care — User Manual
 
 **Version:** 5.7.0  
 **Date:** April 5, 2026  
-**Platform:** Faith Counseling Practice Management System
+**Platform:** ChurchCore Care Practice Management System
 
 ---
 
 ## About This Manual
 
-This user manual covers the full Faith Counseling platform — a faith-based Christian counseling practice management system designed for solo counselors, group practices, and multi-location clinics. Whether you are a practice owner, counselor, scheduler, or client, this manual has a dedicated section for your daily workflows.
+This user manual covers the full ChurchCore Care platform — a faith-based Christian counseling practice management system designed for solo counselors, group practices, and multi-location clinics. Whether you are a practice owner, counselor, scheduler, or client, this manual has a dedicated section for your daily workflows.
 
 ---
 
@@ -60,4 +60,4 @@ For technical support or to report issues, contact your practice administrator. 
 
 ---
 
-*Faith Counseling is built to support Christian counseling practices with structured, explainable workflows and a strong operational foundation. Every surface is designed to keep counselors focused on care, not paperwork.*
+*ChurchCore Care is built to support Christian counseling practices with structured, explainable workflows and a strong operational foundation. Every surface is designed to keep counselors focused on care, not paperwork.*

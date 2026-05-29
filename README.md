@@ -2,7 +2,7 @@
 
 > *"Whatever you do, work at it with all your heart, as working for the Lord."* — Colossians 3:23
 
-Welcome to **ChurchCore Care** — a practice management platform built from the ground up for Christian counseling organizations. Whether you run a solo ministry practice, a group clinic, or a multi-location operation, Faith Counseling is designed to feel like a tool made specifically for you.
+Welcome to **ChurchCore Care** — a practice management platform built from the ground up for Christian counseling organizations. Whether you run a solo ministry practice, a group clinic, or a multi-location operation, ChurchCore Care is designed to feel like a tool made specifically for you.
 
 From the moment a new client submits a care request to the session note signed after their last appointment, every workflow in this platform carries your practice's values forward — with structured clinical support, faith-integrated care tools, and an operational foundation ready for Monday morning.
 
@@ -64,7 +64,7 @@ Behind that presentation, the recent work has made the platform easier to trust 
 
 ## Freshly Shipped
 
-The platform has moved quickly over the last few iterations, and the most recent work is aimed at making Faith Counseling easier to explore, easier to operate, and easier to present with confidence.
+The platform has moved quickly over the last few iterations, and the most recent work is aimed at making ChurchCore Care easier to explore, easier to operate, and easier to present with confidence.
 
 - **Integrated telehealth via JaaS/Jitsi (Phase 1):** Remote appointments now have a live **Join Video Session** button. Clicking it calls `POST /v1/appointments/:id/video-session`, which generates a short-lived RS256 JWT and returns the JaaS room credentials. The Jitsi External API is loaded on demand and the meeting is embedded directly in the scheduling page via `VideoSessionModal`. A `session.video_started` audit event is written to the ledger on every join. JaaS room names are stable opaque tokens stored in `appointments.video_room_id` — no PHI is embedded in the room name or JWT claims. Required env vars: `JITSI_APP_ID`, `JITSI_API_KEY_ID`, `JITSI_PRIVATE_KEY_BASE64`, `JITSI_DOMAIN=8x8.vc`.
 
@@ -94,7 +94,7 @@ The platform has moved quickly over the last few iterations, and the most recent
 - **Deterministic Audit Intelligence observations (v6.1.0):** The Audit Intelligence tab in Practice Operations now generates instant, rule-based callouts after every query — no AI dependency required. A 75-rule engine evaluates volume patterns, denial and error rates, authentication anomalies, PHI access concentration, admin actions, actor behavior, action distribution, and data quality gaps. Results are severity-tiered (critical → warning → info) and always available without an `ANTHROPIC_API_KEY`.
 - **3-minute browser idle session timeout:** Any open browser tab now automatically invalidates the session after 3 minutes of inactivity. A dismissible warning appears at 30 seconds remaining. The server-side idle timeout has been tightened to match, providing defense in depth for PHI protection.
 - **Browser error sweep is now clean:** a Playwright-driven UI scan now walks public, admin, and client surfaces against the local app, and the latest pass cleared public CSP script violations, signed-out auth noise, protected-monitoring 401s, and the Scheduling recurring-series runtime loop so the sweep finishes at `0` public, `0` admin, and `0` client errors.
-- **The platform speaks like a counseling practice:** every screen title, nav label, dashboard panel, and key empty state was audited and rewritten — `My Day`, `My Tasks`, `Needs Attention`, `Caseload`, `Forms & Documents`, `Privacy & Data`, and `Welcome to Faith Counseling` at sign-in, among others.
+- **The platform speaks like a counseling practice:** every screen title, nav label, dashboard panel, and key empty state was audited and rewritten — `My Day`, `My Tasks`, `Needs Attention`, `Caseload`, `Forms & Documents`, `Privacy & Data`, and `Welcome to ChurchCore Care` at sign-in, among others.
 - **A full User Manual is now live:** `docs/User Manual/README.md` walks every major role and product surface, from onboarding and scheduling to charting, monitoring, and security.
 - **Demo data is now reproducible in SQL:** `pnpm demo:sql:generate`, `pnpm demo:sql:apply`, and `pnpm demo:sql:refresh` create and load the canonical dataset under `ops/demo-dataset/generated/`, which makes local demos and reset workflows much more predictable.
 - **The README now shows the real product shape:** the new `LATEST LOOK` section and embedded screenshot grids turn the repository front door into an actual product tour instead of a bare technical landing page.
@@ -260,7 +260,7 @@ The `apps/web/public/assets` bundle files may be refreshed and committed when sh
 
 ## Standalone Product Pages
 
-The static public surfaces are meant to reflect the current product posture, not an older generic admin-console identity. The checked-in About page at `/about` now presents Faith Counseling as a counselor-first, faith-aware practice platform with a stronger product narrative and the same light indigo visual language used across the rest of the app, while still linking back to live monitoring and API documentation.
+The static public surfaces are meant to reflect the current product posture, not an older generic admin-console identity. The checked-in About page at `/about` now presents ChurchCore Care as a counselor-first, faith-aware practice platform with a stronger product narrative and the same light indigo visual language used across the rest of the app, while still linking back to live monitoring and API documentation.
 
 ## Architecture At A Glance
 
@@ -275,11 +275,11 @@ The static public surfaces are meant to reflect the current product posture, not
 
 ## Future Ministry Integration Readiness
 
-Faith Counseling now includes a dedicated planning artifact for future Church Management integration posture: [PLANS/CHURCH-MANAGEMENT-MINISTRY-INTEGRATION.md](PLANS/CHURCH-MANAGEMENT-MINISTRY-INTEGRATION.md).
+ChurchCore Care now includes a dedicated planning artifact for future Church Management integration posture: [PLANS/CHURCH-MANAGEMENT-MINISTRY-INTEGRATION.md](PLANS/CHURCH-MANAGEMENT-MINISTRY-INTEGRATION.md).
 
 That plan establishes the expected boundary for any upstream ministry platform, including ChurchForge:
 
-- Faith Counseling remains a separate protected ministry system, not an internal module.
+- ChurchCore Care remains a separate protected ministry system, not an internal module.
 - Future integration must use APIs, webhooks, or adapters rather than direct database coupling.
 - Member-to-client linkage must be consent-aware, tenant-scoped, revocable, and minimum-necessary.
 - Church-side users should receive ministry-safe coordination data by default, not clinical record detail.
@@ -548,7 +548,7 @@ Public, admin, and client surfaces now complete a local browser error sweep with
 
 Every screen title, page subtitle, navigation label, dashboard panel heading, and key empty state was audited and rewritten to feel natural to a Christian counseling practice rather than an enterprise SaaS back-office. No route or navigation logic was changed — only what people see.
 
-Notable changes: `My Day` and `My Tasks` for counselors, `Today's Overview` for the admin dashboard, `Needs Attention` replacing `Priority Queue`, `Documentation Watch` replacing `Compliance Watch`, `Caseload` replacing `Lifecycle` in Workspace Studio, `Forms & Documents` replacing `Documents & Inventories`, `Privacy & Data` replacing `Data Rights` in the client portal, and `Welcome to Faith Counseling` on the sign-in screen.
+Notable changes: `My Day` and `My Tasks` for counselors, `Today's Overview` for the admin dashboard, `Needs Attention` replacing `Priority Queue`, `Documentation Watch` replacing `Compliance Watch`, `Caseload` replacing `Lifecycle` in Workspace Studio, `Forms & Documents` replacing `Documents & Inventories`, `Privacy & Data` replacing `Data Rights` in the client portal, and `Welcome to ChurchCore Care` on the sign-in screen.
 
 ### OTEL Removal (April 21, 2026)
 
@@ -580,7 +580,7 @@ Recurring scheduling no longer starts with raw RRULE syntax. Staff now get reada
 
 ### Nightly Security Scans (April 6, 2026)
 
-Faith Counseling runs automated nightly security scans at **23:00 UTC** via GitHub Actions. Each run produces two complementary reports:
+ChurchCore Care runs automated nightly security scans at **23:00 UTC** via GitHub Actions. Each run produces two complementary reports:
 
 | Scan | What It Covers |
 | ---- | -------------- |

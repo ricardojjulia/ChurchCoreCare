@@ -1,6 +1,6 @@
 # 10 — Offerings and Financials
 
-**Faith Counseling User Manual**
+**ChurchCore Care User Manual**
 
 ---
 
@@ -74,7 +74,7 @@ All offering records — including ended arrangements — remain in the history 
 
 ## 10.7 Faith-Based Financial Practices
 
-Faith Counseling recognizes that many Christian counseling practices operate under a ministry model. The offering module fully supports:
+ChurchCore Care recognizes that many Christian counseling practices operate under a ministry model. The offering module fully supports:
 
 - **Pro bono** and **scholarship** tracks for ministry-funded clients
 - **Sliding scale** arrangements reflective of compassion-based fee structures

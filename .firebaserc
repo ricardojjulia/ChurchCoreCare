@@ -6,7 +6,8 @@
     "churchcore-care-prod": {
       "hosting": {
         "app": ["churchcore-care-app"],
-        "platform": ["churchcore-care-platform"]
+        "platform": ["churchcore-care-platform"],
+        "mobile": ["churchcore-care-mobile"]
       }
     }
   }

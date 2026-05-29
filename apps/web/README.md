@@ -1,6 +1,6 @@
 # Web App
 
-Lightweight modern UI shell for Faith Counseling, with counselor-first daily workflows and deeper administrative operations.
+Lightweight modern UI shell for ChurchCore Care, with counselor-first daily workflows and deeper administrative operations.
 
 ## Goals
 

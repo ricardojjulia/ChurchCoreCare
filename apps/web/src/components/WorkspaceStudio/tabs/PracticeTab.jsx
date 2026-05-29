@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import {
   Stack, TextInput, Select, Group, Button, Alert, Divider, Badge,
-  Textarea,
+  Textarea, Text,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { Video } from 'lucide-react';
+import { useI18n } from '../../../lib/i18nContext.jsx';
 import { csrfHeaders } from '../../../lib/csrf.js';
 import { SectionHeader, SectionSurface, SurfaceState } from '../../ui/surface.jsx';
 
@@ -18,18 +19,20 @@ async function apiFetch(url, options = {}) {
   return res.json();
 }
 
-const PRACTICE_TYPE_OPTIONS = [
-  { value: 'solo', label: 'Solo Practice' },
-  { value: 'group', label: 'Group Practice' },
-  { value: 'multi_location', label: 'Multi-Location' },
-];
-
 const TIMEZONE_OPTIONS = [
   'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
   'America/Phoenix', 'America/Anchorage', 'Pacific/Honolulu',
 ].map((tz) => ({ value: tz, label: tz.replace('America/', '').replace('Pacific/', '').replaceAll('_', ' ') + ` (${tz})` }));
 
 export default function PracticeTab() {
+  const { t } = useI18n();
+
+  const PRACTICE_TYPE_OPTIONS = [
+    { value: 'solo', label: t('practice.type.solo') },
+    { value: 'group', label: t('practice.type.group') },
+    { value: 'multi_location', label: t('practice.type.multi_location') },
+  ];
+
   const [practices, setPractices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -110,9 +113,9 @@ export default function PracticeTab() {
         jaasPrivateKeyPem: '', // clear the sensitive field after save
       }));
       setVideoDirty(false);
-      notifications.show({ title: 'Saved', message: 'Video configuration updated.', color: 'green' });
+      notifications.show({ title: t('demographics.notify.saved'), message: t('practice.notify.videoUpdated'), color: 'green' });
     } catch (err) {
-      notifications.show({ title: 'Error', message: err.message, color: 'red' });
+      notifications.show({ title: t('practice.notify.error'), message: err.message, color: 'red' });
     } finally {
       setVideoSaving(false);
     }
@@ -141,42 +144,42 @@ export default function PracticeTab() {
       });
       setPractices((prev) => prev.map((p) => p.id === draft.id ? payload.item : p));
       setDirty(false);
-      notifications.show({ title: 'Saved', message: 'Practice profile updated.', color: 'green' });
+      notifications.show({ title: t('demographics.notify.saved'), message: t('practice.notify.profileUpdated'), color: 'green' });
     } catch (err) {
-      notifications.show({ title: 'Error', message: err.message, color: 'red' });
+      notifications.show({ title: t('practice.notify.error'), message: err.message, color: 'red' });
     } finally {
       setSaving(false);
     }
   }
 
-  if (loading) return <SurfaceState type="loading" message="Loading practice profile..." />;
-  if (error) return <SurfaceState type="error" title="Unable to load practice" message={error} />;
-  if (!draft) return <SurfaceState message="No practice configured for this tenant." />;
+  if (loading) return <SurfaceState type="loading" message={t('practice.loading')} />;
+  if (error) return <SurfaceState type="error" title={t('practice.loadError')} message={error} />;
+  if (!draft) return <SurfaceState message={t('practice.notConfigured')} />;
 
   return (
     <Stack gap="md">
       <SectionSurface>
         <SectionHeader
-          title="Practice Profile"
-          description="Core practice identity and contact information. Changes apply across all counselor and portal surfaces."
+          title={t('practice.section.profile.title')}
+          description={t('practice.section.profile.description')}
         />
         <Divider mb="md" />
         <Stack gap="sm">
           <TextInput
-            label="Practice Name"
+            label={t('practice.field.name')}
             value={draft.name}
             onChange={(e) => update('name', e.currentTarget.value)}
             required
           />
           <Group grow>
             <Select
-              label="Practice Type"
+              label={t('practice.field.type')}
               data={PRACTICE_TYPE_OPTIONS}
               value={draft.type}
               onChange={(v) => update('type', v ?? 'solo')}
             />
             <Select
-              label="Timezone"
+              label={t('practice.field.timezone')}
               data={TIMEZONE_OPTIONS}
               value={draft.timezone}
               onChange={(v) => update('timezone', v ?? 'America/New_York')}
@@ -184,35 +187,35 @@ export default function PracticeTab() {
             />
           </Group>
           <TextInput
-            label="Faith Tradition"
+            label={t('practice.field.faithTradition')}
             value={draft.faithTradition}
             onChange={(e) => update('faithTradition', e.currentTarget.value)}
-            description="Displayed in portal and client-facing materials."
+            description={t('practice.field.faithTraditionDesc')}
           />
-          <Divider label="Contact" labelPosition="left" />
+          <Divider label={t('practice.field.contactDivider')} labelPosition="left" />
           <Group grow>
             <TextInput
-              label="Contact Email"
+              label={t('practice.field.contactEmail')}
               type="email"
               value={draft.contactEmail}
               onChange={(e) => update('contactEmail', e.currentTarget.value)}
             />
             <TextInput
-              label="Contact Phone"
+              label={t('practice.field.contactPhone')}
               value={draft.contactPhone}
               onChange={(e) => update('contactPhone', e.currentTarget.value)}
             />
           </Group>
           <Group justify="flex-end" mt="xs">
-            {dirty && <Badge color="yellow" variant="light">Unsaved changes</Badge>}
-            <Button onClick={save} loading={saving} disabled={!dirty}>Save Practice</Button>
+            {dirty && <Badge color="yellow" variant="light">{t('practice.unsavedChanges')}</Badge>}
+            <Button onClick={save} loading={saving} disabled={!dirty}>{t('practice.save')}</Button>
           </Group>
         </Stack>
       </SectionSurface>
 
       {practices.length > 1 && (
         <SectionSurface>
-          <SectionHeader title="All Practices" />
+          <SectionHeader title={t('practice.section.allPractices')} />
           <Stack gap="xs">
             {practices.map((p) => (
               <Group key={p.id} justify="space-between" wrap="nowrap">
@@ -220,7 +223,7 @@ export default function PracticeTab() {
                 <Group gap="xs">
                   <Badge size="xs" variant="outline">{p.type?.replaceAll('_', ' ')}</Badge>
                   {draft.id !== p.id && (
-                    <Button size="xs" variant="subtle" onClick={() => initDraft(p)}>Edit</Button>
+                    <Button size="xs" variant="subtle" onClick={() => initDraft(p)}>{t('actions.edit')}</Button>
                   )}
                 </Group>
               </Group>
@@ -232,42 +235,35 @@ export default function PracticeTab() {
       {videoDraft && (
         <SectionSurface>
           <SectionHeader
-            title="Video / Telehealth Configuration"
-            description={(
-              <>
-              Configure your practice&apos;s own Jitsi as a Service (JaaS) credentials so that video
-              sessions are billed to your account. If left blank, the platform&apos;s default
-              configuration will be used.
-              </>
-            )}
-            meta={<Badge leftSection={<Video size={12} />} color="blue" variant="light">Telehealth</Badge>}
+            title={t('practice.section.video.title')}
+            description={t('practice.section.video.description')}
+            meta={<Badge leftSection={<Video size={12} />} color="blue" variant="light">{t('practice.video.telehealth')}</Badge>}
           />
           <Divider mb="md" />
           <Stack gap="sm">
             <Alert color="blue" variant="light" fz="xs">
-              Credentials are encrypted at rest and are never returned by the API. The private key
-              field is write-only — enter a new value only when you want to replace the stored key.
+              {t('practice.video.encryptedNotice')}
             </Alert>
             <Group grow>
               <TextInput
-                label="JaaS App ID"
-                placeholder="vpaas-magic-cookie-…"
-                description="Found in your 8x8 JaaS dashboard under API Keys."
+                label={t('practice.video.jaasAppId')}
+                placeholder={t('practice.video.jaasAppIdPlaceholder')}
+                description={t('practice.video.jaasAppIdDesc')}
                 value={videoDraft.jaasAppId}
                 onChange={(e) => updateVideo('jaasAppId', e.currentTarget.value)}
               />
               <TextInput
-                label="JaaS API Key ID"
-                placeholder="vpaas-magic-cookie-…/abcd1234"
-                description="The key identifier (Kid) shown in JaaS Credentials."
+                label={t('practice.video.jaasApiKeyId')}
+                placeholder={t('practice.video.jaasApiKeyIdPlaceholder')}
+                description={t('practice.video.jaasApiKeyIdDesc')}
                 value={videoDraft.jaasApiKeyId}
                 onChange={(e) => updateVideo('jaasApiKeyId', e.currentTarget.value)}
               />
             </Group>
             <TextInput
-              label="JaaS Domain"
-              placeholder="8x8.vc"
-              description="Use 8x8.vc for JaaS (default). Change only for self-hosted Jitsi."
+              label={t('practice.video.jaasDomain')}
+              placeholder={t('practice.video.jaasDomainPlaceholder')}
+              description={t('practice.video.jaasDomainDesc')}
               value={videoDraft.jaasDomain}
               onChange={(e) => updateVideo('jaasDomain', e.currentTarget.value)}
               style={{ maxWidth: 300 }}
@@ -275,14 +271,14 @@ export default function PracticeTab() {
             <Textarea
               label={
                 videoDraft.jaasPrivateKeyConfigured
-                  ? 'JaaS Private Key — key is configured, enter new PEM to replace'
-                  : 'JaaS Private Key (PEM)'
+                  ? t('practice.video.privateKeyLabelConfigured')
+                  : t('practice.video.privateKeyLabel')
               }
               placeholder={'-----BEGIN RSA PRIVATE KEY-----\n…\n-----END RSA PRIVATE KEY-----'}
               description={
                 videoDraft.jaasPrivateKeyConfigured
-                  ? 'A private key is already stored. Leave blank to keep the existing key.'
-                  : 'Paste the RSA private key PEM downloaded from the JaaS Credentials page.'
+                  ? t('practice.video.privateKeyDescConfigured')
+                  : t('practice.video.privateKeyDesc')
               }
               value={videoDraft.jaasPrivateKeyPem}
               onChange={(e) => updateVideo('jaasPrivateKeyPem', e.currentTarget.value)}
@@ -291,12 +287,12 @@ export default function PracticeTab() {
               styles={{ input: { fontFamily: 'monospace', fontSize: 12 } }}
             />
             <Group justify="flex-end" mt="xs">
-              {videoDirty && <Badge color="yellow" variant="light">Unsaved changes</Badge>}
+              {videoDirty && <Badge color="yellow" variant="light">{t('practice.unsavedChanges')}</Badge>}
               {videoDraft.jaasPrivateKeyConfigured && !videoDraft.jaasPrivateKeyPem && (
-                <Badge color="green" variant="light">Private key configured</Badge>
+                <Badge color="green" variant="light">{t('practice.video.privateKeyConfigured')}</Badge>
               )}
               <Button onClick={saveVideoConfig} loading={videoSaving} disabled={!videoDirty}>
-                Save Video Config
+                {t('practice.video.save')}
               </Button>
             </Group>
           </Stack>

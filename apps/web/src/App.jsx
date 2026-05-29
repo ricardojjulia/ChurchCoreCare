@@ -34,6 +34,9 @@ const ClientPortalPage = lazy(() => import('./components/Portal/ClientPortalPage
 const OfferingsPage = lazy(() => import('./components/Offerings/OfferingsPage.jsx'));
 const ClinicalChartPage = lazy(() => import('./components/ClinicalChart/ClinicalChartPage.jsx'));
 const FaithWorkflowsPage = lazy(() => import('./components/FaithWorkflows/FaithWorkflowsPage.jsx'));
+const AnalyticsDashboard = lazy(() => import('./components/Analytics/AnalyticsDashboard.jsx'));
+const GroupsPage = lazy(() => import('./components/Groups/GroupsPage.jsx'));
+const GroupDetailPage = lazy(() => import('./components/Groups/GroupDetailPage.jsx'));
 
 function firstString(...values) {
   for (const value of values) {
@@ -159,6 +162,7 @@ export default function App() {
   const [workspaceStudioInitialTab, setWorkspaceStudioInitialTab] = useState('portal');
   const [workspaceStudioDocumentsClientId, setWorkspaceStudioDocumentsClientId] = useState('');
   const [clinicalChartState, setClinicalChartState] = useState(createDefaultClinicalChartState);
+  const [selectedGroupId, setSelectedGroupId] = useState(null);
   const [clientPickerOpen, setClientPickerOpen] = useState(false);
   const [schedulingState, setSchedulingState] = useState({
     composerOpen: false,
@@ -376,6 +380,7 @@ export default function App() {
     }
     if (view !== 'clinical') setClinicalChartState(createDefaultClinicalChartState());
     if (view !== 'portal') setPortalState({ initialClientId: null, initialTab: 'dashboard' });
+    if (view !== 'groups') setSelectedGroupId(null);
     closeNav();
   };
 
@@ -482,8 +487,10 @@ export default function App() {
   const showOfferings        = currentView === 'offerings';
   const showClinical         = currentView === 'clinical';
   const showFaith            = currentView === 'faith';
+  const showAnalytics        = currentView === 'analytics';
+  const showGroups           = currentView === 'groups';
   const showTimeTracking     = currentView === 'time-tracking';
-  const showFallbackWorkspace = !showDashboard && !showCounselorHome && !showTasks && !showUsers && !showCounselors && !showClients && !showScheduling && !showWorkspaceStudio && !showDocuments && !showPortal && !showOfferings && !showClinical && !showFaith;
+  const showFallbackWorkspace = !showDashboard && !showCounselorHome && !showTasks && !showUsers && !showCounselors && !showClients && !showScheduling && !showWorkspaceStudio && !showDocuments && !showPortal && !showOfferings && !showClinical && !showFaith && !showAnalytics && !showGroups;
   if (window.location.pathname === '/signup') {
     return <SignupPage />;
   }
@@ -662,6 +669,14 @@ export default function App() {
               currentUser={currentUser}
               sharedOperationsSummary={operationsSummaryData.summary ?? null}
             />
+          ) : showAnalytics ? (
+            <AnalyticsDashboard />
+          ) : showGroups ? (
+            selectedGroupId ? (
+              <GroupDetailPage groupId={selectedGroupId} onBack={() => setSelectedGroupId(null)} />
+            ) : (
+              <GroupsPage onSelectGroup={(g) => setSelectedGroupId(g.id)} />
+            )
           ) : showTimeTracking ? (
             <TimeTrackingPage currentUser={currentUser} />
           ) : showClinical ? (

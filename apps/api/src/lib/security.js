@@ -1,5 +1,5 @@
 /**
- * Security middleware for Faith Counseling API.
+ * Security middleware for ChurchCore Care API.
  *
  * Controls:
  *  - Secure response headers (CSP, HSTS, X-Frame-Options, CORP, etc.)

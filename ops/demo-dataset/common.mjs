@@ -367,7 +367,7 @@ async function insertStaff(connection, dataset, hashes) {
         staff.id,
         dataset.tenantId,
         'Trauma-Informed Care Certification',
-        'Faith Counseling Institute',
+        'ChurchCore Care Institute',
         '2024-03-01',
         '2027-03-01',
         encrypt(`${staff.id.toUpperCase()}-CERT`),

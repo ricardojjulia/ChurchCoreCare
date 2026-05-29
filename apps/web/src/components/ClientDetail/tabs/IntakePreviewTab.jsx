@@ -12,8 +12,9 @@ import {
   Title,
 } from '@mantine/core';
 import { fetchClientIntakePreview } from '../../../lib/clientApi.js';
+import { useI18n } from '../../../lib/i18nContext.jsx';
 
-function KeyValueList({ title, items, emptyLabel = 'No details available yet.' }) {
+function KeyValueList({ title, items, emptyLabel }) {
   return (
     <Paper withBorder radius="md" p="md">
       <Title order={4}>{title}</Title>
@@ -38,6 +39,7 @@ function urgencyColor(level) {
 }
 
 export default function IntakePreviewTab({ clientId }) {
+  const { t } = useI18n();
 
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -87,14 +89,14 @@ export default function IntakePreviewTab({ clientId }) {
     return (
       <Group py="lg">
         <Loader size="sm" />
-        <Text size="sm" c="dimmed">Loading intake preview...</Text>
+        <Text size="sm" c="dimmed">{t('intake.preview.loading')}</Text>
       </Group>
     );
   }
 
   if (error) {
     return (
-      <Alert color="red" title="Unable to load intake preview">
+      <Alert color="red" title={t('intake.preview.errorTitle')}>
         {error}
       </Alert>
     );
@@ -102,20 +104,20 @@ export default function IntakePreviewTab({ clientId }) {
 
   if (!preview) {
     return (
-      <Alert color="gray" title="No intake preview available">
-        No intake preview data is available for this client.
+      <Alert color="gray" title={t('intake.preview.emptyTitle')}>
+        {t('intake.preview.emptyBody')}
       </Alert>
     );
   }
 
   return (
     <Stack gap="md">
-      <Alert color="blue" title="Counselor review support">
+      <Alert color="blue" title={t('intake.preview.counselorReviewTitle')}>
         {preview.disclaimer}
       </Alert>
 
       {!preview.eligible ? (
-        <Alert color="yellow" title="Preview not currently active">
+        <Alert color="yellow" title={t('intake.preview.notActiveTitle')}>
           <Stack gap={4}>
             {(preview.reasons ?? []).map((reason) => (
               <Text key={reason} size="sm">{reason}</Text>
@@ -126,48 +128,50 @@ export default function IntakePreviewTab({ clientId }) {
 
       <SimpleGrid cols={{ base: 1, md: 3 }}>
         <Paper withBorder radius="md" p="md">
-          <Text size="xs" fw={700} c="dimmed" tt="uppercase">Intake status</Text>
+          <Text size="xs" fw={700} c="dimmed" tt="uppercase">{t('intake.preview.intakeStatus')}</Text>
           <Text size="lg" fw={700} mt={4}>
-            {preview.intake?.completed ? 'Complete' : 'Incomplete'}
+            {preview.intake?.completed ? t('intake.preview.complete') : t('intake.preview.incomplete')}
           </Text>
           <Text size="sm" c="dimmed" mt={6}>
-            Packet status: {preview.intake?.packetStatus ?? 'Not on file'}
+            {t('intake.preview.packetStatus', { status: preview.intake?.packetStatus ?? 'Not on file' })}
           </Text>
         </Paper>
 
         <Paper withBorder radius="md" p="md">
-          <Text size="xs" fw={700} c="dimmed" tt="uppercase">Held sessions</Text>
+          <Text size="xs" fw={700} c="dimmed" tt="uppercase">{t('intake.preview.heldSessions')}</Text>
           <Text size="lg" fw={700} mt={4}>{preview.sessions?.heldSessionCount ?? 0}</Text>
           <Text size="sm" c="dimmed" mt={6}>
-            Future appointments: {preview.sessions?.futureAppointmentCount ?? 0}
+            {t('intake.preview.futureAppointments', { count: preview.sessions?.futureAppointmentCount ?? 0 })}
           </Text>
         </Paper>
 
         <Paper withBorder radius="md" p="md">
-          <Text size="xs" fw={700} c="dimmed" tt="uppercase">Next appointment</Text>
+          <Text size="xs" fw={700} c="dimmed" tt="uppercase">{t('intake.preview.nextAppointment')}</Text>
           <Text size="lg" fw={700} mt={4}>
             {preview.sessions?.nextAppointmentAt
               ? new Date(preview.sessions.nextAppointmentAt).toLocaleString()
-              : 'Not scheduled'}
+              : t('intake.preview.notScheduled')}
           </Text>
           <Text size="sm" c="dimmed" mt={6}>
-            Generated {preview.generatedAt ? new Date(preview.generatedAt).toLocaleString() : 'just now'}
+            {preview.generatedAt
+              ? t('intake.preview.generatedAt', { date: new Date(preview.generatedAt).toLocaleString() })
+              : t('intake.preview.generatedJustNow')}
           </Text>
         </Paper>
       </SimpleGrid>
 
       <SimpleGrid cols={{ base: 1, md: 2 }}>
-        <KeyValueList title="Reported Context" items={preview.reportedContext ?? []} />
-        <KeyValueList title="Presenting Concerns" items={preview.presentingConcerns ?? []} />
+        <KeyValueList title={t('intake.preview.reportedContext')} items={preview.reportedContext ?? []} emptyLabel={t('intake.preview.emptyLabel')} />
+        <KeyValueList title={t('intake.preview.presentingConcerns')} items={preview.presentingConcerns ?? []} emptyLabel={t('intake.preview.emptyLabel')} />
       </SimpleGrid>
 
       <SimpleGrid cols={{ base: 1, md: 2 }}>
-        <KeyValueList title="Reported Contributors" items={preview.reportedContributors ?? []} />
+        <KeyValueList title={t('intake.preview.reportedContributors')} items={preview.reportedContributors ?? []} emptyLabel={t('intake.preview.emptyLabel')} />
         <Paper withBorder radius="md" p="md">
-          <Title order={4}>Reported Conditions And History</Title>
+          <Title order={4}>{t('intake.preview.reportedConditions')}</Title>
           <Stack gap="xs" mt="sm">
             {reportedConditions.length === 0 ? (
-              <Text size="sm" c="dimmed">No reported prior diagnoses, medications, or hospitalization details were found in the submitted intake materials.</Text>
+              <Text size="sm" c="dimmed">{t('intake.preview.noConditions')}</Text>
             ) : reportedConditions.map((entry) => (
               <Group key={entry} align="flex-start" wrap="nowrap">
                 <ThemeIcon color="gray" variant="light" size="sm" mt={2}>•</ThemeIcon>
@@ -180,12 +184,12 @@ export default function IntakePreviewTab({ clientId }) {
 
       <Paper withBorder radius="md" p="md">
         <Group justify="space-between" align="center">
-          <Title order={4}>Screening Signals</Title>
+          <Title order={4}>{t('intake.preview.screeningSignals')}</Title>
           <Text size="sm" c="dimmed">{screeningSignals.length} item(s)</Text>
         </Group>
         <Stack gap="sm" mt="sm">
           {screeningSignals.length === 0 ? (
-            <Text size="sm" c="dimmed">No scored assessments are currently available in the intake record.</Text>
+            <Text size="sm" c="dimmed">{t('intake.preview.noScreeningSignals')}</Text>
           ) : screeningSignals.map((signal) => (
             <Paper key={`${signal.formKey}-${signal.title}-${signal.submittedAt}`} radius="sm" p="sm" bg="var(--mantine-color-gray-0)">
               <Group justify="space-between" align="flex-start">
@@ -194,7 +198,7 @@ export default function IntakePreviewTab({ clientId }) {
                   <Text size="xs" c="dimmed">
                     {signal.scoreValue != null && signal.scoreLabel
                       ? `${signal.scoreLabel}: ${signal.scoreValue}`
-                      : 'Structured intake signal'}
+                      : t('intake.preview.structuredSignal')}
                   </Text>
                 </div>
                 <Badge color={urgencyColor(signal.urgency)} variant="light">
@@ -211,15 +215,15 @@ export default function IntakePreviewTab({ clientId }) {
 
       <Paper withBorder radius="md" p="md">
         <Group justify="space-between" align="center">
-          <Title order={4}>Care Route Hypotheses</Title>
-          <Text size="sm" c="dimmed">Provisional, counselor-reviewed</Text>
+          <Title order={4}>{t('intake.preview.careRouteHypotheses')}</Title>
+          <Text size="sm" c="dimmed">{t('intake.preview.careRouteSubtitle')}</Text>
         </Group>
         <Stack gap="sm" mt="sm">
           {careRoutes.map((route) => (
             <Paper key={route.id} radius="sm" p="sm" bg="var(--mantine-color-blue-0)">
               <Group justify="space-between" align="center">
                 <Text fw={700} size="sm">{route.title}</Text>
-                <Badge variant="light">{route.confidence} confidence</Badge>
+                <Badge variant="light">{t('intake.preview.confidence', { value: route.confidence })}</Badge>
               </Group>
               {(route.basis ?? []).length > 0 ? (
                 <Stack gap={4} mt="xs">
@@ -237,10 +241,10 @@ export default function IntakePreviewTab({ clientId }) {
       </Paper>
 
       <Paper withBorder radius="md" p="md">
-        <Title order={4}>Areas To Assess In First Session</Title>
+        <Title order={4}>{t('intake.preview.areasToAssess')}</Title>
         <Stack gap="xs" mt="sm">
           {areasToAssess.length === 0 ? (
-            <Text size="sm" c="dimmed">No first-session prompts are available yet.</Text>
+            <Text size="sm" c="dimmed">{t('intake.preview.noAreasToAssess')}</Text>
           ) : areasToAssess.map((item) => (
             <Group key={item} align="flex-start" wrap="nowrap">
               <ThemeIcon color="blue" variant="light" size="sm" mt={2}>•</ThemeIcon>

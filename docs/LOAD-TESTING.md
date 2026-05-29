@@ -1,6 +1,6 @@
-# Load Testing — Faith Counseling
+# Load Testing — ChurchCore Care
 
-Performance and load tests for Faith Counseling are built with [k6](https://k6.io). Every scenario runs real HTTP workflows against the live API using actual seeded credentials — no mocking, no fabricated responses.
+Performance and load tests for ChurchCore Care are built with [k6](https://k6.io). Every scenario runs real HTTP workflows against the live API using actual seeded credentials — no mocking, no fabricated responses.
 
 ---
 
@@ -460,7 +460,7 @@ export const DEFAULT_THRESHOLDS = {
 
 ### Optional external metrics sink
 
-If you need k6 metrics in an external dashboard, point k6 at whatever remote-write backend your environment already provides. Faith Counseling no longer ships a local Prometheus observability stack as part of the standard development workflow.
+If you need k6 metrics in an external dashboard, point k6 at whatever remote-write backend your environment already provides. ChurchCore Care no longer ships a local Prometheus observability stack as part of the standard development workflow.
 
 ---
 

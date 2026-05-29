@@ -1,12 +1,12 @@
 # 06 — Faithful Workflows
 
-**Faith Counseling User Manual**
+**ChurchCore Care User Manual**
 
 ---
 
 ## Overview
 
-Faithful Workflows is the care prioritization workspace unique to Faith Counseling. It surfaces care recommendations, clinical risk signals, and urgency cues across the counselor's client caseload — powered by deterministic clinical rules with explainable rationale.
+Faithful Workflows is the care prioritization workspace unique to ChurchCore Care. It surfaces care recommendations, clinical risk signals, and urgency cues across the counselor's client caseload — powered by deterministic clinical rules with explainable rationale.
 
 It is not an AI-generated opinion. Every recommendation is grounded in 27 structured clinical rules across 8 care categories, and every suggestion surfaces the reasoning behind it.
 

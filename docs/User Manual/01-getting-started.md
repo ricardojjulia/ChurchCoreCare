@@ -1,18 +1,18 @@
 # 01 — Getting Started
 
-**Faith Counseling User Manual**
+**ChurchCore Care User Manual**
 
 ---
 
 ## Overview
 
-This section covers how to access the Faith Counseling platform, understand your role, and navigate the main application surfaces.
+This section covers how to access the ChurchCore Care platform, understand your role, and navigate the main application surfaces.
 
 ---
 
 ## 1.1 Accessing the Platform
 
-Open your web browser and navigate to the Faith Counseling URL provided by your practice administrator. The default local URL for development environments is:
+Open your web browser and navigate to the ChurchCore Care URL provided by your practice administrator. The default local URL for development environments is:
 
 ```
 http://127.0.0.1:3002/index.html
@@ -36,7 +36,7 @@ Production environments use a practice-specific domain with HTTPS.
 
 ## 1.3 User Roles
 
-Faith Counseling uses role-based access controls. Your role determines what surfaces and actions are available to you.
+ChurchCore Care uses role-based access controls. Your role determines what surfaces and actions are available to you.
 
 | Role | Description |
 |---|---|
@@ -80,7 +80,7 @@ The top navigation bar displays:
 
 ## 1.6 Language Support
 
-Faith Counseling supports multiple languages. The active language can be changed from the top bar language selector. The API-backed locale catalog ensures labels and messages remain aligned with the currently configured language.
+ChurchCore Care supports multiple languages. The active language can be changed from the top bar language selector. The API-backed locale catalog ensures labels and messages remain aligned with the currently configured language.
 
 Currently supported locales include English and additional languages configured by your practice administrator.
 

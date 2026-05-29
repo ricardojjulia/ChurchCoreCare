@@ -7,7 +7,7 @@
 
 ## Summary
 
-Faith Counseling now treats monitoring as a local, application-owned concern. The current foundation is centered on:
+ChurchCore Care now treats monitoring as a local, application-owned concern. The current foundation is centered on:
 
 - API liveness and readiness health endpoints
 - database monitoring for authorized admin users

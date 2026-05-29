@@ -2,7 +2,7 @@
 
 ## Product Summary
 
-Faith Counseling is a web-first SaaS for Christian counseling practices that need scheduling, clinical documentation, document management, intake workflows, secure client collaboration, and basic billing support in a single tenant-scoped platform.
+ChurchCore Care is a web-first SaaS for Christian counseling practices that need scheduling, clinical documentation, document management, intake workflows, secure client collaboration, and basic billing support in a single tenant-scoped platform.
 
 ## Release Goal
 

@@ -1,12 +1,12 @@
 # 13 — Troubleshooting and FAQ
 
-**Faith Counseling User Manual**
+**ChurchCore Care User Manual**
 
 ---
 
 ## Overview
 
-Common questions, known behaviors, and troubleshooting guidance for Faith Counseling users.
+Common questions, known behaviors, and troubleshooting guidance for ChurchCore Care users.
 
 ---
 
@@ -165,7 +165,7 @@ The form library is managed by your practice administrator or platform administr
 
 ## 13.9 Performance and Browser Tips
 
-- Faith Counseling works best in modern browsers: Chrome, Firefox, Edge, or Safari (latest versions).
+- ChurchCore Care works best in modern browsers: Chrome, Firefox, Edge, or Safari (latest versions).
 - If a page is loading slowly, try refreshing. If the issue persists, check the Monitoring page to see if there is a known service issue.
 - Clear your browser cache if you see outdated content after an application update.
 

@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 import { Alert, Anchor, Button, CopyButton, Group, Loader, Modal, Stack, Text, TextInput, Tooltip } from '@mantine/core';
 import { startVideoSession, startAdHocVideoSession, generateClientJoinToken, generateAdHocClientJoinToken } from '../../lib/clientApi.js';
 import { useJitsiSession } from './useJitsiSession.js';
+import { useI18n } from '../../lib/i18nContext.jsx';
 
 /**
  * VideoSessionModal — opens a full-screen-ish Mantine modal embedding JaaS/Jitsi.
@@ -14,6 +15,7 @@ import { useJitsiSession } from './useJitsiSession.js';
  * @param {string} [props.clientName]      – displayed in the modal title
  */
 export function VideoSessionModal({ opened, onClose, appointmentId, clientId, clientName }) {
+  const { t } = useI18n();
   const containerRef = useRef(null);
   const [sessionData, setSessionData] = useState(null);
   const [starting, setStarting] = useState(false);
@@ -90,7 +92,7 @@ export function VideoSessionModal({ opened, onClose, appointmentId, clientId, cl
     <Modal
       opened={opened}
       onClose={handleClose}
-      title={clientName ? `Video Session — ${clientName}` : 'Video Session'}
+      title={clientName ? t('videoSession.titleWithClient', { name: clientName }) : t('videoSession.title')}
       size="90vw"
       styles={{ body: { padding: 0 } }}
       withCloseButton
@@ -99,7 +101,7 @@ export function VideoSessionModal({ opened, onClose, appointmentId, clientId, cl
         {/* Pre-launch state */}
         {!sessionData && !starting && !startError && (
           <Stack align="center" justify="center" style={{ flex: 1 }} gap="md" p="xl">
-            <Text>Ready to join the video session with {clientName ?? 'your client'}?</Text>
+            <Text>{t('videoSession.readyToJoin', { name: clientName ?? t('videoSession.yourClient') })}</Text>
 
             {/* Client join link section */}
             <Stack gap="xs" style={{ width: '100%', maxWidth: 480 }}>
@@ -111,7 +113,7 @@ export function VideoSessionModal({ opened, onClose, appointmentId, clientId, cl
                   loading={joinUrlLoading}
                   onClick={handleGetClientLink}
                 >
-                  Get Client Join Link
+                  {t('videoSession.getClientLink')}
                 </Button>
               )}
               {joinUrlError && (
@@ -119,7 +121,7 @@ export function VideoSessionModal({ opened, onClose, appointmentId, clientId, cl
               )}
               {joinUrl && (
                 <Stack gap="xs">
-                  <Text fz="sm" fw={500}>Share this link with your client:</Text>
+                  <Text fz="sm" fw={500}>{t('videoSession.shareClientLink')}</Text>
                   <Group gap="xs" wrap="nowrap">
                     <TextInput
                       value={joinUrl}
@@ -129,9 +131,9 @@ export function VideoSessionModal({ opened, onClose, appointmentId, clientId, cl
                     />
                     <CopyButton value={joinUrl} timeout={2500}>
                       {({ copied, copy }) => (
-                        <Tooltip label={copied ? 'Copied!' : 'Copy link'}>
+                        <Tooltip label={copied ? t('videoSession.copiedLink') : t('videoSession.copyLink')}>
                           <Button size="xs" variant={copied ? 'filled' : 'default'} color={copied ? 'teal' : undefined} onClick={copy}>
-                            {copied ? 'Copied' : 'Copy'}
+                            {copied ? t('videoSession.copied') : t('videoSession.copy')}
                           </Button>
                         </Tooltip>
                       )}
@@ -142,14 +144,14 @@ export function VideoSessionModal({ opened, onClose, appointmentId, clientId, cl
                     target="_blank"
                     fz="sm"
                   >
-                    Open in email client
+                    {t('videoSession.openInEmail')}
                   </Anchor>
                 </Stack>
               )}
             </Stack>
 
             <Button color="blue" size="md" onClick={handleStart}>
-              {appointmentId ? 'Join Video Session' : 'Start Ad-hoc Session'}
+              {appointmentId ? t('telehealth.join_session') : t('videoSession.adHocSession')}
             </Button>
           </Stack>
         )}
@@ -158,17 +160,17 @@ export function VideoSessionModal({ opened, onClose, appointmentId, clientId, cl
         {starting && (
           <Stack align="center" justify="center" style={{ flex: 1 }} gap="sm">
             <Loader />
-            <Text c="dimmed" fz="sm">Starting session…</Text>
+            <Text c="dimmed" fz="sm">{t('telehealth.session_started')}</Text>
           </Stack>
         )}
 
         {/* API or JaaS error */}
         {(startError || jitsiError) && (
           <Stack align="center" justify="center" style={{ flex: 1 }} p="xl">
-            <Alert color="red" title="Could not start video session" style={{ maxWidth: 400 }}>
+            <Alert color="red" title={t('telehealth.error_joining')} style={{ maxWidth: 400 }}>
               {startError ?? jitsiError}
             </Alert>
-            <Button variant="default" onClick={handleClose}>Close</Button>
+            <Button variant="default" onClick={handleClose}>{t('workflow.action.close')}</Button>
           </Stack>
         )}
 
@@ -198,16 +200,16 @@ export function VideoSessionModal({ opened, onClose, appointmentId, clientId, cl
                 loading={joinUrlLoading}
                 onClick={handleGetClientLink}
               >
-                Get Client Join Link
+                {t('videoSession.getClientLink')}
               </Button>
             ) : (
               <>
                 <TextInput value={joinUrl} readOnly size="xs" style={{ flex: 1 }} />
                 <CopyButton value={joinUrl} timeout={2500}>
                   {({ copied, copy }) => (
-                    <Tooltip label={copied ? 'Copied!' : 'Copy client link'}>
+                    <Tooltip label={copied ? t('videoSession.copiedLink') : t('videoSession.copyClientLink')}>
                       <Button size="xs" variant={copied ? 'filled' : 'default'} color={copied ? 'teal' : undefined} onClick={copy}>
-                        {copied ? 'Copied' : 'Copy'}
+                        {copied ? t('videoSession.copied') : t('videoSession.copy')}
                       </Button>
                     </Tooltip>
                   )}
@@ -217,7 +219,7 @@ export function VideoSessionModal({ opened, onClose, appointmentId, clientId, cl
                   target="_blank"
                   fz="xs"
                 >
-                  Email
+                  {t('videoSession.email')}
                 </Anchor>
               </>
             )}
@@ -234,7 +236,7 @@ export function VideoSessionModal({ opened, onClose, appointmentId, clientId, cl
             gap="sm"
           >
             <Loader />
-            <Text c="dimmed" fz="sm">Loading video…</Text>
+            <Text c="dimmed" fz="sm">{t('videoSession.loadingVideo')}</Text>
           </Stack>
         )}
       </Stack>

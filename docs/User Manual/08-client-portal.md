@@ -1,12 +1,12 @@
 # 08 — Client Portal
 
-**Faith Counseling User Manual**
+**ChurchCore Care User Manual**
 
 ---
 
 ## Overview
 
-The Client Portal is the secure, client-facing side of Faith Counseling. Clients use it to manage their profile, complete intake forms, view assigned documents, request appointments, see their counselor's contact info, and exercise their data rights.
+The Client Portal is the secure, client-facing side of ChurchCore Care. Clients use it to manage their profile, complete intake forms, view assigned documents, request appointments, see their counselor's contact info, and exercise their data rights.
 
 ---
 
@@ -146,7 +146,7 @@ This content is curated by the practice administrator.
 
 ## 8.9 Data Rights Tab
 
-Faith Counseling includes a **Data Rights** feature aligned with privacy best practices.
+ChurchCore Care includes a **Data Rights** feature aligned with privacy best practices.
 
 ### What Clients Can Do
 

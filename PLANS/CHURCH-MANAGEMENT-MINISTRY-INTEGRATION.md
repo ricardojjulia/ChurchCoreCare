@@ -2,17 +2,17 @@
 
 **Prepared:** April 9, 2026
 **Status:** Proposed future-state plan
-**Scope:** Faith Counseling as an external ministry and care platform for future Church Management integration
+**Scope:** ChurchCore Care as an external ministry and care platform for future Church Management integration
 
 ## Purpose
 
-This plan defines how a future Church Management product should be designed so it can integrate cleanly with Faith Counseling later without forcing the integration now.
+This plan defines how a future Church Management product should be designed so it can integrate cleanly with ChurchCore Care later without forcing the integration now.
 
 The intent is to keep both systems aligned at the architecture, privacy, security, AI, and monitoring levels before direct implementation work begins.
 
 It is written to be usable in two ways:
 
-- as a Faith Counseling-side boundary and planning document under `PLANS/`
+- as a ChurchCore Care-side boundary and planning document under `PLANS/`
 - as a source document for an upstream Church Management product section such as `Future Ministry Integration Readiness`
 
 This document is a future-planning artifact. It does not replace the canonical security or monitoring standards already defined in:
@@ -24,7 +24,7 @@ If a future implementation changes the security/auditing or monitoring standard,
 
 ## Planning Objective
 
-Build the Church Management platform so it can later integrate with Faith Counseling as a separate ministry system with minimal rework, clear system boundaries, and safe information-sharing rules.
+Build the Church Management platform so it can later integrate with ChurchCore Care as a separate ministry system with minimal rework, clear system boundaries, and safe information-sharing rules.
 
 ## ChurchForge-Aligned Section
 
@@ -32,10 +32,10 @@ The following is the normalized architectural position this repository expects f
 
 ### Core Principle
 
-ChurchForge and Faith Counseling are separate systems with separate responsibilities.
+ChurchForge and ChurchCore Care are separate systems with separate responsibilities.
 
 - ChurchForge manages members, households, ministries, events, volunteers, communication, giving, and church operations.
-- Faith Counseling manages protected counseling workflows, client records, scheduling, charting, documentation, and care operations.
+- ChurchCore Care manages protected counseling workflows, client records, scheduling, charting, documentation, and care operations.
 
 Future integration must support ministry coordination without collapsing those two domains into one shared data model.
 
@@ -62,10 +62,10 @@ Current ChurchForge development should preserve future integration readiness by:
 
 ## Core Product Position
 
-Faith Counseling and the Church Management platform must be treated as connected but separate systems.
+ChurchCore Care and the Church Management platform must be treated as connected but separate systems.
 
 - Church Management owns member, household, ministry, discipleship, event, communication, volunteer, and giving workflows.
-- Faith Counseling owns counseling-practice workflows, protected client records, scheduling, charting, documentation, and care operations.
+- ChurchCore Care owns counseling-practice workflows, protected client records, scheduling, charting, documentation, and care operations.
 - Future integration should support ministry coordination without collapsing those two domains into one shared data model.
 
 ## Integration Goals
@@ -73,7 +73,7 @@ Faith Counseling and the Church Management platform must be treated as connected
 The future integration should make it possible to support:
 
 - ministry referral handoff from church staff into counseling intake or care-request workflows
-- optional linkage between a church member record and a Faith Counseling client record
+- optional linkage between a church member record and a ChurchCore Care client record
 - non-clinical status visibility back into Church Management when explicitly allowed
 - secure follow-up coordination between ministry staff and counseling staff
 - aggregate reporting on ministry referral flow, care-request throughput, and operational outcomes
@@ -97,7 +97,7 @@ The Church Management platform should be built with an explicit integration boun
 - Use APIs, webhooks, or event-driven adapters for system-to-system communication.
 - Keep external-system mappings separate from core member and ministry tables.
 - Treat integration as configuration-driven and tenant-aware.
-- Allow the Church Management platform to operate fully even when Faith Counseling is disconnected.
+- Allow the Church Management platform to operate fully even when ChurchCore Care is disconnected.
 - Design for partial integration, not all-or-nothing dependency.
 
 ### Recommended technical shape
@@ -112,7 +112,7 @@ The Church Management platform should be built with an explicit integration boun
 
 ## Domain Model Readiness
 
-The Church Management system should preserve clean domain concepts that can map to Faith Counseling later without distorting either product.
+The Church Management system should preserve clean domain concepts that can map to ChurchCore Care later without distorting either product.
 
 ### Church-side concepts to keep distinct
 
@@ -126,7 +126,7 @@ The Church Management system should preserve clean domain concepts that can map 
 - external ministry link
 - ministry-safe care status
 
-### Faith Counseling concepts to treat as external
+### ChurchCore Care concepts to treat as external
 
 - client record
 - counselor assignment
@@ -179,7 +179,7 @@ Church staff should see only ministry-safe coordination data unless a stronger p
 
 ## Security And Audit Requirements
 
-Future implementation must align with the canonical Faith Counseling security and audit baseline.
+Future implementation must align with the canonical ChurchCore Care security and audit baseline.
 
 ### Non-negotiable requirements
 
@@ -193,8 +193,8 @@ Future implementation must align with the canonical Faith Counseling security an
 ### Minimum auditable actions
 
 - integration connection created or updated
-- referral sent to Faith Counseling
-- referral status received from Faith Counseling
+- referral sent to ChurchCore Care
+- referral status received from ChurchCore Care
 - member-to-client link created, viewed, or revoked
 - consent granted, denied, revoked, or expired
 - export attempt started, denied, failed, or completed
@@ -235,7 +235,7 @@ Use OTEL semantic conventions first and `faith.ui.*` only where app-specific cov
 
 ## AI Guardrails
 
-If AI is used in the Church Management system, it must treat Faith Counseling as a protected external ministry system rather than an unrestricted knowledge source.
+If AI is used in the Church Management system, it must treat ChurchCore Care as a protected external ministry system rather than an unrestricted knowledge source.
 
 ### Required AI rules
 
@@ -260,9 +260,9 @@ If the integration is implemented later, the user experience should make the sys
 ### UX requirements
 
 - visible integration settings and connection status
-- clear labels when data originates from Faith Counseling
+- clear labels when data originates from ChurchCore Care
 - explicit consent and access-state indicators
-- graceful degraded states when Faith Counseling is unavailable
+- graceful degraded states when ChurchCore Care is unavailable
 - clear distinction between ministry coordination data and protected counseling data
 - no UI that implies church staff are browsing counseling charts directly
 
@@ -290,7 +290,7 @@ The Church Management platform does not need the full integration now. It does n
 
 When actual integration work begins, the design should be considered aligned with this plan only if:
 
-1. Faith Counseling remains a separate protected ministry system.
+1. ChurchCore Care remains a separate protected ministry system.
 2. Data sharing is minimum-necessary and consent-aware.
 3. Church staff see ministry-safe coordination data by default, not clinical record detail.
 4. Integration workflows are tenant-scoped, role-gated, auditable, and observable.

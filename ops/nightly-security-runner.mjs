@@ -1,7 +1,7 @@
 /**
  * nightly-security-runner.mjs
  *
- * Orchestrates the nightly AppSec and DB Security scans for Faith Counseling.
+ * Orchestrates the nightly AppSec and DB Security scans for ChurchCore Care.
  * Generates dated JSON reports and a human-readable Markdown summary in
  * docs/SecurityChecks/.
  *
@@ -255,7 +255,7 @@ async function main() {
   const runDateTime = isoDateTime();
 
   console.log(`\n${'='.repeat(70)}`);
-  console.log(`  Faith Counseling — Nightly Security Runner`);
+  console.log(`  ChurchCore Care — Nightly Security Runner`);
   console.log(`  Date: ${runDate}  |  UTC: ${new Date().toUTCString()}`);
   if (DRY_RUN) console.log(`  MODE: DRY RUN (no files will be written)`);
   console.log(`${'='.repeat(70)}\n`);

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Modal, TextInput, Text, Stack, UnstyledButton, Badge, Loader, Group } from '@mantine/core';
+import { useI18n } from '../lib/i18nContext.jsx';
 
 function firstString(...values) {
   for (const value of values) {
@@ -19,6 +20,7 @@ function resolveClientFullName(client) {
 }
 
 export default function ClientPickerModal({ isOpen, clients, loading, onSelectClient, onClose }) {
+  const { t } = useI18n();
   const [query, setQuery] = useState('');
   const inputRef = useRef(null);
 
@@ -33,12 +35,12 @@ export default function ClientPickerModal({ isOpen, clients, loading, onSelectCl
   });
 
   return (
-    <Modal opened={isOpen} onClose={onClose} title="Open Client" size="sm">
+    <Modal opened={isOpen} onClose={onClose} title={t('clientPicker.title')} size="sm">
       <Stack gap="sm">
         <TextInput
           ref={inputRef}
           type="search"
-          placeholder="Search by name…"
+          placeholder={t('clientPicker.searchPlaceholder')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
@@ -47,7 +49,7 @@ export default function ClientPickerModal({ isOpen, clients, loading, onSelectCl
           <Group justify="center" py="md"><Loader size="sm" /></Group>
         ) : filtered.length === 0 ? (
           <Text fz="sm" c="dimmed" ta="center" py="md">
-            {query ? 'No clients match your search.' : 'No clients found.'}
+            {query ? t('clientPicker.noMatch') : t('clientPicker.noClients')}
           </Text>
         ) : (
           <Stack gap={4} style={{ maxHeight: '55vh', overflowY: 'auto' }}>

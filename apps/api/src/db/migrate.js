@@ -416,6 +416,10 @@ async function applyColumnMigrations(conn) {
   await addColumnIfMissing('claims', 'payer_claim_number', 'VARCHAR(64) NULL');
   await addColumnIfMissing('claims', 'rejection_reason', 'TEXT NULL');
   await addColumnIfMissing('claims', 'era_received_at', 'TIMESTAMPTZ NULL');
+
+  // ── Phase E1: ERA reconciliation ─────────────────────────────────────────
+  await addColumnIfMissing('claims', 'paid_amount', 'NUMERIC(10,2) NULL');
+  await addColumnIfMissing('claims', 'adjustment_reason', 'VARCHAR(256) NULL');
   await addColumnIfMissing('practices', 'npi', 'VARCHAR(10) NULL');
 
   // ── Phase B3: Insurance eligibility ──────────────────────────────────────
@@ -475,6 +479,127 @@ async function applyColumnMigrations(conn) {
   `);
   await conn.query(`CREATE INDEX IF NOT EXISTS idx_sa_tenant_intern ON supervisor_assignments (tenant_id, intern_id)`);
   await conn.query(`CREATE INDEX IF NOT EXISTS idx_sa_supervisor ON supervisor_assignments (tenant_id, supervisor_id)`);
+
+  // ── Phase C6: PWA push notification subscriptions ────────────────────────
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      id                CHAR(36)      NOT NULL DEFAULT gen_random_uuid(),
+      tenant_id         VARCHAR(64)   NOT NULL,
+      staff_account_id  VARCHAR(64)   NOT NULL,
+      endpoint          TEXT          NOT NULL,
+      p256dh            TEXT          NOT NULL,
+      auth              TEXT          NOT NULL,
+      created_at        TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (id),
+      UNIQUE (endpoint)
+    )
+  `);
+  await conn.query(`CREATE INDEX IF NOT EXISTS idx_push_subs_staff ON push_subscriptions (tenant_id, staff_account_id)`);
+
+  // ── Phase F1: Group & Family Therapy ─────────────────────────────────────
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS therapy_groups (
+      id              VARCHAR(64)   NOT NULL,
+      tenant_id       VARCHAR(64)   NOT NULL,
+      name            VARCHAR(255)  NOT NULL,
+      counselor_id    VARCHAR(64)   NULL,
+      max_members     INT           NULL,
+      is_active       BOOLEAN       NOT NULL DEFAULT TRUE,
+      created_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (id)
+    )
+  `);
+  await conn.query(`CREATE INDEX IF NOT EXISTS idx_therapy_groups_tenant ON therapy_groups (tenant_id)`);
+
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS group_members (
+      id          VARCHAR(64)  NOT NULL,
+      group_id    VARCHAR(64)  NOT NULL,
+      client_id   VARCHAR(64)  NOT NULL,
+      tenant_id   VARCHAR(64)  NOT NULL,
+      joined_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+      left_at     TIMESTAMPTZ  NULL,
+      PRIMARY KEY (id)
+    )
+  `);
+  await conn.query(`CREATE INDEX IF NOT EXISTS idx_group_members_group ON group_members (group_id, tenant_id)`);
+  await conn.query(`CREATE INDEX IF NOT EXISTS idx_group_members_client ON group_members (client_id, tenant_id)`);
+
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS group_sessions (
+      id               VARCHAR(64)  NOT NULL,
+      group_id         VARCHAR(64)  NULL,
+      unit_id          VARCHAR(64)  NULL,
+      tenant_id        VARCHAR(64)  NOT NULL,
+      scheduled_at     TIMESTAMPTZ  NOT NULL,
+      duration_minutes INT          NOT NULL DEFAULT 60,
+      status           VARCHAR(32)  NOT NULL DEFAULT 'scheduled',
+      series_id        VARCHAR(64)  NULL,
+      series_rrule     TEXT         NULL,
+      created_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (id)
+    )
+  `);
+  await conn.query(`CREATE INDEX IF NOT EXISTS idx_group_sessions_group ON group_sessions (group_id, tenant_id)`);
+  await conn.query(`CREATE INDEX IF NOT EXISTS idx_group_sessions_unit ON group_sessions (unit_id, tenant_id)`);
+
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS group_session_notes (
+      id               VARCHAR(64)  NOT NULL,
+      group_session_id VARCHAR(64)  NOT NULL,
+      tenant_id        VARCHAR(64)  NOT NULL,
+      counselor_id     VARCHAR(64)  NOT NULL,
+      shared_note_enc  TEXT         NULL,
+      note_format      VARCHAR(32)  NOT NULL DEFAULT 'SOAP',
+      created_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+      updated_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (id),
+      UNIQUE (group_session_id, tenant_id)
+    )
+  `);
+
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS group_member_notes (
+      id               VARCHAR(64)  NOT NULL,
+      group_session_id VARCHAR(64)  NOT NULL,
+      client_id        VARCHAR(64)  NOT NULL,
+      tenant_id        VARCHAR(64)  NOT NULL,
+      individual_note_enc TEXT      NULL,
+      created_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+      updated_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (id),
+      UNIQUE (group_session_id, client_id, tenant_id)
+    )
+  `);
+  await conn.query(`CREATE INDEX IF NOT EXISTS idx_group_member_notes_session ON group_member_notes (group_session_id, tenant_id)`);
+
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS relational_units (
+      id           VARCHAR(64)   NOT NULL,
+      tenant_id    VARCHAR(64)   NOT NULL,
+      unit_type    VARCHAR(16)   NOT NULL DEFAULT 'couple',
+      label        VARCHAR(128)  NOT NULL,
+      counselor_id VARCHAR(64)   NULL,
+      created_at   TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (id)
+    )
+  `);
+  await conn.query(`CREATE INDEX IF NOT EXISTS idx_relational_units_tenant ON relational_units (tenant_id)`);
+
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS relational_unit_members (
+      id        VARCHAR(64)  NOT NULL,
+      unit_id   VARCHAR(64)  NOT NULL,
+      client_id VARCHAR(64)  NOT NULL,
+      tenant_id VARCHAR(64)  NOT NULL,
+      role      VARCHAR(32)  NULL,
+      joined_at TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+      left_at   TIMESTAMPTZ  NULL,
+      PRIMARY KEY (id)
+    )
+  `);
+  await conn.query(`CREATE INDEX IF NOT EXISTS idx_relational_unit_members_unit ON relational_unit_members (unit_id, tenant_id)`);
+  await conn.query(`CREATE INDEX IF NOT EXISTS idx_relational_unit_members_client ON relational_unit_members (client_id, tenant_id)`);
 
   console.log('Column migrations done.');
 }
