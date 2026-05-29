@@ -1,4 +1,4 @@
-# Faith Counseling
+# ChurchCore Care
 
 > *"Whatever you do, work at it with all your heart, as working for the Lord."* — Colossians 3:23
 
