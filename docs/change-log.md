@@ -2,6 +2,54 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## May 30, 2026 — Subscription Tracker + Solo UI Persona frontend
+
+### feat: add Subscription tab, PersonaUpgradeModal, and solo/practice persona filtering
+
+**Date:** 2026-05-30
+**Affected area:** `apps/web/src/`, `packages/i18n/src/index.js`, `PLANS/FULL-SURFACE-MONITORING.md`
+
+Adds the Subscription tab to Workspace Studio showing plan usage, grace-period alerts, billing portal links, and a UI persona switcher. Adds `PersonaUpgradeModal` shown when a solo tenant adds a 2nd counselor (dismissible, mutable after 6 dismissals). Filters sidebar nav and Workspace Studio tabs based on `uiPersona`. Renames "Workspace Studio" to "My Practice" in solo mode.
+
+**New files:**
+
+- `apps/web/src/lib/useSubscriptionUsage.js` — hook that fetches `GET /api/v1/subscription/usage`
+- `apps/web/src/components/WorkspaceStudio/tabs/SubscriptionTab.jsx` — plan usage bars, grace alerts, billing portal, persona switcher
+- `apps/web/src/components/Onboarding/PersonaUpgradeModal.jsx` — solo-to-practice upgrade prompt modal
+
+**Modified files:**
+
+- `apps/web/src/App.jsx` — `uiPersona` from session, persona upgrade state + handlers, `PersonaUpgradeModal` rendered, `uiPersona` passed to Sidebar and WorkspaceStudioPage, `checkPersonaUpgradeAfterStaffCreate` wired to CounselorMaintenance
+- `apps/web/src/components/Sidebar.jsx` — accepts `uiPersona` prop; hides `counselors`/`users` in solo mode; renames workspace-studio label to "My Practice" in solo mode
+- `apps/web/src/components/WorkspaceStudio/WorkspaceStudioPage.jsx` — accepts `uiPersona` prop; hides `locations`/`staff` tabs in solo; adds `SubscriptionTab`; page title "My Practice" in solo mode
+- `apps/web/src/components/CounselorMaintenance.jsx` — adds optional `onCounselorCreated` callback prop called after successful counselor creation
+- `packages/i18n/src/index.js` — 13 new subscription/persona i18n keys
+- `PLANS/FULL-SURFACE-MONITORING.md` — added `studio.subscription` and `persona_upgrade_modal` surfaces
+
+---
+
+## May 30, 2026 — Subscription Plan Limits + UI Persona backend
+
+### feat: add subscription plan limits enforcement and ui_persona field
+
+**Date:** 2026-05-30
+**Affected area:** `apps/api/src/lib/subscriptionPlan.js`, `apps/api/src/db/migrate.js`, `apps/api/src/index.js`, `apps/api/src/lib/tenant-setup.js`, `apps/api/test/subscriptionPlan.test.mjs`
+
+Adds counselor and client limit enforcement for the `solo` plan (3 counselors, 100 active clients) with a 14-day grace period before hard-blocking. Adds a `ui_persona` field so the frontend knows to render simplified "solo mode" UI. Tracks persona upgrade modal dismissals.
+
+**New files:**
+
+- `apps/api/src/lib/subscriptionPlan.js` — plan limits service: `getTenantPlanInfo`, `getUsageCounts`, `getSubscriptionSummary`, `checkLimitBlock`, `setUiPersona`, `recordPersonaDismiss`, `mutePersonaUpgrade`, `applyPlanDefaults`
+- `apps/api/test/subscriptionPlan.test.mjs` — 10 unit tests covering auth, no-DB mode, and validation
+
+**Modified files:**
+
+- `apps/api/src/db/migrate.js` — added 6 new columns to `tenants` table (`ui_persona`, `counselor_limit`, `client_limit`, `limit_grace_started_at`, `persona_upgrade_dismiss_count`, `persona_upgrade_muted`); registered `subscription_limits_v1` migration
+- `apps/api/src/index.js` — imported `subscriptionPlan.js`; added routes `GET /v1/subscription/usage`, `PATCH /v1/tenant/ui-persona`, `POST /v1/tenant/persona-dismiss`; added counselor/client limit guards to staff/client creation; added `uiPersona` to `handleAuthMe` response
+- `apps/api/src/lib/tenant-setup.js` — calls `applyPlanDefaults` after tenant INSERT to set correct limits for new tenants
+
+---
+
 ## May 30, 2026 — Ministry Plan frontend
 
 ### feat: add Ministry Plan UI for church identity, ministry analytics, and client scholarship/directory fields

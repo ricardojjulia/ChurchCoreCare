@@ -52,6 +52,7 @@ try {
   await recordMigration(connection, 'onboarding_wizard_v1');
   await recordMigration(connection, 'aacc_ceu_entries_v1');
   await recordMigration(connection, 'ministry_plan_v1');
+  await recordMigration(connection, 'subscription_limits_v1');
 
   // Seed a default tenant + system practice for local dev
   await seedDevData(connection);
@@ -731,6 +732,14 @@ async function applyColumnMigrations(conn) {
   await addColumnIfMissing('clients', 'scholarship_flag', 'BOOLEAN NOT NULL DEFAULT FALSE');
   await addColumnIfMissing('clients', 'church_directory_id', 'VARCHAR(128) NULL');
   await addColumnIfMissing('clients', 'church_directory_source', 'VARCHAR(64) NULL');
+
+  // ── Subscription plan limits + UI persona ─────────────────────────────────
+  await addColumnIfMissing('tenants', 'ui_persona', "VARCHAR(16) NOT NULL DEFAULT 'practice'");
+  await addColumnIfMissing('tenants', 'counselor_limit', 'INT NULL');
+  await addColumnIfMissing('tenants', 'client_limit', 'INT NULL');
+  await addColumnIfMissing('tenants', 'limit_grace_started_at', 'TIMESTAMPTZ NULL');
+  await addColumnIfMissing('tenants', 'persona_upgrade_dismiss_count', 'INT NOT NULL DEFAULT 0');
+  await addColumnIfMissing('tenants', 'persona_upgrade_muted', 'BOOLEAN NOT NULL DEFAULT FALSE');
 
   console.log('Column migrations done.');
 }

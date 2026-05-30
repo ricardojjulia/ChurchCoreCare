@@ -153,6 +153,7 @@ Required boundary rules:
 - `studio.portal`
 - `studio.faith` — Practice Faith Context; denomination tradition selector, vocabulary preset editor, and default integration level; admin/practice_owner edit, counselor read-only
 - `studio.ministry` — Ministry Overview tab; visible only to admin/owner roles; fetches GET /api/v1/ministry/summary; shows stat cards for total clients, scholarship clients, and total counselors; shows an upgrade prompt when the tenant is not on the ministry plan
+- `studio.subscription` — Subscription tab; plan usage bars (counselors, clients) with color thresholds; grace period alerts; billing portal links; UI persona switcher (solo ↔ practice); visible to all admin/owner roles
 
 ### Client detail tabs (additional)
 
@@ -179,6 +180,7 @@ Required boundary rules:
 - Audit filter workflow
 - Audit export workflow
 - Onboarding wizard — `onboarding_wizard`; full-screen 4-step modal shown automatically on first login for practice_owner / practice_admin roles when `shouldShowWizard=true`; steps: Practice Setup, Counselor Profile, First Client (optional), First Appointment (optional); cannot be dismissed until completed; re-openable via SetupChecklistBadge in the sidebar
+- Persona upgrade modal — `persona_upgrade_modal`; dismissible modal shown to solo tenants when a 2nd counselor is added; prompts switch to Practice mode; shows "Don't show again" checkbox after 6 dismissals
 
 ### AACC CE Tracking surfaces
 

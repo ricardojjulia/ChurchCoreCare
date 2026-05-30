@@ -27,8 +27,8 @@ function getNavItemsForRole(role) {
   if (isAdminRole(role)) {
     return [
       { key: 'dashboard', labelKey: 'nav.dashboard' },
-      { key: 'users', labelKey: 'nav.users' },
-      { key: 'counselors', labelKey: 'nav.counselors' },
+      { key: 'users', labelKey: 'nav.users', soloHidden: true },
+      { key: 'counselors', labelKey: 'nav.counselors', soloHidden: true },
       { key: 'clients', labelKey: 'nav.clients' },
       { key: 'scheduling', labelKey: 'nav.scheduling' },
       { key: 'clinical', labelKey: 'nav.clinical' },
@@ -37,7 +37,7 @@ function getNavItemsForRole(role) {
       { key: 'portal', labelKey: 'nav.portal' },
       { key: 'analytics', labelKey: 'nav.analytics' },
       { key: 'groups', labelKey: 'nav.groups' },
-      { key: 'workspace-studio', labelKey: 'nav.workspaceStudio' },
+      { key: 'workspace-studio', labelKey: 'nav.workspaceStudio', soloLabelKey: 'nav.myPractice' },
       { key: 'operations', labelKey: 'nav.operationsStudio', href: '/operations.html' },
       { key: 'faith', labelKey: 'nav.faithWorkflows' },
       { key: 'about', labelKey: 'nav.about', href: '/about.html' },
@@ -77,10 +77,17 @@ function resolveUserLabel(user, role) {
   return null;
 }
 
-export default function Sidebar({ currentUser, currentView, onNavigate, onOpenClientPicker, onSignOut, connectionStatus, shouldShowOnboarding = false, onOpenOnboarding }) {
+export default function Sidebar({ currentUser, currentView, onNavigate, onOpenClientPicker, onSignOut, connectionStatus, shouldShowOnboarding = false, onOpenOnboarding, uiPersona = null }) {
   const { t } = useI18n();
   const userRole = currentUser?.role ?? null;
-  const visibleNavItems = getNavItemsForRole(userRole);
+  const isSolo = uiPersona === 'solo';
+  const allNavItems = getNavItemsForRole(userRole);
+  const visibleNavItems = allNavItems
+    .filter((item) => !(isSolo && item.soloHidden))
+    .map((item) => ({
+      ...item,
+      labelKey: (isSolo && item.soloLabelKey) ? item.soloLabelKey : item.labelKey,
+    }));
   const CONNECTION_TONE = {
     loading: { color: 'gray', label: t('sidebar.connection.loading') },
     connected: { color: 'green', label: t('sidebar.connection.connected') },

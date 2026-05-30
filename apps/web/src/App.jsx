@@ -4,6 +4,7 @@ import { useDisclosure } from '@mantine/hooks';
 import AuthGate from './components/AuthGate';
 import Sidebar from './components/Sidebar';
 import OnboardingWizard from './components/Onboarding/OnboardingWizard.jsx';
+import PersonaUpgradeModal from './components/Onboarding/PersonaUpgradeModal.jsx';
 import TopBar from './components/TopBar';
 import TrialBanner from './components/TrialBanner.jsx';
 import TrialExpiredPage from './components/TrialExpiredPage.jsx';
@@ -70,6 +71,7 @@ function normalizeSessionUser(profile) {
     role: firstString(profile.role, profile.userRole) ?? null,
     name: firstString(directName, nestedName, combinedName, profile.displayName) ?? null,
     email: firstString(profile.email, profile.username) ?? null,
+    uiPersona: firstString(profile.uiPersona, profile.ui_persona) ?? null,
   };
 }
 
@@ -167,6 +169,8 @@ export default function App() {
   const [clientPickerOpen, setClientPickerOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingShouldShow, setOnboardingShouldShow] = useState(false);
+  const [personaUpgradeOpened, setPersonaUpgradeOpened] = useState(false);
+  const [personaUpgradeDismissCount, setPersonaUpgradeDismissCount] = useState(0);
   const [schedulingState, setSchedulingState] = useState({
     composerOpen: false,
     initialClientId: null,
@@ -174,6 +178,7 @@ export default function App() {
     initialPortalRequest: null,
   });
   const userRole = currentUser?.role ?? null;
+  const uiPersona = currentUser?.uiPersona ?? null;
   const selectedClientId = selectedClientRequest?.clientId ?? null;
   const counselorWorkspaceData = buildCounselorWorkspaceData(operationsSummaryData.summary, clientsData.items, currentUser);
   const surfaceLoadingFallback = (
@@ -343,6 +348,63 @@ export default function App() {
     setSelectedClientRequest(null);
     setSelectedCounselorId(null);
     setCurrentView(defaultViewForRole(normalized?.role ?? null));
+  };
+
+  const handlePersonaDismiss = async () => {
+    try {
+      const res = await fetch('/api/v1/tenant/persona-dismiss', {
+        method: 'POST',
+        credentials: 'include',
+        headers: csrfHeaders(),
+        body: JSON.stringify({}),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPersonaUpgradeDismissCount(data.dismissCount ?? 0);
+      }
+    } catch { /* best-effort */ }
+    setPersonaUpgradeOpened(false);
+  };
+
+  const handlePersonaConfirm = async () => {
+    try {
+      await fetch('/api/v1/tenant/ui-persona', {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: csrfHeaders(),
+        body: JSON.stringify({ persona: 'practice' }),
+      });
+    } catch { /* best-effort */ }
+    window.location.reload();
+  };
+
+  const handlePersonaMute = async () => {
+    try {
+      await fetch('/api/v1/tenant/persona-dismiss', {
+        method: 'POST',
+        credentials: 'include',
+        headers: csrfHeaders(),
+        body: JSON.stringify({ mute: true }),
+      });
+    } catch { /* best-effort */ }
+    setPersonaUpgradeOpened(false);
+  };
+
+  const checkPersonaUpgradeAfterStaffCreate = async () => {
+    if (uiPersona !== 'solo') return;
+    try {
+      const res = await fetch('/api/v1/subscription/usage', { credentials: 'include' });
+      if (!res.ok) return;
+      const data = await res.json();
+      const activeCounselors = data?.usage?.activeCounselors ?? 0;
+      const shouldPrompt = data?.personaUpgrade?.shouldPromptUpgrade ?? false;
+      const dismissCount = data?.personaUpgrade?.dismissCount ?? 0;
+      const muted = data?.personaUpgrade?.muted ?? false;
+      if (activeCounselors >= 2 && shouldPrompt && !muted) {
+        setPersonaUpgradeDismissCount(dismissCount);
+        setPersonaUpgradeOpened(true);
+      }
+    } catch { /* best-effort */ }
   };
 
   const handleSignOut = async () => {
@@ -565,6 +627,7 @@ export default function App() {
           onSignOut={handleSignOut}
           shouldShowOnboarding={onboardingShouldShow}
           onOpenOnboarding={() => setShowOnboarding(true)}
+          uiPersona={uiPersona}
         />
       </AppShell.Navbar>
 
@@ -599,7 +662,7 @@ export default function App() {
             </div>
           ) : showCounselors ? (
             <div style={{ padding: '20px' }}>
-              <CounselorMaintenance userRole={userRole} onViewCounselor={handleOpenCounselor} />
+              <CounselorMaintenance userRole={userRole} onViewCounselor={handleOpenCounselor} onCounselorCreated={checkPersonaUpgradeAfterStaffCreate} />
             </div>
           ) : showScheduling ? (
             <SchedulingPage
@@ -647,6 +710,7 @@ export default function App() {
               initialTab={workspaceStudioInitialTab}
               initialDocumentsClientId={workspaceStudioDocumentsClientId}
               userRole={userRole}
+              uiPersona={uiPersona}
               onSchedulePortalRequest={(clientId, portalRequest) => handleOpenScheduling({
                 composerOpen: true,
                 initialClientId: clientId,
@@ -756,6 +820,14 @@ export default function App() {
           setShowOnboarding(false);
           setOnboardingShouldShow(false);
         }}
+      />
+
+      <PersonaUpgradeModal
+        opened={personaUpgradeOpened}
+        dismissCount={personaUpgradeDismissCount}
+        onDismiss={handlePersonaDismiss}
+        onConfirm={handlePersonaConfirm}
+        onMute={handlePersonaMute}
       />
 
       <Modal

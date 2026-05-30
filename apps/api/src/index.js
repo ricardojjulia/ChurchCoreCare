@@ -246,6 +246,14 @@ import {
   getMinistrySummary,
   checkScholarshipBlock,
 } from './lib/ministryPlan.js';
+import {
+  getSubscriptionSummary,
+  checkLimitBlock,
+  setUiPersona,
+  recordPersonaDismiss,
+  mutePersonaUpgrade,
+  applyPlanDefaults,
+} from './lib/subscriptionPlan.js';
 
 // ─── Self-scheduling validation allowlists ────────────────────────────────────
 const VALID_SLOT_DURATIONS = new Set([30, 45, 50]);
@@ -2421,6 +2429,22 @@ export async function handleApiRequest(request, response) {
       return;
     }
 
+    // ─── Subscription plan limits + UI persona ────────────────────────────────
+    if (requestUrl.pathname === '/v1/subscription/usage') {
+      await handleSubscriptionUsage(request, response, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/tenant/ui-persona') {
+      await handleTenantUiPersona(request, response, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/tenant/persona-dismiss') {
+      await handleTenantPersonaDismiss(request, response, session);
+      return;
+    }
+
     // ─── Supervisor assignments ─────────────────────────────────────────────
     if (requestUrl.pathname === '/v1/supervisor-assignments') {
       await handleSupervisorAssignments(request, response, requestUrl, session);
@@ -2647,6 +2671,17 @@ async function handleAuthMe(request, response, session) {
     writeJson(response, 401, { error: 'Authentication required' });
     return;
   }
+
+  // Fetch tenant ui_persona for all authenticated callers
+  let uiPersona = 'practice';
+  if (process.env.DB_NAME) {
+    const [tenantRows] = await pool.query(
+      'SELECT ui_persona FROM tenants WHERE id = ? LIMIT 1',
+      [session.tenant_id],
+    );
+    uiPersona = tenantRows?.[0]?.ui_persona ?? 'practice';
+  }
+
   if (session.role === 'client') {
     const [rows] = await pool.query(
       'SELECT pa.email_enc, c.first_name_enc, c.last_name_enc FROM portal_accounts pa ' +
@@ -2660,6 +2695,7 @@ async function handleAuthMe(request, response, session) {
       portalAccountId: session.portal_account_id,
       tenantId: session.tenant_id,
       role: session.role,
+      uiPersona,
       name: row ? `${decrypt(row.first_name_enc)} ${decrypt(row.last_name_enc)}` : null,
       email: row?.email_enc ? decrypt(row.email_enc) : null,
     });
@@ -2677,6 +2713,7 @@ async function handleAuthMe(request, response, session) {
     staffAccountId: session.staff_account_id,
     tenantId: session.tenant_id,
     role: session.role,
+    uiPersona,
     name: row ? `${decrypt(row.first_name_enc)} ${decrypt(row.last_name_enc)}` : null,
     email: row?.email_enc ? decrypt(row.email_enc) : null,
   });
@@ -2800,6 +2837,11 @@ async function handleClientsCollection(request, response, requestUrl, session) {
   const tenantId = callerTenant(request, session);
 
   if (process.env.DB_NAME) {
+    const clientLimitCheck = await checkLimitBlock(tenantId, 'client', pool);
+    if (clientLimitCheck.blocked) {
+      writeJson(response, 422, { error: 'client_limit_exceeded', reason: clientLimitCheck.reason });
+      return;
+    }
     const id = genId('c');
     const faithBackground = sanitizeStr(payload.faithBackground, 500) ?? 'Undeclared';
     await pool.query(
@@ -14107,6 +14149,11 @@ async function handleStaffCollection(request, response, session) {
 
   if (process.env.DB_NAME) {
     const tenantId = callerTenant(request, session);
+    const limitCheck = await checkLimitBlock(tenantId, 'counselor', pool);
+    if (limitCheck.blocked) {
+      writeJson(response, 422, { error: 'counselor_limit_exceeded', reason: limitCheck.reason });
+      return;
+    }
     const item = await createStaff({
       id: genId('s'),
       tenantId,
@@ -19097,6 +19144,121 @@ async function handleMinistrySummary(request, response, session) {
 
   // No-DB mode
   writeJson(response, 200, { totalClients: 0, scholarshipClients: 0, totalCounselors: 0 });
+}
+
+// ─── Subscription plan usage ──────────────────────────────────────────────────
+
+const SUBSCRIPTION_USAGE_STUB = Object.freeze({
+  plan: { planType: 'standard', uiPersona: 'practice', planDisplayName: 'Practice', counselorLimit: null, clientLimit: null },
+  usage: { activeCounselors: 0, activeClients: 0 },
+  grace: { counselorsInGrace: false, clientsInGrace: false, graceStartedAt: null, graceDaysRemaining: null, graceExpired: false },
+  personaUpgrade: { dismissCount: 0, muted: false, shouldPromptUpgrade: false },
+});
+
+async function handleSubscriptionUsage(request, response, session) {
+  if (request.method !== 'GET') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (!isAdminRole(callerRole(request, session))) {
+    writeJson(response, 403, { error: 'Access denied' });
+    return;
+  }
+
+  if (!process.env.DB_NAME) {
+    writeJson(response, 200, SUBSCRIPTION_USAGE_STUB);
+    return;
+  }
+
+  const tenantId = callerTenant(request, session);
+  try {
+    const summary = await getSubscriptionSummary(tenantId, pool);
+    writeJson(response, 200, summary);
+  } catch (err) {
+    logError('subscription.usage.error', { message: err.message });
+    writeJson(response, 500, { error: 'Internal server error' });
+  }
+}
+
+// ─── Tenant UI persona ────────────────────────────────────────────────────────
+
+async function handleTenantUiPersona(request, response, session) {
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (!isAdminRole(callerRole(request, session))) {
+    writeJson(response, 403, { error: 'Access denied' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const persona = payload?.persona;
+
+  if (!persona || (persona !== 'solo' && persona !== 'practice')) {
+    writeJson(response, 400, { error: 'persona must be "solo" or "practice"' });
+    return;
+  }
+
+  if (!process.env.DB_NAME) {
+    writeJson(response, 200, { updated: true });
+    return;
+  }
+
+  const tenantId = callerTenant(request, session);
+  try {
+    const result = await setUiPersona(tenantId, persona, pool);
+    writeJson(response, 200, result);
+  } catch (err) {
+    if (err.code === 'validation_error') {
+      writeJson(response, 400, { error: err.message });
+      return;
+    }
+    if (err.code === 'tenant_not_found') {
+      writeJson(response, 404, { error: 'Tenant not found' });
+      return;
+    }
+    logError('tenant.ui_persona.error', { message: err.message });
+    writeJson(response, 500, { error: 'Internal server error' });
+  }
+}
+
+// ─── Tenant persona dismiss ───────────────────────────────────────────────────
+
+async function handleTenantPersonaDismiss(request, response, session) {
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (!isAdminRole(callerRole(request, session))) {
+    writeJson(response, 403, { error: 'Access denied' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const mute = payload?.mute === true;
+
+  if (!process.env.DB_NAME) {
+    writeJson(response, 200, { dismissCount: 1, muted: mute });
+    return;
+  }
+
+  const tenantId = callerTenant(request, session);
+  try {
+    if (mute) {
+      const result = await mutePersonaUpgrade(tenantId, pool);
+      writeJson(response, 200, { dismissCount: null, muted: result.muted });
+      return;
+    }
+    const result = await recordPersonaDismiss(tenantId, pool);
+    writeJson(response, 200, { dismissCount: result.dismissCount, muted: false });
+  } catch (err) {
+    logError('tenant.persona_dismiss.error', { message: err.message });
+    writeJson(response, 500, { error: 'Internal server error' });
+  }
 }
 
 function renderSwaggerUiHtml(specUrl) {

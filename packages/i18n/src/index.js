@@ -1121,6 +1121,21 @@ export const baseMessages = Object.freeze({
   'ministry.scholarship.saved': 'Scholarship status saved.',
   'client.tab.ministry': 'Ministry',
 
+  // ─── Subscription & persona ───────────────────────────────────────────────
+  'studio.tab.subscription': 'Subscription',
+  'nav.myPractice': 'My Practice',
+  'subscription.plan.title': 'Your Plan',
+  'subscription.plan.personal': 'Personal',
+  'subscription.plan.practice': 'Practice',
+  'subscription.plan.ministry': 'Ministry',
+  'subscription.usage.counselors': 'Counselors',
+  'subscription.usage.clients': 'Active Clients',
+  'subscription.grace.warning': "You're over your plan limit.",
+  'subscription.grace.expired': 'Plan limit exceeded — upgrade required.',
+  'subscription.persona.toSolo': 'Switch to Solo mode',
+  'subscription.persona.toPractice': 'Switch to Practice mode',
+  'subscription.persona.upgrade.title': "You're building a team!",
+
   // ─── AACC CE Tracking ─────────────────────────────────────────────────────
   'aacc.credential.bcpcc':           'BCPCC',
   'aacc.credential.ncca_fellow':     'NCCA Fellow',
