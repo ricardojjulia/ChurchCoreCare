@@ -9,7 +9,7 @@
  * before clinical use.
  */
 
-export const AI_DISCLAIMER = '⚠ AI-assisted draft — final judgment belongs to the counselor';
+export const AI_DISCLAIMER = '⚠ Template-generated draft — review and edit before clinical use';
 
 // ─── Session agenda ──────────────────────────────────────────────────────────
 

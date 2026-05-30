@@ -98,7 +98,7 @@ The session INSERT did not include `revoked` (defaults to `FALSE`), so login suc
 | Faith-integrated notes | ✅ Full | Scripture refs, prayer journaling, spiritual practices, faith integration levels |
 | Supervision / cosign | ✅ Full | Intern relationships, pending review, cosign workflow, audit logged |
 | Licensure time tracking | ✅ Full | Direct clinical, indirect/admin, CE, supervisor verification, CSV export |
-| Faithful Workflows | ✅ Full | 27 deterministic rules, 8 care categories, 3 canvas views (Classic, Radial Hub, Priority Matrix) |
+| Faithful Workflows | ✅ Full | 36 deterministic rules (no LLM), 8 care categories, 3 canvas views (Classic, Radial Hub, Priority Matrix) |
 | Client portal | ✅ Full | Auth, forms, documents, appointments, messaging, resources, portal branding |
 | Telehealth video | ✅ Full | JaaS/Jitsi, client join links, embedded video, RS256 JWT, audit logged |
 | Billing foundation | ✅ Full | Invoices, superbills, payments, service codes, fee schedules, aging reports |

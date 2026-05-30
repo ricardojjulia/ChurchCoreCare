@@ -10,6 +10,7 @@ import WorkflowCanvasPriority from './WorkflowCanvasPriority.jsx';
 import RecommendationDrawer from './RecommendationDrawer.jsx';
 import { runWorkflow, buildClientRankEntry, buildLightweightRankEntry } from './engine/runWorkflow.js';
 import { getMockClientData, MOCK_CLIENTS } from './engine/mockData.js';
+import { applyPersistedStates } from './engine/applyPersistedStates.js';
 
 // ─── View variant metadata ────────────────────────────────────────────────────
 
@@ -98,6 +99,8 @@ async function fetchClientWorkflowData(clientId, demoModeEnabled) {
     faithRes,
     appointmentsRes,
     assessmentsRes,
+    homeworkRes,
+    referralsRes,
   ] = await Promise.allSettled([
     fetch(`/api/v1/clients/${encodeURIComponent(clientId)}`,                    { credentials: 'include' }).then((r) => r.ok ? r.json() : null),
     fetch(`/api/v1/clients/${encodeURIComponent(clientId)}/diagnoses`,          { credentials: 'include' }).then((r) => r.ok ? r.json() : null),
@@ -106,6 +109,8 @@ async function fetchClientWorkflowData(clientId, demoModeEnabled) {
     fetch(`/api/v1/clients/${encodeURIComponent(clientId)}/faith-profile`,      { credentials: 'include' }).then((r) => r.ok ? r.json() : null),
     fetch(`/api/v1/appointments?clientId=${encodeURIComponent(clientId)}`,      { credentials: 'include' }).then((r) => r.ok ? r.json() : null),
     fetch(`/api/v1/forms/client-overview?clientId=${encodeURIComponent(clientId)}`, { credentials: 'include' }).then((r) => r.ok ? r.json() : null),
+    fetch(`/api/v1/forms/assignments?clientId=${encodeURIComponent(clientId)}&status=pending`, { credentials: 'include' }).then((r) => r.ok ? r.json() : null),
+    fetch(`/api/v1/faith/referral-coordination?clientId=${encodeURIComponent(clientId)}`, { credentials: 'include' }).then((r) => r.ok ? r.json() : null),
   ]);
 
   const val = (settled) => settled.status === 'fulfilled' ? settled.value : null;
@@ -139,6 +144,8 @@ async function fetchClientWorkflowData(clientId, demoModeEnabled) {
     faithProfile: val(faithRes)?.item ?? val(faithRes) ?? null,
     appointments: val(appointmentsRes)?.items ?? [],
     assessments,
+    homeworkPending: val(homeworkRes)?.items ?? [],
+    referrals: val(referralsRes)?.items ?? [],
     status: 'ready',
     errorMessage: null,
   };
@@ -555,30 +562,6 @@ export default function FaithWorkflowsPage({ clients = [], currentUser, sharedOp
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-const SAFETY_LOCK_THRESHOLD = 9;
-
-/**
- * Merge persisted DB states into the rules engine output.
- * Safety lock: any rec with priority >= SAFETY_LOCK_THRESHOLD cannot stay hidden/deferred.
- *
- * @param {import('./engine/types.js').Recommendation[]} recs
- * @param {Record<string, {status: string}>} states  — keyed by ruleId
- * @param {boolean} applyStates  — false for non-selected clients (skip merge)
- */
-function applyPersistedStates(recs, states, applyStates) {
-  if (!applyStates) return recs;
-  return recs.map((rec) => {
-    const persisted = states[rec.ruleId];
-    if (!persisted) return rec;
-    let status = persisted.status;
-    // Safety lock: high-priority recommendations cannot be hidden or deferred
-    if (rec.priority >= SAFETY_LOCK_THRESHOLD && (status === 'hidden' || status === 'deferred')) {
-      status = 'pending';
-    }
-    return { ...rec, status };
-  });
-}
 
 function classifyCountBand(total) {
   if (total >= 150) return '150_plus';

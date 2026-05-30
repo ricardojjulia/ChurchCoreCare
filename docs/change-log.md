@@ -2,6 +2,32 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## May 29, 2026 — Faithful Workflows engine enhancements
+
+### feat: 2 new clinical rules, improved data wiring, 83-test coverage
+
+**Date:** 2026-05-29
+**Affected area:** `apps/web/src/components/FaithWorkflows/engine/`
+
+Closed six gaps identified in the Faithful Workflows engine (documented in `PLANS/FAITHFUL-WORKFLOWS-ENHANCEMENTS.md`).
+
+**Bug fixes:**
+
+- Fixed broken test (`rule_coordination_no_insurance` → `rule_coordination_gift_arrangement`)
+- Fixed `homeworkPending` and `referrals` not wired into `fetchClientWorkflowData` — rules that depended on them (pending homework, open referrals) could never fire in production
+- Fixed misleading "AI-assisted" watermark in `contentTemplates.js` — templates are deterministic, not LLM-generated
+
+**New rules (36 total, up from 34):**
+
+- `ruleSessionFrequencyDecline` — fires when appointment spacing widens > 1.5× over the session history, signalling possible disengagement (priority 5, confidence 0.80)
+- `ruleSupervisionMissing` — fires when a high-urgency client (PHQ-9 ≥ 20, active SI, or ≥ 2 no-shows) has no supervision note documented in the past 30 days (priority 7, confidence 0.85)
+
+**Refactor:**
+
+- Extracted `applyPersistedStates` from `FaithWorkflowsPage.jsx` to `engine/applyPersistedStates.js` for testability
+
+**Tests:** 83 tests, 83 passing (up from 52). New coverage: `scoreClient`, `contentTemplates` (all 7 renderers), `applyPersistedStates`, and both new rules.
+
 ## May 28, 2026 — Platform Admin App complete (apps/platform/)
 
 ### feat: platform admin web app — impersonation, data exports, retention policies

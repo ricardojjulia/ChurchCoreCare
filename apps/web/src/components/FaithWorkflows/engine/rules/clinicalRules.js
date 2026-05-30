@@ -9,9 +9,10 @@
  * - Stale treatment plan (>90 days without review)
  * - No progress note in 30+ days for an active client
  * - Diagnosis with no corresponding treatment goal
+ * - Supervision consultation missing for high-urgency clients
  */
 
-import { getLatestAssessment, getScoreHistory, isWorseningTrend, daysSince } from '../utils.js';
+import { getLatestAssessment, getScoreHistory, isWorseningTrend, daysSince, consecutiveNoShows } from '../utils.js';
 
 // AUDIT hazardous-use threshold (AUDIT-C uses 3/4; full AUDIT uses 8+)
 const AUDIT_HAZARDOUS_THRESHOLD = 8;
@@ -353,5 +354,63 @@ export function ruleAuditHigh(data, clientId) {
     status: 'pending',
     orderedAfter: null,
     docNote: 'Document substance use discussion, any referrals made, and treatment plan updates to address substance use.',
+  };
+}
+
+/**
+ * Rule: High-urgency client has no supervision consultation note in the past 30 days.
+ *
+ * High-urgency triggers: PHQ-9 ≥ 20 (severe), PHQ-9 item 9 ≥ 2 (active SI),
+ * or ≥ 2 consecutive no-shows.
+ */
+export function ruleSupervisionMissing(data, clientId) {
+  const phq9 = getLatestAssessment(data.assessments, 'PHQ-9');
+  const noShows = consecutiveNoShows(data.appointments ?? []);
+
+  const isSevere = (phq9?.score ?? 0) >= 20;
+  const hasSI = (phq9?.item9Score ?? 0) >= 2;
+  const hasMultipleNoShows = noShows >= 2;
+
+  if (!isSevere && !hasSI && !hasMultipleNoShows) return null;
+
+  const notes = data.progressNotes ?? [];
+  const hasRecentSupervision = notes.some(
+    (n) =>
+      daysSince(n.createdAt) <= 30 &&
+      (n.noteType === 'supervision_note' ||
+       n.noteType === 'supervisory_note' ||
+       (n.noteType ?? '').toLowerCase().includes('supervision')),
+  );
+
+  if (hasRecentSupervision) return null;
+
+  const reasons = [
+    isSevere && `PHQ-9 ${phq9.score} (severe ≥20)`,
+    hasSI && `PHQ-9 item 9 = ${phq9.item9Score} (active SI)`,
+    hasMultipleNoShows && `${noShows} consecutive no-shows`,
+  ].filter(Boolean);
+
+  return {
+    id: `rule_clinical_supervision_missing:${clientId}`,
+    ruleId: 'rule_clinical_supervision_missing',
+    category: 'clinical_caution',
+    title: 'Supervision Consultation Recommended',
+    summary: `Client presents with high-urgency indicators (${reasons.join('; ')}) but no supervision note is documented in the past 30 days.`,
+    rationale: `When a client presents with severe symptom levels, active suicidal ideation, or repeated disengagement, clinical supervision provides an important safety net — both for the client and for the counselor. Best practice calls for documented consultation within 30 days for any client in this risk range. If supervision has occurred verbally, document it now.`,
+    evidence: [
+      ...reasons.map((r) => r),
+      'No supervision note found in the past 30 days',
+    ],
+    priority: 7,
+    confidence: 0.85,
+    cautions: [
+      'If supervision occurred verbally, document it retroactively in a progress note.',
+      'This rule does not fire if a supervision note exists in the last 30 days.',
+    ],
+    actions: ['generate_note_prep', 'add_reminder_task'],
+    faithNote: null,
+    status: 'pending',
+    orderedAfter: null,
+    docNote: 'Document supervision consultation: date, supervisor name, clinical concerns discussed, and any guidance received.',
   };
 }
