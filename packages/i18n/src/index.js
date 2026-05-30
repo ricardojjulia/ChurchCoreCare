@@ -681,6 +681,7 @@ export const baseMessages = Object.freeze({
   'studio.tab.appointments': 'Appointments',
   'studio.tab.offerings': 'Offerings',
   'studio.tab.portal': 'Portal',
+  'studio.tab.faith': 'Faith Context',
   'studio.placeholderForTab': 'Content for {tab} tab',
   'offerings.title': 'Offerings',
   'offerings.subtitle': 'Review voluntary offerings from clients across sessions.',

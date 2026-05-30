@@ -45,6 +45,7 @@ try {
   // report schema version across tenant DBs.
   await recordMigration(connection, 'core_schema_initial');
   await recordMigration(connection, 'column_migrations_batch_1');
+  await recordMigration(connection, 'practice_faith_profiles_v1');
 
   // Seed a default tenant + system practice for local dev
   await seedDevData(connection);
@@ -600,6 +601,23 @@ async function applyColumnMigrations(conn) {
   `);
   await conn.query(`CREATE INDEX IF NOT EXISTS idx_relational_unit_members_unit ON relational_unit_members (unit_id, tenant_id)`);
   await conn.query(`CREATE INDEX IF NOT EXISTS idx_relational_unit_members_client ON relational_unit_members (client_id, tenant_id)`);
+
+  // ── Practice faith profile ────────────────────────────────────────────────
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS practice_faith_profiles (
+      id                        VARCHAR(64)   NOT NULL,
+      tenant_id                 VARCHAR(64)   NOT NULL,
+      tradition                 VARCHAR(64)   NOT NULL DEFAULT 'broadly_christian',
+      vocabulary_preset         JSONB         NOT NULL DEFAULT '{}',
+      content_guidelines_enc    TEXT          NULL,
+      default_integration_level VARCHAR(32)   NOT NULL DEFAULT 'preferred',
+      updated_at                TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+      updated_by                VARCHAR(64)   NOT NULL,
+      PRIMARY KEY (id)
+    )
+  `);
+  await addIndexIfMissing('practice_faith_profiles', 'idx_practice_faith_profiles_tenant', '(tenant_id)');
+  await addUniqueIndexIfMissing('practice_faith_profiles', 'uq_practice_faith_profile_tenant', '(tenant_id)');
 
   console.log('Column migrations done.');
 }

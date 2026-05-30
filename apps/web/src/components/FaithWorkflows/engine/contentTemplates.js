@@ -141,20 +141,26 @@ const VERSE_MAP = {
 /**
  * Return verse suggestions for a recommendation's category.
  * @param {import('./types.js').Recommendation} rec
+ * @param {Object|null} practiceVocab — optional vocabulary preset for substitution
  * @returns {string}
  */
-export function renderVerseSuggestions(rec) {
+export function renderVerseSuggestions(rec, practiceVocab = null) {
   const verses = VERSE_MAP[rec.category] ?? VERSE_MAP.spiritual;
+  const scriptureLabel = practiceVocab?.scriptureTerms?.[0] ?? 'Scripture';
   const lines = [
-    `Scripture Suggestions — ${rec.title}`,
+    `${scriptureLabel} Suggestions — ${rec.title}`,
     '',
-    'These verses may offer comfort or reflection relevant to this care area.',
+    `These verses may offer comfort or reflection relevant to this care area.`,
     'Share only with clients who have opted into faith integration.',
     '',
   ];
   for (const v of verses) {
     lines.push(`${v.ref}`);
-    lines.push(`"${v.text}"`);
+    // Apply vocabulary substitution in body text only
+    const bodyText = practiceVocab
+      ? v.text.replace(/\bScripture\b/g, scriptureLabel)
+      : v.text;
+    lines.push(`"${bodyText}"`);
     lines.push('');
   }
   lines.push(AI_DISCLAIMER);
@@ -166,18 +172,21 @@ export function renderVerseSuggestions(rec) {
 /**
  * Render a brief, non-prescriptive prayer prompt for a spiritual care recommendation.
  * @param {import('./types.js').Recommendation} rec
+ * @param {Object|null} practiceVocab — optional vocabulary preset for substitution
  * @returns {string}
  */
-export function renderPrayerPrompt(rec) {
+export function renderPrayerPrompt(rec, practiceVocab = null) {
+  const prayerTerm = practiceVocab?.prayerTerms?.[0] ?? 'prayer';
+  const useCustomTerm = prayerTerm !== 'prayer';
   return [
-    `Prayer Prompt — ${rec.title}`,
+    `${useCustomTerm ? prayerTerm.charAt(0).toUpperCase() + prayerTerm.slice(1) : 'Prayer'} Prompt — ${rec.title}`,
     '',
-    'If the client has invited prayer into session, consider a brief closing prayer',
+    `If the client has invited ${prayerTerm} into session, consider a brief closing ${prayerTerm}`,
     'acknowledging the area of care being addressed.',
     '',
     `Suggested focus: ${rec.summary}`,
     '',
-    'Note: Prayer is always led by the client\'s invitation and comfort. Never assume.',
+    `Note: ${useCustomTerm ? prayerTerm.charAt(0).toUpperCase() + prayerTerm.slice(1) : 'Prayer'} is always led by the client's invitation and comfort. Never assume.`,
     '',
     AI_DISCLAIMER,
   ].join('\n');
@@ -232,10 +241,12 @@ export function renderCbtExercise(rec) {
 /**
  * Render a between-session journaling prompt.
  * @param {import('./types.js').Recommendation} rec
+ * @param {Object|null} practiceVocab — optional vocabulary preset for substitution
  * @returns {string}
  */
-export function renderJournalPrompt(rec) {
+export function renderJournalPrompt(rec, practiceVocab = null) {
   const hasFaith = rec.faithNote != null;
+  const scriptureLabel = practiceVocab?.scriptureTerms?.[0] ?? 'Scripture';
   const lines = [
     `Journaling Prompt — ${rec.title}`,
     '',
@@ -254,7 +265,7 @@ export function renderJournalPrompt(rec) {
       '',
       'Faith reflection (optional, only if client has invited this):',
       '  • Where did you sense God\'s presence or absence this week?',
-      '  • Is there a Scripture passage that has been on your mind?',
+      `  • Is there a ${scriptureLabel} passage that has been on your mind?`,
     );
   }
 
@@ -409,23 +420,24 @@ ${faithSection}
  * Dispatch to the right template renderer for a given action key.
  * @param {string} actionKey
  * @param {import('./types.js').Recommendation} rec
- * @param {{ clientName?: string, clientFirstName?: string, allRecommendations?: import('./types.js').Recommendation[] }} ctx
+ * @param {{ clientName?: string, clientFirstName?: string, allRecommendations?: import('./types.js').Recommendation[], practiceVocab?: Object|null }} ctx
  * @returns {string|null}
  */
 export function renderActionContent(actionKey, rec, ctx = {}) {
+  const practiceVocab = ctx.practiceVocab ?? null;
   switch (actionKey) {
     case 'generate_session_agenda':
       return renderSessionAgenda(ctx.clientName ?? 'Client', ctx.allRecommendations ?? [rec]);
     case 'generate_note_prep':
       return renderNotePrep(rec);
     case 'suggest_verses':
-      return renderVerseSuggestions(rec);
+      return renderVerseSuggestions(rec, practiceVocab);
     case 'create_prayer_prompt':
-      return renderPrayerPrompt(rec);
+      return renderPrayerPrompt(rec, practiceVocab);
     case 'create_cbt_exercise':
       return renderCbtExercise(rec);
     case 'create_journal_prompt':
-      return renderJournalPrompt(rec);
+      return renderJournalPrompt(rec, practiceVocab);
     case 'draft_followup_message':
       return renderFollowupMessage(ctx.clientFirstName ?? '', rec);
     default:

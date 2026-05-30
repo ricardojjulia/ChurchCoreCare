@@ -147,6 +147,7 @@ Required boundary rules:
 - `studio.appointments`
 - `studio.offerings`
 - `studio.portal`
+- `studio.faith` — Practice Faith Context; denomination tradition selector, vocabulary preset editor, and default integration level; admin/practice_owner edit, counselor read-only
 
 ### Scheduling subviews
 

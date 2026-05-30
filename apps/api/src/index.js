@@ -2206,6 +2206,11 @@ export async function handleApiRequest(request, response) {
       return;
     }
 
+    if (requestUrl.pathname === '/v1/practice/faith-profile') {
+      await handlePracticeFaithProfile(request, response, session);
+      return;
+    }
+
     if (/^\/v1\/staff\/[^/]+\/faith-profile$/.test(requestUrl.pathname)) {
       await handleStaffFaithProfile(request, response, requestUrl, session);
       return;
@@ -14542,6 +14547,188 @@ async function handleStaffEmployment(request, response, requestUrl, session) {
   }
 
   writeJson(response, 503, { error: 'Database not configured' });
+}
+
+// ─── /v1/practice/faith-profile ──────────────────────────────────────────────
+
+const ALLOWED_TRADITIONS = new Set([
+  'broadly_christian', 'evangelical_baptist', 'methodist', 'presbyterian_reformed',
+  'lutheran', 'anglican_episcopal', 'pentecostal_charismatic', 'nondenominational',
+  'catholic_roman', 'catholic_eastern', 'orthodox_eastern', 'orthodox_oriental',
+  'black_church', 'mennonite_anabaptist', 'messianic_jewish',
+]);
+
+const ALLOWED_INTEGRATION_LEVELS = new Set(['none', 'open', 'preferred', 'required']);
+
+function practiceFaithProfileItem(row) {
+  return {
+    tradition:                  row.tradition,
+    vocabularyPreset:           typeof row.vocabulary_preset === 'string'
+      ? JSON.parse(row.vocabulary_preset)
+      : (row.vocabulary_preset ?? {}),
+    defaultIntegrationLevel:    row.default_integration_level,
+    contentGuidelinesConfigured: row.content_guidelines_enc != null,
+    updatedAt:                  row.updated_at,
+  };
+}
+
+async function handlePracticeFaithProfile(request, response, session) {
+  const role     = callerRole(request, session);
+  const tenantId = callerTenant(request, session);
+
+  // Deny unauthenticated callers
+  if (!role) {
+    writeJson(response, 401, { error: 'Authentication required' });
+    return;
+  }
+
+  if (request.method === 'GET') {
+    // Allowed roles: practice_admin, practice_owner, counselor — deny client
+    if (role === 'client') {
+      await emitAudit(request, 'practice.faith_profile.read.denied', 'practice_faith_profile', tenantId, session);
+      writeJson(response, 403, { error: 'Staff access required' });
+      return;
+    }
+
+    if (!process.env.DB_NAME) {
+      writeJson(response, 200, { item: null });
+      return;
+    }
+
+    const [rows] = await pool.query(
+      'SELECT * FROM practice_faith_profiles WHERE tenant_id = ? LIMIT 1',
+      [tenantId],
+    );
+    const row = rows[0] ?? null;
+    await emitAudit(request, 'practice.faith_profile.read', 'practice_faith_profile', tenantId, session);
+    writeJson(response, 200, { item: row ? practiceFaithProfileItem(row) : null });
+    return;
+  }
+
+  if (request.method === 'PUT') {
+    // Allowed roles: practice_admin, practice_owner only
+    if (role !== 'practice_admin' && role !== 'practice_owner') {
+      await emitAudit(request, 'practice.faith_profile.upsert.denied', 'practice_faith_profile', tenantId, session);
+      writeJson(response, 403, { error: 'Admin role required' });
+      return;
+    }
+
+    const payload = await readJsonBody(request);
+
+    // Validate tradition
+    if (!payload.tradition) {
+      writeJson(response, 400, { error: 'tradition is required' });
+      return;
+    }
+    if (!ALLOWED_TRADITIONS.has(payload.tradition)) {
+      writeJson(response, 400, { error: `tradition must be one of the allowed values` });
+      return;
+    }
+
+    // Validate vocabularyPreset
+    if (!payload.vocabularyPreset || typeof payload.vocabularyPreset !== 'object' || Array.isArray(payload.vocabularyPreset)) {
+      writeJson(response, 400, { error: 'vocabularyPreset is required and must be an object' });
+      return;
+    }
+    const vp = payload.vocabularyPreset;
+    if (!Array.isArray(vp.prayerTerms) || vp.prayerTerms.length < 1 || vp.prayerTerms.length > 5) {
+      writeJson(response, 400, { error: 'vocabularyPreset.prayerTerms must be an array of 1–5 items' });
+      return;
+    }
+    if (!Array.isArray(vp.scriptureTerms) || vp.scriptureTerms.length < 1 || vp.scriptureTerms.length > 5) {
+      writeJson(response, 400, { error: 'vocabularyPreset.scriptureTerms must be an array of 1–5 items' });
+      return;
+    }
+    if (!Array.isArray(vp.communityTerms) || vp.communityTerms.length < 1 || vp.communityTerms.length > 5) {
+      writeJson(response, 400, { error: 'vocabularyPreset.communityTerms must be an array of 1–5 items' });
+      return;
+    }
+    if (typeof vp.spiritualLeaderTitle !== 'string' || vp.spiritualLeaderTitle.length > 64) {
+      writeJson(response, 400, { error: 'vocabularyPreset.spiritualLeaderTitle must be a string max 64 chars' });
+      return;
+    }
+    if (typeof vp.practiceType !== 'string' || vp.practiceType.length > 64) {
+      writeJson(response, 400, { error: 'vocabularyPreset.practiceType must be a string max 64 chars' });
+      return;
+    }
+
+    // Validate defaultIntegrationLevel
+    if (!payload.defaultIntegrationLevel) {
+      writeJson(response, 400, { error: 'defaultIntegrationLevel is required' });
+      return;
+    }
+    if (!ALLOWED_INTEGRATION_LEVELS.has(payload.defaultIntegrationLevel)) {
+      writeJson(response, 400, { error: `defaultIntegrationLevel must be one of: none, open, preferred, required` });
+      return;
+    }
+
+    // Validate contentGuidelines (optional)
+    if (payload.contentGuidelines != null) {
+      if (typeof payload.contentGuidelines !== 'string' || payload.contentGuidelines.length > 4000) {
+        writeJson(response, 400, { error: 'contentGuidelines must be a string max 4000 chars' });
+        return;
+      }
+    }
+
+    const tradition             = sanitizeStr(payload.tradition, 64);
+    const defaultIntegrationLevel = sanitizeStr(payload.defaultIntegrationLevel, 32);
+    const vocabularyPresetJson  = JSON.stringify({
+      prayerTerms:          vp.prayerTerms.map((t) => sanitizeStr(String(t), 64)),
+      scriptureTerms:       vp.scriptureTerms.map((t) => sanitizeStr(String(t), 64)),
+      communityTerms:       vp.communityTerms.map((t) => sanitizeStr(String(t), 64)),
+      spiritualLeaderTitle: sanitizeStr(vp.spiritualLeaderTitle, 64),
+      practiceType:         sanitizeStr(vp.practiceType, 64),
+    });
+    const contentGuidelinesEnc = payload.contentGuidelines
+      ? encrypt(payload.contentGuidelines)
+      : null;
+    const updatedBy = callerIdentity(request, session)?.staffId ?? 'system';
+
+    if (!process.env.DB_NAME) {
+      // No-DB mode: return the shape the caller would receive after a real upsert
+      const syntheticRow = {
+        tradition,
+        vocabulary_preset:         JSON.parse(vocabularyPresetJson),
+        default_integration_level: defaultIntegrationLevel,
+        content_guidelines_enc:    contentGuidelinesEnc,
+        updated_at:                new Date().toISOString(),
+      };
+      writeJson(response, 200, { item: practiceFaithProfileItem(syntheticRow) });
+      return;
+    }
+
+    // Look up existing row id to preserve it on upsert
+    const [existingRows] = await pool.query(
+      'SELECT id FROM practice_faith_profiles WHERE tenant_id = ? LIMIT 1',
+      [tenantId],
+    );
+    const id = existingRows[0]?.id ?? crypto.randomUUID();
+
+    await pool.query(
+      `INSERT INTO practice_faith_profiles
+         (id, tenant_id, tradition, vocabulary_preset, content_guidelines_enc, default_integration_level, updated_at, updated_by)
+       VALUES (?, ?, ?, ?, ?, ?, NOW(), ?)
+       ON CONFLICT (tenant_id) DO UPDATE SET
+         tradition                 = EXCLUDED.tradition,
+         vocabulary_preset         = EXCLUDED.vocabulary_preset,
+         content_guidelines_enc    = EXCLUDED.content_guidelines_enc,
+         default_integration_level = EXCLUDED.default_integration_level,
+         updated_at                = NOW(),
+         updated_by                = EXCLUDED.updated_by`,
+      [id, tenantId, tradition, vocabularyPresetJson, contentGuidelinesEnc, defaultIntegrationLevel, updatedBy],
+    );
+
+    const [updatedRows] = await pool.query(
+      'SELECT * FROM practice_faith_profiles WHERE tenant_id = ? LIMIT 1',
+      [tenantId],
+    );
+    const updatedRow = updatedRows[0];
+    await emitAudit(request, 'practice.faith_profile.upsert', 'practice_faith_profile', tenantId, session);
+    writeJson(response, 200, { item: practiceFaithProfileItem(updatedRow) });
+    return;
+  }
+
+  writeJson(response, 405, { error: 'Method not allowed' });
 }
 
 // ─── /v1/staff/:id/faith-profile ─────────────────────────────────────────────

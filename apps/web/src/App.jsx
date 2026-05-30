@@ -622,6 +622,7 @@ export default function App() {
             <WorkspaceStudioPage
               initialTab={workspaceStudioInitialTab}
               initialDocumentsClientId={workspaceStudioDocumentsClientId}
+              userRole={userRole}
               onSchedulePortalRequest={(clientId, portalRequest) => handleOpenScheduling({
                 composerOpen: true,
                 initialClientId: clientId,
