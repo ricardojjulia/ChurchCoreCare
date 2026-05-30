@@ -49,6 +49,9 @@ try {
   await recordMigration(connection, 'counselor_scheduling_profiles_v1');
   await recordMigration(connection, 'client_booking_authorizations_v1');
   await recordMigration(connection, 'self_booking_appointments_v1');
+  await recordMigration(connection, 'onboarding_wizard_v1');
+  await recordMigration(connection, 'aacc_ceu_entries_v1');
+  await recordMigration(connection, 'ministry_plan_v1');
 
   // Seed a default tenant + system practice for local dev
   await seedDevData(connection);
@@ -438,6 +441,14 @@ async function applyColumnMigrations(conn) {
   // ── Practice billing gate ─────────────────────────────────────────────────
   await addColumnIfMissing('portal_settings', 'insurance_billing_enabled', 'BOOLEAN NOT NULL DEFAULT FALSE');
 
+  // ── Onboarding wizard state ───────────────────────────────────────────────
+  const onboardingCompletedAdded = await addColumnIfMissing('tenants', 'onboarding_completed', 'BOOLEAN NOT NULL DEFAULT FALSE');
+  await addColumnIfMissing('tenants', 'onboarding_steps_completed', "JSONB NOT NULL DEFAULT '{}'");
+  if (onboardingCompletedAdded) {
+    // Backfill: all existing tenants already have data — mark them complete
+    await conn.query('UPDATE tenants SET onboarding_completed = TRUE');
+  }
+
   // ── Phase A1: Tenant slug registry ───────────────────────────────────────
   await conn.query(`
     CREATE TABLE IF NOT EXISTS tenant_slugs (
@@ -679,6 +690,47 @@ async function applyColumnMigrations(conn) {
   `);
   await addIndexIfMissing('self_booking_appointments', 'idx_sba_client', '(tenant_id, client_id)');
   await addIndexIfMissing('self_booking_appointments', 'idx_sba_appointment', '(appointment_id)');
+
+  // ── AACC CEU tracking ──────────────────────────────────────────────────────
+  await addColumnIfMissing('staff_members', 'aacc_credential_type', 'VARCHAR(32) NULL');
+  await addColumnIfMissing('staff_members', 'aacc_cycle_start_date', 'DATE NULL');
+  await addColumnIfMissing('time_entries', 'aacc_ceu_id', 'VARCHAR(64) NULL');
+
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS aacc_ceu_entries (
+      id               VARCHAR(64)  NOT NULL,
+      tenant_id        VARCHAR(64)  NOT NULL,
+      staff_id         VARCHAR(64)  NOT NULL,
+      entry_type       VARCHAR(16)  NOT NULL DEFAULT 'standalone',
+      time_entry_id    VARCHAR(64)  NULL,
+      category         VARCHAR(64)  NOT NULL,
+      duration_minutes INTEGER      NOT NULL,
+      entry_date       DATE         NOT NULL,
+      description      TEXT         NULL,
+      provider         VARCHAR(255) NULL,
+      created_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+      updated_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (id)
+    )
+  `);
+  await addIndexIfMissing('aacc_ceu_entries', 'idx_aacc_ceu_staff', '(tenant_id, staff_id)');
+  await addIndexIfMissing('aacc_ceu_entries', 'idx_aacc_ceu_time_entry', '(tenant_id, time_entry_id)');
+
+  // ── Ministry / Church Plan fields ──────────────────────────────────────────
+  // staff_members — ministry admin access flag
+  await addColumnIfMissing('staff_members', 'ministry_admin_access', 'BOOLEAN NOT NULL DEFAULT FALSE');
+
+  // practices — church identity fields
+  await addColumnIfMissing('practices', 'ministry_name', 'VARCHAR(255) NULL');
+  await addColumnIfMissing('practices', 'denomination', 'VARCHAR(64) NULL');
+  await addColumnIfMissing('practices', 'church_size', 'VARCHAR(32) NULL');
+  await addColumnIfMissing('practices', 'parent_organization', 'VARCHAR(255) NULL');
+  await addColumnIfMissing('practices', 'church_directory_url_pattern', 'TEXT NULL');
+
+  // clients — scholarship and church directory fields
+  await addColumnIfMissing('clients', 'scholarship_flag', 'BOOLEAN NOT NULL DEFAULT FALSE');
+  await addColumnIfMissing('clients', 'church_directory_id', 'VARCHAR(128) NULL');
+  await addColumnIfMissing('clients', 'church_directory_source', 'VARCHAR(64) NULL');
 
   console.log('Column migrations done.');
 }

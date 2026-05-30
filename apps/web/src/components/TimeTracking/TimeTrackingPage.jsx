@@ -1,13 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Stack, Paper, Group, Title, Text, Button, Badge, Table, Loader,
-  Alert, ActionIcon, Select,
+  Alert, ActionIcon, Select, Divider,
 } from '@mantine/core';
 import { Check, Download, Plus, Trash2 } from 'lucide-react';
 import { notifications } from '@mantine/notifications';
 import { csrfHeaders } from '../../lib/csrf.js';
 import QuickLogModal from './QuickLogModal.jsx';
 import LicensureProgressBars from './LicensureProgressBars.jsx';
+import AaccCeuModal, { AACC_CATEGORIES } from './AaccCeuModal.jsx';
+import AaccCeuProgressWidget from './AaccCeuProgressWidget.jsx';
 
 const CATEGORY_LABELS = {
   direct_clinical: 'Direct Clinical',
@@ -33,6 +35,8 @@ const CATEGORY_OPTIONS = [
 ];
 
 const SUPERVISION_CATEGORIES = new Set(['supervision_individual', 'supervision_group']);
+
+const AACC_CATEGORY_MAP = Object.fromEntries(AACC_CATEGORIES.map(({ value, label }) => [value, label]));
 
 function formatDateTime(iso) {
   if (!iso) return '—';
@@ -154,6 +158,125 @@ function PendingVerificationSection({ items, staffById, verifyingId, onVerify })
   );
 }
 
+function AaccCeuLog({ staffId, reload }) {
+  const [entries, setEntries]       = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [error,   setError]         = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+
+  const loadEntries = useCallback(async () => {
+    if (!staffId) { setLoading(false); return; }
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/v1/staff/${encodeURIComponent(staffId)}/aacc-ceu/entries`);
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error ?? `Request failed: ${res.status}`);
+      setEntries(body.entries ?? []);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [staffId]);
+
+  useEffect(() => { loadEntries(); }, [loadEntries, reload]);
+
+  const handleDelete = async (entryId) => {
+    if (!window.confirm('Remove this AACC CEU entry?')) return;
+    setDeletingId(entryId);
+    try {
+      const res = await fetch(
+        `/api/v1/staff/${encodeURIComponent(staffId)}/aacc-ceu/entries/${encodeURIComponent(entryId)}`,
+        { method: 'DELETE', headers: csrfHeaders() },
+      );
+      if (!res.ok && res.status !== 204) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? 'Delete failed');
+      }
+      notifications.show({ title: 'Removed', message: 'AACC CEU entry deleted.', color: 'red' });
+      loadEntries();
+    } catch (err) {
+      notifications.show({ title: 'Error', message: err.message, color: 'red' });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  if (!staffId) return null;
+
+  return (
+    <Stack gap="sm">
+      <AaccCeuProgressWidget staffId={staffId} />
+
+      {error && <Alert color="red">{error}</Alert>}
+
+      {loading ? (
+        <Group py="sm">
+          <Loader size="sm" />
+          <Text size="sm" c="dimmed">Loading AACC entries…</Text>
+        </Group>
+      ) : entries.length === 0 ? (
+        <Text size="sm" c="dimmed">No AACC CEU entries logged yet. Use "Add AACC CEU" to add one.</Text>
+      ) : (
+        <Paper withBorder radius="md">
+          <Table striped highlightOnHover>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Date</Table.Th>
+                <Table.Th>Category</Table.Th>
+                <Table.Th>Hours</Table.Th>
+                <Table.Th>Provider</Table.Th>
+                <Table.Th>Description</Table.Th>
+                <Table.Th style={{ width: 48 }} />
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {entries.map((entry) => (
+                <Table.Tr key={entry.id}>
+                  <Table.Td>
+                    <Text size="sm">{entry.entryDate ? new Date(entry.entryDate).toLocaleDateString() : '—'}</Text>
+                  </Table.Td>
+                  <Table.Td>
+                    <Badge color="teal" variant="light" size="sm">
+                      {AACC_CATEGORY_MAP[entry.category] ?? entry.category}
+                    </Badge>
+                  </Table.Td>
+                  <Table.Td>
+                    <Text size="sm" fw={600}>
+                      {(Number(entry.durationMinutes ?? 0) / 60).toFixed(2)}h
+                    </Text>
+                  </Table.Td>
+                  <Table.Td>
+                    <Text size="sm" c="dimmed">{entry.provider ?? '—'}</Text>
+                  </Table.Td>
+                  <Table.Td>
+                    <Text size="sm" c="dimmed" lineClamp={1}>{entry.description ?? '—'}</Text>
+                  </Table.Td>
+                  <Table.Td>
+                    <ActionIcon
+                      color="red"
+                      variant="subtle"
+                      size="sm"
+                      loading={deletingId === entry.id}
+                      onClick={() => handleDelete(entry.id)}
+                      aria-label="Delete AACC CEU entry"
+                    >
+                      <Trash2 size={14} />
+                    </ActionIcon>
+                  </Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Paper>
+      )}
+    </Stack>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function TimeTrackingPage({ currentUser }) {
   const currentStaffId = currentUser?.staffId ?? currentUser?.staffMemberId ?? null;
   const [entries, setEntries] = useState([]);
@@ -164,9 +287,11 @@ export default function TimeTrackingPage({ currentUser }) {
   const [selectedUserId, setSelectedUserId] = useState(currentStaffId ?? '');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [logOpen, setLogOpen] = useState(false);
+  const [logOpen, setLogOpen]           = useState(false);
   const [categoryFilter, setCategoryFilter] = useState('');
-  const [verifyingId, setVerifyingId] = useState(null);
+  const [verifyingId, setVerifyingId]   = useState(null);
+  const [aaccModalOpen, setAaccModalOpen] = useState(false);
+  const [aaccReloadKey, setAaccReloadKey] = useState(0);
 
   useEffect(() => {
     setSelectedUserId((previous) => previous || currentStaffId || '');
@@ -327,6 +452,16 @@ export default function TimeTrackingPage({ currentUser }) {
           >
             Export CSV
           </Button>
+          {currentStaffId && (
+            <Button
+              leftSection={<Plus size={16} />}
+              variant="default"
+              onClick={() => setAaccModalOpen(true)}
+              disabled={!isViewingOwnEntries}
+            >
+              Add AACC CEU
+            </Button>
+          )}
           <Button
             leftSection={<Plus size={16} />}
             onClick={() => setLogOpen(true)}
@@ -443,11 +578,36 @@ export default function TimeTrackingPage({ currentUser }) {
         </Paper>
       )}
 
+      {currentStaffId && (
+        <>
+          <Divider mt="md" />
+          <Stack gap="sm">
+            <Title order={4}>AACC CEU Log</Title>
+            <Text size="sm" c="dimmed">
+              Track continuing education hours for AACC credential renewal (BCPCC 50 hrs/5yr, NCCA 30 hrs/3yr).
+            </Text>
+            <AaccCeuLog
+              staffId={currentStaffId}
+              reload={aaccReloadKey}
+            />
+          </Stack>
+        </>
+      )}
+
       <QuickLogModal
         opened={logOpen}
         onClose={() => setLogOpen(false)}
         onCreated={() => loadData()}
       />
+
+      {currentStaffId && (
+        <AaccCeuModal
+          opened={aaccModalOpen}
+          onClose={() => setAaccModalOpen(false)}
+          staffId={currentStaffId}
+          onSaved={() => setAaccReloadKey((k) => k + 1)}
+        />
+      )}
     </Stack>
   );
 }

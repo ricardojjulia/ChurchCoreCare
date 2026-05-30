@@ -116,6 +116,7 @@ Required boundary rules:
 - `client.legal`
 - `client.insurance` — insurance records + real-time eligibility card (EligibilityCard)
 - `client.scheduling_auth` — per-client booking authorization; controls whether the client can use real-time self-booking or request-only mode, overrides for allowed appointment types and days, and optional expiry date
+- `client.ministry` — ministry plan only; church directory reference (ID + source); scholarship status toggle with auto-save; shows non-ministry placeholder for standard-plan tenants
 
 ### Clinical chart surfaces
 
@@ -151,8 +152,9 @@ Required boundary rules:
 - `studio.offerings`
 - `studio.portal`
 - `studio.faith` — Practice Faith Context; denomination tradition selector, vocabulary preset editor, and default integration level; admin/practice_owner edit, counselor read-only
+- `studio.ministry` — Ministry Overview tab; visible only to admin/owner roles; fetches GET /api/v1/ministry/summary; shows stat cards for total clients, scholarship clients, and total counselors; shows an upgrade prompt when the tenant is not on the ministry plan
 
-### Scheduling subviews
+### Client detail tabs (additional)
 
 - `scheduling.general`
 - `scheduling.counselor`
@@ -176,6 +178,13 @@ Required boundary rules:
 - Audit event detail drawer or panel
 - Audit filter workflow
 - Audit export workflow
+- Onboarding wizard — `onboarding_wizard`; full-screen 4-step modal shown automatically on first login for practice_owner / practice_admin roles when `shouldShowWizard=true`; steps: Practice Setup, Counselor Profile, First Client (optional), First Appointment (optional); cannot be dismissed until completed; re-openable via SetupChecklistBadge in the sidebar
+
+### AACC CE Tracking surfaces
+
+- `time_tracking.aacc_ceu_log` — AACC CEU log section within TimeTrackingPage; visible only when the current user has a staffId; shows AaccCeuProgressWidget and entry table with delete support
+- `time_tracking.aacc_ceu_modal` — Add AACC CEU Entry modal; opened from the "Add AACC CEU" button in TimeTrackingPage; standalone CEU entry form with category, duration, date, provider, description fields
+- `counselor.aacc_credential` — AACC Credential section within the counselor ProfileTab; visible to admins and the counselor themselves; credential type selector and cycle start date; saved via PATCH /api/v1/staff/:staffId/aacc-credential
 
 Placeholder but visible surfaces still count as monitored surfaces. Even when a surface is incomplete, it must still be represented in local QA, consistency checks, and current documentation.
 

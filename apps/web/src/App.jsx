@@ -3,6 +3,7 @@ import { AppShell, Button, Center, Group, Modal, Paper, Stack, Text, Loader } fr
 import { useDisclosure } from '@mantine/hooks';
 import AuthGate from './components/AuthGate';
 import Sidebar from './components/Sidebar';
+import OnboardingWizard from './components/Onboarding/OnboardingWizard.jsx';
 import TopBar from './components/TopBar';
 import TrialBanner from './components/TrialBanner.jsx';
 import TrialExpiredPage from './components/TrialExpiredPage.jsx';
@@ -164,6 +165,8 @@ export default function App() {
   const [clinicalChartState, setClinicalChartState] = useState(createDefaultClinicalChartState);
   const [selectedGroupId, setSelectedGroupId] = useState(null);
   const [clientPickerOpen, setClientPickerOpen] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingShouldShow, setOnboardingShouldShow] = useState(false);
   const [schedulingState, setSchedulingState] = useState({
     composerOpen: false,
     initialClientId: null,
@@ -216,6 +219,24 @@ export default function App() {
       .finally(() => { if (cancelled) return; setAuthBootstrapping(false); });
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const onboardingEligibleRoles = ['practice_owner', 'practice_admin', 'platform_admin'];
+    if (!onboardingEligibleRoles.includes(userRole)) return;
+    let cancelled = false;
+    fetch('/api/v1/onboarding/status', { credentials: 'include' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled) return;
+        if (data?.shouldShowWizard) {
+          setOnboardingShouldShow(true);
+          setShowOnboarding(true);
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [isAuthenticated, userRole]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -542,6 +563,8 @@ export default function App() {
           onNavigate={handleNavigate}
           onOpenClientPicker={() => { setClientPickerOpen(true); closeNav(); }}
           onSignOut={handleSignOut}
+          shouldShowOnboarding={onboardingShouldShow}
+          onOpenOnboarding={() => setShowOnboarding(true)}
         />
       </AppShell.Navbar>
 
@@ -726,6 +749,14 @@ export default function App() {
           )}
         </Suspense>
       </AppShell.Main>
+
+      <OnboardingWizard
+        opened={showOnboarding}
+        onClose={() => {
+          setShowOnboarding(false);
+          setOnboardingShouldShow(false);
+        }}
+      />
 
       <Modal
         opened={idleWarning}

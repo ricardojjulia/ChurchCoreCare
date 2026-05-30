@@ -2,6 +2,155 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## May 30, 2026 — Ministry Plan frontend
+
+### feat: add Ministry Plan UI for church identity, ministry analytics, and client scholarship/directory fields
+
+**Date:** 2026-05-30
+**Affected area:** `apps/web/src/components/WorkspaceStudio/`, `apps/web/src/components/ClientDetail/`, `apps/web/src/lib/usePlanType.js`, `packages/i18n/src/index.js`, `PLANS/FULL-SURFACE-MONITORING.md`
+
+Added the complete Ministry Plan frontend for the `ministry` plan tier.
+
+**New files:**
+
+- `apps/web/src/lib/usePlanType.js` — `usePlanType()` hook; probes `GET /api/v1/ministry/summary` to detect the tenant's plan; returns `{ planType, loading, isMinistry }`
+- `apps/web/src/components/WorkspaceStudio/tabs/MinistryTab.jsx` — Ministry Overview tab; stat cards for total clients, scholarship clients, and total counselors; admin/owner only; shows upgrade prompt on 403 `ministry_plan_required`
+- `apps/web/src/components/ClientDetail/tabs/MinistryClientTab.jsx` — Client Ministry tab; church directory reference fields (ID + source) with grouped save; scholarship Switch with auto-save and inline Alert on activation; hidden on non-ministry plans
+
+**Modified files:**
+
+- `apps/web/src/components/WorkspaceStudio/tabs/PracticeTab.jsx` — added Church Identity section (ministry plan only) with ministry name, denomination Select, church size Select, parent organization, and directory URL pattern; uses `usePlanType()` hook to conditionally render
+- `apps/web/src/components/WorkspaceStudio/WorkspaceStudioPage.jsx` — added `ministry` tab entry to `STUDIO_TABS`; imports `MinistryTab`
+- `apps/web/src/components/ClientDetail/ClientDetailTabs.jsx` — added `ministry` tab; imports `MinistryClientTab`
+- `packages/i18n/src/index.js` — added 57 `ministry.*` and `studio.tab.ministry` / `client.tab.ministry` i18n keys
+
+**Surface registry:** added `studio.ministry` and `client.ministry` to `PLANS/FULL-SURFACE-MONITORING.md`
+
+---
+
+## May 30, 2026 — Onboarding Wizard frontend
+
+### feat: add OnboardingWizard and SetupChecklistBadge for first-login practice setup
+
+**Date:** 2026-05-30
+**Affected area:** `apps/web/src/components/Onboarding/`, `apps/web/src/App.jsx`, `apps/web/src/components/Sidebar.jsx`, `packages/i18n/src/index.js`, `PLANS/FULL-SURFACE-MONITORING.md`, `tests/e2e/onboarding-wizard.spec.mjs`
+
+Added the complete Onboarding Wizard UI feature.
+
+**New components:**
+
+- `OnboardingWizard.jsx` — full-screen Mantine v9 Modal with 4-step Stepper; steps: Practice Setup (name + timezone), Counselor Profile (name, license, tradition), First Client (optional), First Appointment (optional); non-dismissable until completed; uses `@mantine/form` per step with `LoadingOverlay` on submit; calls PATCH `/api/v1/onboarding/step/:n` per step and POST `/api/v1/onboarding/complete` on finish
+- `SetupChecklistBadge.jsx` — sidebar badge/button shown only when `shouldShowWizard=true`; re-opens the wizard on click
+
+**App.jsx changes:**
+
+- Fetches GET `/api/v1/onboarding/status` after auth for `practice_owner`, `practice_admin`, `platform_admin` roles
+- Auto-shows wizard if `shouldShowWizard=true`
+- Passes `shouldShowOnboarding` / `onOpenOnboarding` props to Sidebar
+
+**Sidebar.jsx changes:**
+
+- Imports and conditionally renders `SetupChecklistBadge`
+
+**i18n:** Added 9 `onboarding.*` keys to `packages/i18n/src/index.js`
+
+**Surface registry:** Registered `onboarding_wizard` modal surface in `PLANS/FULL-SURFACE-MONITORING.md`
+
+**E2E tests:** `tests/e2e/onboarding-wizard.spec.mjs` — happy path, step-1 validation, badge visibility, role gate (counselor role sees no wizard)
+
+---
+
+## May 30, 2026 — Ministry/Church Plan backend
+
+### feat: ministry plan tier with church identity, scholarship clients, and ministry summary
+
+**Date:** 2026-05-30
+**Affected area:** `apps/api/src/db/migrate.js`, `apps/api/src/lib/ministryPlan.js`, `apps/api/src/index.js`, `packages/domain/src/index.js`, `apps/api/test/ministryPlan.test.mjs`
+
+Added the complete server-side Ministry/Church Plan feature.
+
+**Database (migrate.js additions):**
+
+- `staff_members.ministry_admin_access` (BOOLEAN NOT NULL DEFAULT FALSE) — ministry admin access flag
+- `practices.ministry_name` (VARCHAR 255 NULL) — display name for the ministry
+- `practices.denomination` (VARCHAR 64 NULL) — validated denomination from allow-list
+- `practices.church_size` (VARCHAR 32 NULL) — validated size: small, medium, large, megachurch
+- `practices.parent_organization` (VARCHAR 255 NULL) — parent church organization name
+- `practices.church_directory_url_pattern` (TEXT NULL) — URL pattern for church directory links
+- `clients.scholarship_flag` (BOOLEAN NOT NULL DEFAULT FALSE) — blocks invoice creation when true
+- `clients.church_directory_id` (VARCHAR 128 NULL) — reference ID in external church directory
+- `clients.church_directory_source` (VARCHAR 64 NULL) — source system name for directory ID
+
+**Service layer (`apps/api/src/lib/ministryPlan.js`):**
+
+- `getChurchIdentity` — reads ministry_name, denomination, church_size, parent_organization, church_directory_url_pattern for a practice
+- `upsertChurchIdentity` — validates denomination/churchSize against allow-lists, then updates the practice row
+- `getChurchDirectoryRef` — reads church_directory_id and church_directory_source for a client
+- `upsertChurchDirectoryRef` — updates church directory reference fields on a client
+- `setScholarshipFlag` — sets the scholarship_flag boolean on a client
+- `getScholarshipFlag` — reads the scholarship_flag for a client
+- `getMinistrySummary` — aggregate counts: totalClients, scholarshipClients, totalCounselors
+- `checkScholarshipBlock` — returns true if client scholarship_flag is set (used in invoice guard)
+
+**API routes (apps/api/src/index.js):**
+
+- `GET /v1/practices/:id/church-identity` — admin/owner/counselor; returns null fields in no-DB mode
+- `PATCH /v1/practices/:id/church-identity` — admin/owner only; 400 on invalid denomination/churchSize
+- `PATCH /v1/clients/:id/church-directory-ref` — admin/owner only
+- `PATCH /v1/clients/:id/scholarship` — admin/owner only; 400 if scholarshipFlag is not boolean
+- `GET /v1/ministry/summary` — admin/owner only; 403 if tenant plan_type != 'ministry'
+
+**Guards:**
+
+- Invoice creation (POST /v1/billing/invoices): returns 422 `scholarship_client_no_invoice` for scholarship clients
+- All billing routes: returns 403 `ministry_admin_billing_denied` for ministry_admin role
+
+**Domain package:** Added `ministry_admin` to staffRoles array in `packages/domain/src/index.js`
+
+**Tests:** 10 tests in `apps/api/test/ministryPlan.test.mjs` — all passing; full suite 263 tests, 0 failures
+
+---
+
+## May 30, 2026 — AACC CEU Tracking backend
+
+### feat: AACC continuing education tracking for BCPCC and NCCA credentialing
+
+**Date:** 2026-05-30
+**Affected area:** `apps/api/src/db/migrate.js`, `apps/api/src/lib/aaccCeu.js`, `apps/api/src/index.js`, `apps/api/test/aaccCeu.test.mjs`
+
+Added the complete server-side AACC continuing education (CEU) tracking feature for counselors pursuing BCPCC or NCCA credentials.
+
+**Database (migrate.js additions):**
+
+- `staff_members.aacc_credential_type` (VARCHAR 32 NULL) — credential track: `bcpcc`, `ncca_fellow`, or `ncca_diplomate`
+- `staff_members.aacc_cycle_start_date` (DATE NULL) — renewal cycle start
+- `time_entries.aacc_ceu_id` (VARCHAR 64 NULL) — links a time entry to a CEU entry
+- `aacc_ceu_entries` table — CEU record per counselor with category, duration, date, description, and provider
+
+**Service layer (`apps/api/src/lib/aaccCeu.js`):**
+
+- `getCredentialStatus` — fetches credential type and cycle start for a staff member
+- `upsertCredential` — sets or updates credential type and cycle start date
+- `getCeuProgress` — computes hours summary: totalHours, remainingHours, percentComplete, cycleEndDate
+- `listCeuEntries` — returns all CEU entries ordered by entry date descending
+- `addCeuEntry` — validates and inserts a CEU entry; links time entry if `timeEntryId` provided
+- `deleteCeuEntry` — removes a CEU entry and unlinks any associated time entry
+- `renderRenewalReportHtml` — returns a print-ready HTML report grouped by category with subtotals
+
+**API routes (7 new):**
+
+- `PATCH /v1/staff/:staffId/aacc-credential` — set credential type and cycle start
+- `GET /v1/staff/:staffId/aacc-ceu/progress` — hours summary
+- `GET /v1/staff/:staffId/aacc-ceu/entries` — list CEU entries
+- `POST /v1/staff/:staffId/aacc-ceu/entries` — add a CEU entry
+- `DELETE /v1/staff/:staffId/aacc-ceu/entries/:entryId` — delete a CEU entry
+- `PATCH /v1/time-entries/:id/aacc-ceu` — link or unlink a time entry to a CEU entry
+- `GET /v1/staff/:staffId/aacc-ceu/renewal-report` — returns `text/html` print-ready renewal report
+
+**Tests:** 10 unit tests in `apps/api/test/aaccCeu.test.mjs` — all pass (253 total, 0 failures).
+
+---
+
 ## May 30, 2026 — Client Self-Scheduling backend
 
 ### feat: three-layer counselor-gated slot booking service

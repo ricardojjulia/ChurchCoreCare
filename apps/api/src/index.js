@@ -215,9 +215,64 @@ import {
   SelfSchedulingError,
   SlotConflictError,
 } from './lib/selfScheduling.js';
+import {
+  getOnboardingStatus,
+  markStepComplete,
+  completeOnboarding,
+  savePracticeName,
+  saveCounselorProfile,
+  createFirstClient,
+  createFirstAppointment,
+} from './lib/onboarding.js';
+import {
+  AACC_CATEGORIES,
+  VALID_CREDENTIAL_TYPES,
+  getCredentialStatus,
+  upsertCredential,
+  getCeuProgress,
+  listCeuEntries,
+  addCeuEntry,
+  deleteCeuEntry,
+  renderRenewalReportHtml,
+} from './lib/aaccCeu.js';
+import {
+  VALID_CHURCH_SIZES,
+  VALID_DENOMINATIONS,
+  getChurchIdentity,
+  upsertChurchIdentity,
+  getChurchDirectoryRef,
+  upsertChurchDirectoryRef,
+  setScholarshipFlag,
+  getMinistrySummary,
+  checkScholarshipBlock,
+} from './lib/ministryPlan.js';
 
 // ─── Self-scheduling validation allowlists ────────────────────────────────────
 const VALID_SLOT_DURATIONS = new Set([30, 45, 50]);
+const ALLOWED_TIMEZONES = new Set([
+  'America/New_York','America/Chicago','America/Denver','America/Los_Angeles',
+  'America/Anchorage','America/Phoenix','America/Detroit','America/Indiana/Indianapolis',
+  'Pacific/Honolulu','America/Puerto_Rico','America/Toronto','America/Vancouver',
+  'America/Winnipeg','America/Halifax','America/St_Johns',
+  'Europe/London','Europe/Paris','Europe/Berlin','Europe/Rome','Europe/Madrid',
+  'Europe/Amsterdam','Europe/Stockholm','Europe/Zurich','Europe/Warsaw',
+  'Europe/Helsinki','Europe/Athens','Europe/Bucharest','Europe/Istanbul',
+  'Africa/Nairobi','Africa/Lagos','Africa/Cairo','Africa/Johannesburg',
+  'Asia/Kolkata','Asia/Karachi','Asia/Dhaka','Asia/Bangkok','Asia/Singapore',
+  'Asia/Shanghai','Asia/Tokyo','Asia/Seoul','Australia/Sydney','Pacific/Auckland',
+]);
+
+const ALLOWED_LICENSE_TYPES_ONBOARDING = new Set([
+  'lmft','lpc','lcsw','psychologist','pastoral_counselor','lpcc','mft',
+  'social_worker','counselor_intern','other',
+]);
+
+const ALLOWED_TRADITIONS_ONBOARDING = new Set([
+  'broadly_christian','evangelical_baptist','methodist','presbyterian_reformed',
+  'lutheran','anglican_episcopal','pentecostal_charismatic','nondenominational',
+  'catholic_roman','catholic_eastern','orthodox_eastern','orthodox_oriental',
+  'black_church','mennonite_anabaptist','messianic_jewish',
+]);
 const VALID_BUFFERS        = new Set([0, 10, 15]);
 const VALID_ADVANCE_DAYS   = new Set([7, 14, 30, 60]);
 const VALID_NOTICE_HOURS   = new Set([2, 4, 12, 24, 48]);
@@ -1703,6 +1758,20 @@ export async function handleApiRequest(request, response) {
       }
     }
 
+    // ── Ministry plan: client church-directory-ref and scholarship ────────────
+    {
+      const churchDirMatch = requestUrl.pathname.match(/^\/v1\/clients\/([^/]+)\/church-directory-ref$/);
+      if (churchDirMatch) {
+        await handleClientChurchDirectoryRef(request, response, churchDirMatch[1], session);
+        return;
+      }
+      const scholarshipMatch = requestUrl.pathname.match(/^\/v1\/clients\/([^/]+)\/scholarship$/);
+      if (scholarshipMatch) {
+        await handleClientScholarship(request, response, scholarshipMatch[1], session);
+        return;
+      }
+    }
+
     if (requestUrl.pathname.startsWith('/v1/clients/')) {
       const sub = parseClientSubresource(requestUrl.pathname);
       if (sub) {
@@ -1839,21 +1908,38 @@ export async function handleApiRequest(request, response) {
     }
 
     if (requestUrl.pathname === '/v1/billing/subscription') {
+      // ministry_admin role may not perform billing actions
+      if (callerRole(request, session) === 'ministry_admin') {
+        writeJson(response, 403, { error: 'ministry_admin_billing_denied' });
+        return;
+      }
       await handleBillingSubscription(request, response, requestUrl, session);
       return;
     }
 
     if (requestUrl.pathname === '/v1/billing/portal') {
+      if (callerRole(request, session) === 'ministry_admin') {
+        writeJson(response, 403, { error: 'ministry_admin_billing_denied' });
+        return;
+      }
       await handleBillingPortal(request, response, requestUrl, session);
       return;
     }
 
     if (requestUrl.pathname === '/v1/billing/subscription/activate') {
+      if (callerRole(request, session) === 'ministry_admin') {
+        writeJson(response, 403, { error: 'ministry_admin_billing_denied' });
+        return;
+      }
       await handleBillingSubscriptionActivate(request, response, session);
       return;
     }
 
     if (requestUrl.pathname === '/v1/billing/subscription/upgrade') {
+      if (callerRole(request, session) === 'ministry_admin') {
+        writeJson(response, 403, { error: 'ministry_admin_billing_denied' });
+        return;
+      }
       await handleBillingSubscriptionUpgrade(request, response, session);
       return;
     }
@@ -2189,6 +2275,12 @@ export async function handleApiRequest(request, response) {
       return;
     }
 
+    // ── Ministry plan: church identity (must be before /v1/practices/ catch-all)
+    if (/^\/v1\/practices\/[^/]+\/church-identity$/.test(requestUrl.pathname)) {
+      await handleChurchIdentity(request, response, requestUrl, session);
+      return;
+    }
+
     if (requestUrl.pathname.startsWith('/v1/practices/')) {
       await handlePracticeById(request, response, requestUrl, session);
       return;
@@ -2254,6 +2346,32 @@ export async function handleApiRequest(request, response) {
       return;
     }
 
+    // ─── Onboarding wizard ──────────────────────────────────────────────────
+    if (requestUrl.pathname === '/v1/onboarding/status') {
+      await handleOnboarding(request, response, session, 'status');
+      return;
+    }
+    if (requestUrl.pathname === '/v1/onboarding/step/1') {
+      await handleOnboarding(request, response, session, 'step1');
+      return;
+    }
+    if (requestUrl.pathname === '/v1/onboarding/step/2') {
+      await handleOnboarding(request, response, session, 'step2');
+      return;
+    }
+    if (requestUrl.pathname === '/v1/onboarding/step/3') {
+      await handleOnboarding(request, response, session, 'step3');
+      return;
+    }
+    if (requestUrl.pathname === '/v1/onboarding/step/4') {
+      await handleOnboarding(request, response, session, 'step4');
+      return;
+    }
+    if (requestUrl.pathname === '/v1/onboarding/complete') {
+      await handleOnboarding(request, response, session, 'complete');
+      return;
+    }
+
     if (/^\/v1\/staff\/[^/]+\/faith-profile$/.test(requestUrl.pathname)) {
       await handleStaffFaithProfile(request, response, requestUrl, session);
       return;
@@ -2266,8 +2384,40 @@ export async function handleApiRequest(request, response) {
       return;
     }
 
+    // ── AACC CEU tracking (must be before /v1/staff/ catch-all) ─────────────
+    if (/^\/v1\/staff\/[^/]+\/aacc-credential$/.test(requestUrl.pathname)) {
+      await handleAaccCredential(request, response, requestUrl, session);
+      return;
+    }
+
+    if (/^\/v1\/staff\/[^/]+\/aacc-ceu\/progress$/.test(requestUrl.pathname)) {
+      await handleAaccCeuProgress(request, response, requestUrl, session);
+      return;
+    }
+
+    if (/^\/v1\/staff\/[^/]+\/aacc-ceu\/renewal-report$/.test(requestUrl.pathname)) {
+      await handleAaccRenewalReport(request, response, requestUrl, session);
+      return;
+    }
+
+    if (/^\/v1\/staff\/[^/]+\/aacc-ceu\/entries\/[^/]+$/.test(requestUrl.pathname)) {
+      await handleAaccCeuEntryById(request, response, requestUrl, session);
+      return;
+    }
+
+    if (/^\/v1\/staff\/[^/]+\/aacc-ceu\/entries$/.test(requestUrl.pathname)) {
+      await handleAaccCeuEntries(request, response, requestUrl, session);
+      return;
+    }
+
     if (requestUrl.pathname.startsWith('/v1/staff/')) {
       await handleStaffById(request, response, requestUrl, session);
+      return;
+    }
+
+    // ─── Ministry plan summary ────────────────────────────────────────────────
+    if (requestUrl.pathname === '/v1/ministry/summary') {
+      await handleMinistrySummary(request, response, session);
       return;
     }
 
@@ -2300,6 +2450,10 @@ export async function handleApiRequest(request, response) {
     }
     if (requestUrl.pathname.startsWith('/v1/time-entries/') && requestUrl.pathname.endsWith('/verify')) {
       await handleVerifyTimeEntry(request, response, requestUrl, session);
+      return;
+    }
+    if (/^\/v1\/time-entries\/[^/]+\/aacc-ceu$/.test(requestUrl.pathname)) {
+      await handleTimeEntryAaccCeu(request, response, requestUrl, session);
       return;
     }
     if (requestUrl.pathname.startsWith('/v1/time-entries/')) {
@@ -8103,6 +8257,12 @@ async function handleInvoices(request, response, requestUrl, session) {
 
     if (process.env.DB_NAME) {
       const tenantId = callerTenant(request, session);
+      // Scholarship clients may not be invoiced
+      const isScholarship = await checkScholarshipBlock(tenantId, clientId, pool);
+      if (isScholarship) {
+        writeJson(response, 422, { error: 'scholarship_client_no_invoice' });
+        return;
+      }
       const [clientRows] = await pool.query('SELECT * FROM clients WHERE id = ? AND tenant_id = ?', [clientId, tenantId]);
       if (!clientRows[0]) { writeJson(response, 400, { error: 'Valid clientId is required' }); return; }
       const totals = computeInvoiceTotals(lineItems, payload.adjustments, 0);
@@ -14781,6 +14941,242 @@ async function handlePracticeFaithProfile(request, response, session) {
   writeJson(response, 405, { error: 'Method not allowed' });
 }
 
+// ─── /v1/onboarding/* ────────────────────────────────────────────────────────
+
+async function handleOnboarding(request, response, session, step) {
+  const role     = callerRole(request, session);
+  const tenantId = callerTenant(request, session);
+
+  // Auth guard — admin only
+  if (!['practice_owner', 'practice_admin'].includes(role)) {
+    // No role at all → not authenticated; role present but insufficient → forbidden
+    const isAuthenticated = Boolean(role);
+    writeJson(response, isAuthenticated ? 403 : 401, {
+      error: isAuthenticated ? 'Admin access required' : 'Authentication required',
+    });
+    return;
+  }
+
+  // GET /v1/onboarding/status
+  if (step === 'status') {
+    if (request.method !== 'GET') {
+      writeJson(response, 405, { error: 'Method not allowed' });
+      return;
+    }
+
+    if (!process.env.DB_NAME) {
+      writeJson(response, 200, { onboardingCompleted: false, stepsCompleted: {}, shouldShowWizard: true });
+      return;
+    }
+
+    const status = await getOnboardingStatus(pool, tenantId);
+    writeJson(response, 200, {
+      ...status,
+      shouldShowWizard: !status.onboardingCompleted,
+    });
+    return;
+  }
+
+  // POST /v1/onboarding/complete
+  if (step === 'complete') {
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: 'Method not allowed' });
+      return;
+    }
+
+    if (process.env.DB_NAME) {
+      await completeOnboarding(pool, tenantId);
+    }
+    await emitAudit(request, 'onboarding.complete', 'tenant', tenantId, session);
+    writeJson(response, 200, { completed: true });
+    return;
+  }
+
+  // PATCH only for step routes
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+
+  // ── Step 1: practice name + timezone ──────────────────────────────────────
+  if (step === 'step1') {
+    const practiceName = typeof payload.practiceName === 'string' ? payload.practiceName.trim() : '';
+    if (!practiceName || practiceName.length > 255) {
+      writeJson(response, 400, { error: 'practiceName is required (max 255 characters)' });
+      return;
+    }
+    const timezone = typeof payload.timezone === 'string' ? payload.timezone.trim() : '';
+    if (!ALLOWED_TIMEZONES.has(timezone)) {
+      writeJson(response, 400, { error: 'timezone must be a supported IANA timezone' });
+      return;
+    }
+
+    if (process.env.DB_NAME) {
+      await savePracticeName(pool, tenantId, practiceName, timezone);
+      await markStepComplete(pool, tenantId, 'step1');
+    }
+    const prevRoute = request.route;
+    request.route = 'onboarding_wizard';
+    await emitAudit(request, 'practice.record.update', 'practice', tenantId, session);
+    request.route = prevRoute;
+    writeJson(response, 200, { ok: true });
+    return;
+  }
+
+  // ── Step 2: counselor profile ─────────────────────────────────────────────
+  if (step === 'step2') {
+    const firstName = typeof payload.firstName === 'string' ? payload.firstName.trim() : '';
+    const lastName  = typeof payload.lastName  === 'string' ? payload.lastName.trim()  : '';
+    if (!firstName) {
+      writeJson(response, 400, { error: 'firstName is required' });
+      return;
+    }
+    if (!lastName) {
+      writeJson(response, 400, { error: 'lastName is required' });
+      return;
+    }
+    const licenseType = typeof payload.licenseType === 'string' ? payload.licenseType.trim() : '';
+    if (!ALLOWED_LICENSE_TYPES_ONBOARDING.has(licenseType)) {
+      writeJson(response, 400, { error: 'licenseType must be a supported value' });
+      return;
+    }
+    const faithTradition = typeof payload.faithTradition === 'string' ? payload.faithTradition.trim() : '';
+    if (!ALLOWED_TRADITIONS_ONBOARDING.has(faithTradition)) {
+      writeJson(response, 400, { error: 'faithTradition must be a supported tradition value' });
+      return;
+    }
+    if (payload.bio != null) {
+      if (typeof payload.bio !== 'string' || payload.bio.length > 2000) {
+        writeJson(response, 400, { error: 'bio must be a string max 2000 characters' });
+        return;
+      }
+    }
+
+    if (process.env.DB_NAME) {
+      const staffId = callerIdentity(request, session)?.staffAccountId ?? 'unknown';
+      await saveCounselorProfile(pool, tenantId, staffId, {
+        firstName,
+        lastName,
+        licenseType,
+        faithTradition,
+        bio: payload.bio ?? null,
+      }, encrypt, null);
+      await markStepComplete(pool, tenantId, 'step2');
+    }
+    const prevRoute = request.route;
+    request.route = 'onboarding_wizard';
+    await emitAudit(request, 'counselor.record.update', 'staff_member', tenantId, session);
+    request.route = prevRoute;
+    writeJson(response, 200, { ok: true });
+    return;
+  }
+
+  // ── Step 3: first client ──────────────────────────────────────────────────
+  if (step === 'step3') {
+    if (payload.skip === true) {
+      writeJson(response, 200, { skipped: true });
+      return;
+    }
+
+    const firstName = typeof payload.firstName === 'string' ? payload.firstName.trim() : '';
+    const lastName  = typeof payload.lastName  === 'string' ? payload.lastName.trim()  : '';
+    if (!firstName) {
+      writeJson(response, 400, { error: 'firstName is required' });
+      return;
+    }
+    if (!lastName) {
+      writeJson(response, 400, { error: 'lastName is required' });
+      return;
+    }
+    if (payload.email != null && typeof payload.email !== 'string') {
+      writeJson(response, 400, { error: 'email must be a string' });
+      return;
+    }
+    if (payload.pronouns != null && typeof payload.pronouns !== 'string') {
+      writeJson(response, 400, { error: 'pronouns must be a string' });
+      return;
+    }
+
+    let clientId;
+    if (process.env.DB_NAME) {
+      clientId = await createFirstClient(pool, tenantId, {
+        firstName,
+        lastName,
+        email: payload.email ?? null,
+        pronouns: payload.pronouns ?? null,
+      }, encrypt);
+      await markStepComplete(pool, tenantId, 'step3');
+    } else {
+      clientId = 'preview-client-id';
+    }
+    const prevRoute = request.route;
+    request.route = 'onboarding_wizard';
+    await emitAudit(request, 'client.record.create', 'client', tenantId, session);
+    request.route = prevRoute;
+    writeJson(response, 200, { clientId });
+    return;
+  }
+
+  // ── Step 4: first appointment ─────────────────────────────────────────────
+  if (step === 'step4') {
+    if (payload.skip === true) {
+      writeJson(response, 200, { skipped: true });
+      return;
+    }
+
+    const clientId = typeof payload.clientId === 'string' ? payload.clientId.trim() : '';
+    if (!clientId) {
+      writeJson(response, 400, { error: 'clientId is required' });
+      return;
+    }
+    const date = typeof payload.date === 'string' ? payload.date.trim() : '';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(Date.parse(date))) {
+      writeJson(response, 400, { error: 'date must be a valid ISO date (YYYY-MM-DD)' });
+      return;
+    }
+    const time = typeof payload.time === 'string' ? payload.time.trim() : '';
+    if (!/^\d{2}:\d{2}$/.test(time)) {
+      writeJson(response, 400, { error: 'time must be in HH:MM format' });
+      return;
+    }
+    const apptType = typeof payload.apptType === 'string' ? payload.apptType.trim() : '';
+    if (!apptType) {
+      writeJson(response, 400, { error: 'apptType is required' });
+      return;
+    }
+    const durationMinutes = Number(payload.durationMinutes);
+    if (!Number.isInteger(durationMinutes) || durationMinutes <= 0) {
+      writeJson(response, 400, { error: 'durationMinutes must be a positive integer' });
+      return;
+    }
+
+    let appointmentId;
+    if (process.env.DB_NAME) {
+      const staffId = callerIdentity(request, session)?.staffAccountId ?? 'unknown';
+      appointmentId = await createFirstAppointment(pool, tenantId, staffId, {
+        clientId,
+        date,
+        time,
+        apptType,
+        durationMinutes,
+      });
+      await markStepComplete(pool, tenantId, 'step4');
+    } else {
+      appointmentId = 'preview-appointment-id';
+    }
+    const prevRoute = request.route;
+    request.route = 'onboarding_wizard';
+    await emitAudit(request, 'appointment.record.create', 'appointment', tenantId, session);
+    request.route = prevRoute;
+    writeJson(response, 200, { appointmentId });
+    return;
+  }
+
+  writeJson(response, 404, { error: 'Not found' });
+}
+
 // ─── /v1/staff/:staffId/scheduling-profile ────────────────────────────────────
 
 async function handleCounselorSchedulingProfile(request, response, staffId, session) {
@@ -18043,6 +18439,12 @@ function resolveRoute(pathname) {
   if (pathname.startsWith('/v1/staff/')) return '/v1/staff/:id';
   if (pathname.startsWith('/v1/i18n/catalog/')) return '/v1/i18n/catalog/:locale';
   if (pathname.startsWith('/v1/i18n/settings/')) return '/v1/i18n/settings/:locale';
+  if (pathname === '/v1/onboarding/status') return '/v1/onboarding/status';
+  if (pathname === '/v1/onboarding/step/1') return '/v1/onboarding/step/1';
+  if (pathname === '/v1/onboarding/step/2') return '/v1/onboarding/step/2';
+  if (pathname === '/v1/onboarding/step/3') return '/v1/onboarding/step/3';
+  if (pathname === '/v1/onboarding/step/4') return '/v1/onboarding/step/4';
+  if (pathname === '/v1/onboarding/complete') return '/v1/onboarding/complete';
   return pathname;
 }
 
@@ -18221,6 +18623,480 @@ async function emitAudit(request, action, targetType, targetId, session = null) 
       error: auditError,
     });
   }
+}
+
+// ─── AACC CEU — helpers ───────────────────────────────────────────────────────
+
+/**
+ * Returns true if the caller can read/write AACC CEU data for staffId.
+ * - admin/owner/platform_admin: always allowed
+ * - counselor: only for their own staffId (resolved via x-staff-id header)
+ * - client: always denied
+ */
+function aaccCeuAccessDenied(request, response, session, staffId) {
+  const role = callerRole(request, session);
+  if (role === 'client') {
+    writeJson(response, 403, { error: 'Access denied' });
+    return true;
+  }
+  if (isAdminRole(role)) return false;
+  // counselor or intern: may only act on own record
+  const callerId = callerIdentity(request, session)?.staffId
+    ?? (request.headers['x-staff-id'] || '').trim();
+  if (callerId && callerId === staffId) return false;
+  writeJson(response, 403, { error: 'Access denied' });
+  return true;
+}
+
+// ─── PATCH /v1/staff/:staffId/aacc-credential ─────────────────────────────────
+
+async function handleAaccCredential(request, response, requestUrl, session) {
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const staffId = requestUrl.pathname.split('/')[3];
+  const tenantId = callerTenant(request, session);
+
+  if (aaccCeuAccessDenied(request, response, session, staffId)) return;
+
+  const payload = await readJsonBody(request);
+  const credentialType = sanitizeStr(payload.credentialType, 32);
+  const cycleStartDate = sanitizeStr(payload.cycleStartDate, 32);
+
+  if (!credentialType || !VALID_CREDENTIAL_TYPES.has(credentialType)) {
+    writeJson(response, 400, { error: 'credentialType must be one of: bcpcc, ncca_fellow, ncca_diplomate' });
+    return;
+  }
+  if (!cycleStartDate || Number.isNaN(Date.parse(cycleStartDate))) {
+    writeJson(response, 400, { error: 'cycleStartDate must be a valid date string (YYYY-MM-DD)' });
+    return;
+  }
+
+  if (!process.env.DB_NAME) {
+    writeJson(response, 200, { updated: true });
+    return;
+  }
+
+  try {
+    const result = await upsertCredential(tenantId, staffId, { credentialType, cycleStartDate }, pool);
+    await emitAudit(request, 'staff.aacc_credential.update', 'staff', staffId, session);
+    writeJson(response, 200, result);
+  } catch (err) {
+    if (err.code === 'staff_not_found') {
+      writeJson(response, 404, { error: 'Staff not found' });
+      return;
+    }
+    throw err;
+  }
+}
+
+// ─── GET /v1/staff/:staffId/aacc-ceu/progress ─────────────────────────────────
+
+async function handleAaccCeuProgress(request, response, requestUrl, session) {
+  if (request.method !== 'GET') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const staffId = requestUrl.pathname.split('/')[3];
+  const tenantId = callerTenant(request, session);
+
+  if (aaccCeuAccessDenied(request, response, session, staffId)) return;
+
+  if (!process.env.DB_NAME) {
+    writeJson(response, 200, { credentialType: null });
+    return;
+  }
+
+  const progress = await getCeuProgress(tenantId, staffId, pool);
+  if (progress === null) {
+    writeJson(response, 404, { error: 'Staff not found' });
+    return;
+  }
+
+  await emitAudit(request, 'staff.aacc_ceu.progress.read', 'staff', staffId, session);
+  writeJson(response, 200, progress);
+}
+
+// ─── GET|POST /v1/staff/:staffId/aacc-ceu/entries ─────────────────────────────
+
+async function handleAaccCeuEntries(request, response, requestUrl, session) {
+  const staffId = requestUrl.pathname.split('/')[3];
+  const tenantId = callerTenant(request, session);
+
+  if (aaccCeuAccessDenied(request, response, session, staffId)) return;
+
+  if (request.method === 'GET') {
+    if (!process.env.DB_NAME) {
+      writeJson(response, 200, { entries: [] });
+      return;
+    }
+    const entries = await listCeuEntries(tenantId, staffId, pool);
+    await emitAudit(request, 'staff.aacc_ceu.entries.list', 'staff', staffId, session);
+    writeJson(response, 200, { entries });
+    return;
+  }
+
+  if (request.method === 'POST') {
+    const payload = await readJsonBody(request);
+    const category = sanitizeStr(payload.category, 64);
+    const durationMinutes = payload.durationMinutes != null ? Number(payload.durationMinutes) : undefined;
+    const entryDate = sanitizeStr(payload.entryDate, 32);
+    const description = sanitizeStr(payload.description, 2000) ?? null;
+    const provider = sanitizeStr(payload.provider, 255) ?? null;
+    const entryType = sanitizeStr(payload.entryType, 16) ?? 'standalone';
+    const timeEntryId = sanitizeStr(payload.timeEntryId, 64) ?? null;
+
+    if (!category || !AACC_CATEGORIES.has(category)) {
+      writeJson(response, 400, { error: `category must be one of: ${[...AACC_CATEGORIES].join(', ')}` });
+      return;
+    }
+    if (durationMinutes === undefined || !Number.isFinite(durationMinutes) || durationMinutes <= 0) {
+      writeJson(response, 400, { error: 'durationMinutes must be greater than 0' });
+      return;
+    }
+    if (durationMinutes > 480) {
+      writeJson(response, 400, { error: 'durationMinutes must not exceed 480' });
+      return;
+    }
+    if (!entryDate || Number.isNaN(Date.parse(entryDate))) {
+      writeJson(response, 400, { error: 'entryDate must be a valid date string' });
+      return;
+    }
+
+    if (!process.env.DB_NAME) {
+      writeJson(response, 503, { error: 'Database not configured' });
+      return;
+    }
+
+    try {
+      const entry = await addCeuEntry(tenantId, staffId, {
+        category, durationMinutes, entryDate, description, provider, entryType, timeEntryId,
+      }, pool);
+      await emitAudit(request, 'staff.aacc_ceu.entry.create', 'aacc_ceu_entry', entry.id, session);
+      writeJson(response, 201, { entry });
+    } catch (err) {
+      if (err.code === 'validation_error') {
+        writeJson(response, 400, { error: err.message });
+        return;
+      }
+      throw err;
+    }
+    return;
+  }
+
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+// ─── DELETE /v1/staff/:staffId/aacc-ceu/entries/:entryId ──────────────────────
+
+async function handleAaccCeuEntryById(request, response, requestUrl, session) {
+  if (request.method !== 'DELETE') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const parts = requestUrl.pathname.split('/');
+  const staffId = parts[3];
+  const entryId = parts[6];
+  const tenantId = callerTenant(request, session);
+
+  if (aaccCeuAccessDenied(request, response, session, staffId)) return;
+
+  if (!process.env.DB_NAME) {
+    writeJson(response, 503, { error: 'Database not configured' });
+    return;
+  }
+
+  try {
+    const result = await deleteCeuEntry(tenantId, staffId, entryId, pool);
+    await emitAudit(request, 'staff.aacc_ceu.entry.delete', 'aacc_ceu_entry', entryId, session);
+    writeJson(response, 200, result);
+  } catch (err) {
+    if (err.code === 'not_found') {
+      writeJson(response, 404, { error: 'CEU entry not found' });
+      return;
+    }
+    throw err;
+  }
+}
+
+// ─── GET /v1/staff/:staffId/aacc-ceu/renewal-report ──────────────────────────
+
+async function handleAaccRenewalReport(request, response, requestUrl, session) {
+  if (request.method !== 'GET') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const staffId = requestUrl.pathname.split('/')[3];
+  const tenantId = callerTenant(request, session);
+
+  if (aaccCeuAccessDenied(request, response, session, staffId)) return;
+
+  if (!process.env.DB_NAME) {
+    response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    response.end('<!doctype html><html lang="en"><head><meta charset="utf-8" /><title>AACC CE Renewal Report</title></head><body style="font-family:Arial,sans-serif;padding:40px;"><h1>AACC CE Renewal Report</h1><p>No credential data available.</p></body></html>');
+    return;
+  }
+
+  const html = await renderRenewalReportHtml(tenantId, staffId, pool);
+  await emitAudit(request, 'staff.aacc_ceu.renewal_report.read', 'staff', staffId, session);
+  response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+  response.end(html);
+}
+
+// ─── PATCH /v1/time-entries/:id/aacc-ceu ─────────────────────────────────────
+
+async function handleTimeEntryAaccCeu(request, response, requestUrl, session) {
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const role = callerRole(request, session);
+  if (role === 'client') {
+    writeJson(response, 403, { error: 'Access denied' });
+    return;
+  }
+
+  const timeEntryId = requestUrl.pathname.split('/')[3];
+  const tenantId = callerTenant(request, session);
+
+  if (!process.env.DB_NAME) {
+    writeJson(response, 503, { error: 'Database not configured' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  // aaccCeuId may be null to unlink
+  const aaccCeuId = payload.aaccCeuId !== undefined
+    ? (payload.aaccCeuId === null ? null : sanitizeStr(payload.aaccCeuId, 64))
+    : undefined;
+
+  if (aaccCeuId === undefined) {
+    writeJson(response, 400, { error: 'aaccCeuId is required' });
+    return;
+  }
+
+  const result = await pool.query(
+    'UPDATE time_entries SET aacc_ceu_id = $1 WHERE id = $2 AND tenant_id = $3',
+    [aaccCeuId, timeEntryId, tenantId],
+  );
+
+  if (result.rowCount === 0) {
+    writeJson(response, 404, { error: 'Time entry not found' });
+    return;
+  }
+
+  await emitAudit(request, 'time_entry.aacc_ceu.link', 'time_entry', timeEntryId, session);
+  writeJson(response, 200, { updated: true, aaccCeuId });
+}
+
+// ─── GET|PATCH /v1/practices/:practiceId/church-identity ──────────────────────
+
+async function handleChurchIdentity(request, response, requestUrl, session) {
+  const practiceId = requestUrl.pathname.split('/')[3];
+  const tenantId = callerTenant(request, session);
+  const role = callerRole(request, session);
+
+  if (request.method === 'GET') {
+    // client role is denied
+    if (role === 'client') {
+      writeJson(response, 403, { error: 'Access denied' });
+      return;
+    }
+
+    if (!process.env.DB_NAME) {
+      writeJson(response, 200, {
+        ministryName: null,
+        denomination: null,
+        churchSize: null,
+        parentOrganization: null,
+        churchDirectoryUrlPattern: null,
+      });
+      return;
+    }
+
+    const identity = await getChurchIdentity(tenantId, practiceId, pool);
+    if (identity === null) {
+      writeJson(response, 404, { error: 'Practice not found' });
+      return;
+    }
+
+    await emitAudit(request, 'practice.church_identity.read', 'practice', practiceId, session);
+    writeJson(response, 200, identity);
+    return;
+  }
+
+  if (request.method === 'PATCH') {
+    // admin/owner only
+    if (!isAdminRole(role)) {
+      writeJson(response, 403, { error: 'Access denied' });
+      return;
+    }
+
+    const payload = await readJsonBody(request);
+    const fields = {
+      ministryName: payload.ministryName !== undefined ? sanitizeStr(payload.ministryName, 255) : undefined,
+      denomination: payload.denomination !== undefined ? sanitizeStr(payload.denomination, 64) : undefined,
+      churchSize: payload.churchSize !== undefined ? sanitizeStr(payload.churchSize, 32) : undefined,
+      parentOrganization: payload.parentOrganization !== undefined ? sanitizeStr(payload.parentOrganization, 255) : undefined,
+      churchDirectoryUrlPattern: payload.churchDirectoryUrlPattern !== undefined ? sanitizeStr(payload.churchDirectoryUrlPattern, 2048) : undefined,
+    };
+
+    // Validate denomination and churchSize before hitting DB
+    if (fields.denomination !== undefined && fields.denomination !== null && !VALID_DENOMINATIONS.has(fields.denomination)) {
+      writeJson(response, 400, { error: `denomination must be one of: ${[...VALID_DENOMINATIONS].join(', ')}` });
+      return;
+    }
+    if (fields.churchSize !== undefined && fields.churchSize !== null && !VALID_CHURCH_SIZES.has(fields.churchSize)) {
+      writeJson(response, 400, { error: `churchSize must be one of: ${[...VALID_CHURCH_SIZES].join(', ')}` });
+      return;
+    }
+
+    if (!process.env.DB_NAME) {
+      writeJson(response, 200, { updated: true });
+      return;
+    }
+
+    try {
+      const result = await upsertChurchIdentity(tenantId, practiceId, fields, pool);
+      await emitAudit(request, 'practice.church_identity.update', 'practice', practiceId, session);
+      writeJson(response, 200, result);
+    } catch (err) {
+      if (err.code === 'practice_not_found') {
+        writeJson(response, 404, { error: 'Practice not found' });
+        return;
+      }
+      if (err.code === 'validation_error') {
+        writeJson(response, 400, { error: err.message });
+        return;
+      }
+      throw err;
+    }
+    return;
+  }
+
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+// ─── PATCH /v1/clients/:clientId/church-directory-ref ─────────────────────────
+
+async function handleClientChurchDirectoryRef(request, response, clientId, session) {
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const role = callerRole(request, session);
+  if (!isAdminRole(role)) {
+    writeJson(response, 403, { error: 'Access denied' });
+    return;
+  }
+
+  const tenantId = callerTenant(request, session);
+  const payload = await readJsonBody(request);
+  const churchDirectoryId = sanitizeStr(payload.churchDirectoryId, 128) ?? null;
+  const churchDirectorySource = sanitizeStr(payload.churchDirectorySource, 64) ?? null;
+
+  if (!process.env.DB_NAME) {
+    writeJson(response, 200, { updated: true });
+    return;
+  }
+
+  try {
+    const result = await upsertChurchDirectoryRef(tenantId, clientId, { churchDirectoryId, churchDirectorySource }, pool);
+    await emitAudit(request, 'client.church_directory_ref.update', 'client', clientId, session);
+    writeJson(response, 200, result);
+  } catch (err) {
+    if (err.code === 'client_not_found') {
+      writeJson(response, 404, { error: 'Client not found' });
+      return;
+    }
+    throw err;
+  }
+}
+
+// ─── PATCH /v1/clients/:clientId/scholarship ──────────────────────────────────
+
+async function handleClientScholarship(request, response, clientId, session) {
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const role = callerRole(request, session);
+  if (!isAdminRole(role)) {
+    writeJson(response, 403, { error: 'Access denied' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+
+  if (typeof payload.scholarshipFlag !== 'boolean') {
+    writeJson(response, 400, { error: 'scholarshipFlag must be a boolean' });
+    return;
+  }
+
+  const tenantId = callerTenant(request, session);
+
+  if (!process.env.DB_NAME) {
+    writeJson(response, 200, { updated: true });
+    return;
+  }
+
+  try {
+    const result = await setScholarshipFlag(tenantId, clientId, payload.scholarshipFlag, pool);
+    await emitAudit(request, 'client.scholarship_flag.update', 'client', clientId, session);
+    writeJson(response, 200, result);
+  } catch (err) {
+    if (err.code === 'client_not_found') {
+      writeJson(response, 404, { error: 'Client not found' });
+      return;
+    }
+    throw err;
+  }
+}
+
+// ─── GET /v1/ministry/summary ─────────────────────────────────────────────────
+
+async function handleMinistrySummary(request, response, session) {
+  if (request.method !== 'GET') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const role = callerRole(request, session);
+  if (!isAdminRole(role)) {
+    writeJson(response, 403, { error: 'Access denied' });
+    return;
+  }
+
+  const tenantId = callerTenant(request, session);
+
+  // Require ministry plan
+  if (process.env.DB_NAME) {
+    const [tenantRows] = await pool.query(
+      'SELECT plan_type FROM tenants WHERE id = ? LIMIT 1',
+      [tenantId],
+    );
+    const planType = tenantRows?.[0]?.plan_type ?? null;
+    if (planType !== 'ministry') {
+      writeJson(response, 403, { error: 'ministry_plan_required' });
+      return;
+    }
+
+    const summary = await getMinistrySummary(tenantId, pool);
+    await emitAudit(request, 'ministry.summary.read', 'tenant', tenantId, session);
+    writeJson(response, 200, summary);
+    return;
+  }
+
+  // No-DB mode
+  writeJson(response, 200, { totalClients: 0, scholarshipClients: 0, totalCounselors: 0 });
 }
 
 function renderSwaggerUiHtml(specUrl) {

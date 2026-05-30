@@ -11,6 +11,7 @@ import AppointmentsTab from './tabs/AppointmentsTab.jsx';
 import ChartTab from './tabs/ChartTab.jsx';
 import ClientsTab from './tabs/ClientsTab.jsx';
 import FaithContextTab from './tabs/FaithContextTab.jsx';
+import MinistryTab from './tabs/MinistryTab.jsx';
 import { useI18n } from '../../lib/i18nContext.jsx';
 import { PageSurface, SectionSurface } from '../ui/surface.jsx';
 
@@ -26,6 +27,7 @@ const STUDIO_TABS = [
   { id: 'offerings', labelKey: 'studio.tab.offerings' },
   { id: 'portal', labelKey: 'studio.tab.portal' },
   { id: 'faith', labelKey: 'studio.tab.faith' },
+  { id: 'ministry', labelKey: 'studio.tab.ministry' },
 ];
 
 export default function WorkspaceStudioPage({ initialTab = 'portal', onSchedulePortalRequest, onViewClient, onOpenCounselorMaintenance, initialDocumentsClientId = '', userRole = null }) {
@@ -70,6 +72,8 @@ export default function WorkspaceStudioPage({ initialTab = 'portal', onScheduleP
                 <ClientsTab onViewClient={onViewClient} />
               ) : tab.id === 'faith' ? (
                 <FaithContextTab userRole={userRole} />
+              ) : tab.id === 'ministry' ? (
+                <MinistryTab userRole={userRole} />
               ) : (
                 <Text c="dimmed" fz="sm">{t('studio.placeholderForTab', { tab: t(tab.labelKey) })}</Text>
               )}

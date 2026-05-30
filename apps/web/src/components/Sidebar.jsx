@@ -1,6 +1,7 @@
 import { NavLink, Stack, Text, Group, Button, Box, Divider, Badge } from '@mantine/core';
 import { useI18n } from '../lib/i18nContext.jsx';
 import { isAdminRole, isClientRole, isCounselorRole, isOperationsStaffRole } from '../lib/roles.js';
+import SetupChecklistBadge from './Onboarding/SetupChecklistBadge.jsx';
 
 function getNavItemsForRole(role) {
   if (isClientRole(role)) {
@@ -76,7 +77,7 @@ function resolveUserLabel(user, role) {
   return null;
 }
 
-export default function Sidebar({ currentUser, currentView, onNavigate, onOpenClientPicker, onSignOut, connectionStatus }) {
+export default function Sidebar({ currentUser, currentView, onNavigate, onOpenClientPicker, onSignOut, connectionStatus, shouldShowOnboarding = false, onOpenOnboarding }) {
   const { t } = useI18n();
   const userRole = currentUser?.role ?? null;
   const visibleNavItems = getNavItemsForRole(userRole);
@@ -129,6 +130,15 @@ export default function Sidebar({ currentUser, currentView, onNavigate, onOpenCl
             {connectionTone.label}
           </Badge>
         </Box>
+
+        {shouldShowOnboarding && (
+          <Box px="xs" mb="sm">
+            <SetupChecklistBadge
+              shouldShowWizard={shouldShowOnboarding}
+              onOpen={onOpenOnboarding}
+            />
+          </Box>
+        )}
 
         <Stack gap={2} component="nav" aria-label={t('sidebar.primaryNav')}>
           {visibleNavItems.map((item) =>
