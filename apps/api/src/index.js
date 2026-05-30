@@ -11418,13 +11418,13 @@ async function handleWorkflowRecommendationState(request, response, requestUrl, 
       `INSERT INTO workflow_recommendation_states
          (id, tenant_id, practice_id, client_id, counselor_id, rule_id, status, deferred_until, notes_enc, expires_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE
-         counselor_id   = VALUES(counselor_id),
-         status         = VALUES(status),
-         deferred_until = VALUES(deferred_until),
-         notes_enc      = VALUES(notes_enc),
+       ON CONFLICT (tenant_id, client_id, rule_id) DO UPDATE SET
+         counselor_id   = EXCLUDED.counselor_id,
+         status         = EXCLUDED.status,
+         deferred_until = EXCLUDED.deferred_until,
+         notes_enc      = EXCLUDED.notes_enc,
          actioned_at    = NOW(),
-         expires_at     = VALUES(expires_at)`,
+         expires_at     = EXCLUDED.expires_at`,
       [stateId, tenantId, practiceId, client.id, counselorId, ruleId, status, deferredUntil, notesEnc, expiresAt],
     );
 
@@ -11579,13 +11579,13 @@ async function handleWorkflowRecommendationBatch(request, response, requestUrl, 
         `INSERT INTO workflow_recommendation_states
            (id, tenant_id, practice_id, client_id, counselor_id, rule_id, status, deferred_until, notes_enc, expires_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
-         ON DUPLICATE KEY UPDATE
-           counselor_id   = VALUES(counselor_id),
-           status         = VALUES(status),
-           deferred_until = VALUES(deferred_until),
-           notes_enc      = VALUES(notes_enc),
+         ON CONFLICT (tenant_id, client_id, rule_id) DO UPDATE SET
+           counselor_id   = EXCLUDED.counselor_id,
+           status         = EXCLUDED.status,
+           deferred_until = EXCLUDED.deferred_until,
+           notes_enc      = EXCLUDED.notes_enc,
            actioned_at    = NOW(),
-           expires_at     = VALUES(expires_at)`,
+           expires_at     = EXCLUDED.expires_at`,
         [stateId, tenantId, tenantId, client.id, counselorId, ruleId, status, deferredUntil, expiresAt],
       );
 
