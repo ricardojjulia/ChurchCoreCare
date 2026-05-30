@@ -2,6 +2,46 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## May 30, 2026 — Client Self-Scheduling backend
+
+### feat: three-layer counselor-gated slot booking service
+
+**Date:** 2026-05-30
+**Affected area:** `apps/api/src/db/migrate.js`, `apps/api/src/lib/slotCalculator.js`, `apps/api/src/lib/selfScheduling.js`, `apps/api/src/index.js`
+
+Added the complete server-side half of client self-scheduling: DB schema, pure slot calculator, service layer, and 7 new API routes.
+
+**Database (3 new tables via migrate.js):**
+
+- `counselor_scheduling_profiles` — per-counselor availability config (enabled flag, slot duration, buffer, advance booking window, availability blocks as JSONB)
+- `client_booking_authorizations` — counselor-gated access control per client/counselor pair (`request` or `book` mode with optional day/type filters and expiry)
+- `self_booking_appointments` — immutable booking ledger linking appointments to the authorization that created them
+
+**Service layer (`apps/api/src/lib/selfScheduling.js`):**
+
+- `getSchedulingProfile` / `upsertSchedulingProfile` — profile CRUD with RBAC (counselors own-only, admin any-in-tenant)
+- `getBookingAuthorization` / `upsertBookingAuthorization` — authorization CRUD
+- `getEntitlement` — portal entitlement list for a client
+- `getAvailableSlots` — computes open slots via the pure slot calculator
+- `confirmBooking` — transactional slot booking with FOR UPDATE overlap check, appointment insert, self-booking ledger insert, and reminder insert; raises `SlotConflictError` on race condition
+
+**Pure slot calculator (`apps/api/src/lib/slotCalculator.js`):**
+
+- Zero DB calls, no new dependencies; uses `Intl.DateTimeFormat` for all timezone math
+- Handles availability blocks, buffer minutes, minNoticeHours, advanceBookingDays, allowedDays filter, and deduplication
+
+**API routes (7 new):**
+
+- `GET/PUT /v1/staff/:staffId/scheduling-profile`
+- `GET/PUT /v1/clients/:clientId/booking-authorization`
+- `GET /v1/portal/scheduling/entitlement`
+- `GET /v1/portal/scheduling/slots`
+- `POST /v1/portal/scheduling/book`
+
+**Tests:** 16 new tests (8 unit + 8 API), 233 total passing.
+
+---
+
 ## May 29, 2026 — Faithful Workflows engine enhancements
 
 ### feat: 2 new clinical rules, improved data wiring, 83-test coverage

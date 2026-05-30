@@ -560,6 +560,7 @@ export default function App() {
               clientId={selectedClientId}
               initialTab={selectedClientRequest?.initialTab ?? null}
               onBack={handleClientBack}
+              currentUser={currentUser}
               onOpenClientDocuments={(clientId) => handleOpenPortal({ initialClientId: clientId, initialTab: 'documents' })}
               onScheduleClient={() => handleOpenScheduling({
                 composerOpen: true,

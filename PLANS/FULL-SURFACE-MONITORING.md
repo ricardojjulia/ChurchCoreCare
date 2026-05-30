@@ -95,6 +95,7 @@ Required boundary rules:
 - `portal.giving`
 - `portal.resources`
 - `portal.data_rights`
+- `portal.scheduling` — client self-booking flow; shown inside the appointments tab when the client has real-time booking authorization (`mode === 'book'`); step-by-step: appointment type selection, week-view day navigation, slot list with timezone display, and confirmation modal; falls back to the existing appointment request form when mode is not `'book'`
 
 ### Operations Studio tabs
 
@@ -114,6 +115,7 @@ Required boundary rules:
 - `client.faith`
 - `client.legal`
 - `client.insurance` — insurance records + real-time eligibility card (EligibilityCard)
+- `client.scheduling_auth` — per-client booking authorization; controls whether the client can use real-time self-booking or request-only mode, overrides for allowed appointment types and days, and optional expiry date
 
 ### Clinical chart surfaces
 
@@ -134,6 +136,7 @@ Required boundary rules:
 - `counselor.certifications`
 - `counselor.employment`
 - `counselor.availability`
+- `counselor.scheduling_profile` — self-scheduling configuration; slot duration, buffer, advance window, min notice, appointment types, availability blocks; editable by the counselor themselves and practice admins/owners; read-only for other counselors viewing the record
 
 ### Workspace Studio tabs
 

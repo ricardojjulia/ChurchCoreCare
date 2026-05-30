@@ -9,6 +9,7 @@ import FaithProfileTab    from './tabs/FaithProfileTab.jsx';
 import LegalAdminTab      from './tabs/LegalAdminTab.jsx';
 import PortalActivityTab  from './tabs/PortalActivityTab.jsx';
 import BillingTab         from './tabs/BillingTab.jsx';
+import SchedulingAuthTab  from './tabs/SchedulingAuthTab.jsx';
 import { useI18n } from '../../lib/i18nContext.jsx';
 
 const TABS = [
@@ -21,6 +22,7 @@ const TABS = [
   { id: 'legal', labelKey: 'client.tab.legal' },
   { id: 'billing', labelKey: 'client.tab.billing' },
   { id: 'portalActivity', labelKey: 'client.tab.portalActivity' },
+  { id: 'scheduling', labelKey: 'client.tab.scheduling' },
 ];
 
 export default function ClientDetailTabs({ client, clientId, currentUser, initialTab = null }) {
@@ -46,6 +48,7 @@ export default function ClientDetailTabs({ client, clientId, currentUser, initia
         <Tabs.Panel value="legal"        p="md"><LegalAdminTab      client={client} clientId={clientId} currentUser={currentUser} /></Tabs.Panel>
         <Tabs.Panel value="billing"      p="md"><BillingTab         clientId={clientId} /></Tabs.Panel>
         <Tabs.Panel value="portalActivity" p="md"><PortalActivityTab clientId={clientId} /></Tabs.Panel>
+        <Tabs.Panel value="scheduling"     p="md"><SchedulingAuthTab clientId={clientId} counselorId={currentUser?.staffId ?? currentUser?.staffMemberId ?? null} /></Tabs.Panel>
       </Box>
     </Tabs>
   );

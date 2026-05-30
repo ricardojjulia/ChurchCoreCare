@@ -21,6 +21,7 @@ import {
   Title,
 } from '@mantine/core';
 import { Video } from 'lucide-react';
+import PortalSchedulingTab from './tabs/PortalSchedulingTab.jsx';
 import { notifications } from '@mantine/notifications';
 import {
   changeAuthenticatedPassword,
@@ -247,6 +248,8 @@ export default function ClientPortalPage({
     notes: '',
   });
 
+  const [schedulingEntitlement, setSchedulingEntitlement] = useState(null);
+
   const previewClients = Array.isArray(clients) ? clients : [];
   const effectiveClientId = isClientRole ? null : selectedClientId;
   const overview = portalData.overview;
@@ -317,6 +320,19 @@ export default function ClientPortalPage({
     return () => {
       cancelled = true;
     };
+  }, [effectiveClientId, isClientRole]);
+
+  useEffect(() => {
+    if (!isClientRole && !effectiveClientId) return;
+    let cancelledEnt = false;
+    const entUrl = effectiveClientId
+      ? `/api/v1/portal/scheduling/entitlement?clientId=${encodeURIComponent(effectiveClientId)}`
+      : '/api/v1/portal/scheduling/entitlement';
+    fetch(entUrl, { credentials: 'include' })
+      .then((r) => r.ok ? r.json() : null)
+      .then((payload) => { if (!cancelledEnt && payload) setSchedulingEntitlement(payload.item ?? payload); })
+      .catch(() => {});
+    return () => { cancelledEnt = true; };
   }, [effectiveClientId, isClientRole]);
 
   const contactPreferenceOptions = overview?.settings?.contactPreferenceOptions?.map((value) => ({
@@ -988,6 +1004,9 @@ export default function ClientPortalPage({
           </Tabs.Panel>
 
           <Tabs.Panel value="appointments" pt="md">
+            {schedulingEntitlement?.mode === 'book' ? (
+              <PortalSchedulingTab effectiveClientId={effectiveClientId} />
+            ) : (
             <SimpleGrid cols={{ base: 1, lg: 2 }}>
               <Paper withBorder radius="md" p="md">
                 <Title order={4}>{t('portal.appointments.requestTitle')}</Title>
@@ -1059,6 +1078,7 @@ export default function ClientPortalPage({
                 </Stack>
               </Paper>
             </SimpleGrid>
+            )}
           </Tabs.Panel>
 
           <Tabs.Panel value="documents" pt="md">

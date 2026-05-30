@@ -7,6 +7,7 @@ import CounselorFaithProfileTab from './tabs/CounselorFaithProfileTab.jsx';
 import CertificationsTab        from './tabs/CertificationsTab.jsx';
 import EmploymentTab            from './tabs/EmploymentTab.jsx';
 import AvailabilityTab          from './tabs/AvailabilityTab.jsx';
+import SchedulingProfileTab    from './tabs/SchedulingProfileTab.jsx';
 import { useI18n } from '../../lib/i18nContext.jsx';
 
 const TABS = [
@@ -17,6 +18,7 @@ const TABS = [
   { id: 'certifications', labelKey: 'counselor.tab.certifications' },
   { id: 'employment', labelKey: 'counselor.tab.employment' },
   { id: 'availability', labelKey: 'counselor.tab.availability' },
+  { id: 'scheduling', labelKey: 'counselor.tab.scheduling' },
 ];
 
 export default function CounselorDetailTabs({ counselor, staffId, currentUser }) {
@@ -36,6 +38,7 @@ export default function CounselorDetailTabs({ counselor, staffId, currentUser })
         <Tabs.Panel value="certifications" p="md"><CertificationsTab        staffId={staffId} currentUser={currentUser} /></Tabs.Panel>
         <Tabs.Panel value="employment"     p="md"><EmploymentTab            staffId={staffId} currentUser={currentUser} /></Tabs.Panel>
         <Tabs.Panel value="availability"   p="md"><AvailabilityTab          staffId={staffId} /></Tabs.Panel>
+        <Tabs.Panel value="scheduling"     p="md"><SchedulingProfileTab     staffId={staffId} currentUser={currentUser} /></Tabs.Panel>
       </Box>
     </Tabs>
   );

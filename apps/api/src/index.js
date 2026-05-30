@@ -204,6 +204,24 @@ import {
   listLicensureGoals, createLicensureGoal,
   listSupervisorAssignments, createSupervisorAssignment, deleteSupervisorAssignment, isSupervisorOf,
 } from './db/queries/timeTracking.js';
+import {
+  getSchedulingProfile,
+  upsertSchedulingProfile,
+  getBookingAuthorization,
+  upsertBookingAuthorization,
+  getEntitlement,
+  getAvailableSlots,
+  confirmBooking,
+  SelfSchedulingError,
+  SlotConflictError,
+} from './lib/selfScheduling.js';
+
+// ─── Self-scheduling validation allowlists ────────────────────────────────────
+const VALID_SLOT_DURATIONS = new Set([30, 45, 50]);
+const VALID_BUFFERS        = new Set([0, 10, 15]);
+const VALID_ADVANCE_DAYS   = new Set([7, 14, 30, 60]);
+const VALID_NOTICE_HOURS   = new Set([2, 4, 12, 24, 48]);
+const VALID_BOOKING_MODES  = new Set(['request', 'book']);
 
 const port = Number(process.env.PORT || 3001);
 const currentFilePath = fileURLToPath(import.meta.url);
@@ -1676,6 +1694,15 @@ export async function handleApiRequest(request, response) {
       return;
     }
 
+    // ── Client booking authorization (must be before /v1/clients/ catch-all) ──
+    {
+      const bookingAuthMatch = requestUrl.pathname.match(/^\/v1\/clients\/([^/]+)\/booking-authorization$/);
+      if (bookingAuthMatch) {
+        await handleClientBookingAuthorization(request, response, bookingAuthMatch[1], session);
+        return;
+      }
+    }
+
     if (requestUrl.pathname.startsWith('/v1/clients/')) {
       const sub = parseClientSubresource(requestUrl.pathname);
       if (sub) {
@@ -1935,6 +1962,22 @@ export async function handleApiRequest(request, response) {
 
     if (requestUrl.pathname === '/v1/portal/public-requests') {
       await handlePortalPublicRequests(request, response, requestUrl, session);
+      return;
+    }
+
+    // ── Portal self-scheduling routes ─────────────────────────────────────────
+    if (requestUrl.pathname === '/v1/portal/scheduling/entitlement') {
+      await handlePortalSchedulingEntitlement(request, response, requestUrl, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/portal/scheduling/slots') {
+      await handlePortalSchedulingSlots(request, response, requestUrl, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/portal/scheduling/book') {
+      await handlePortalSchedulingBook(request, response, session);
       return;
     }
 
@@ -2213,6 +2256,13 @@ export async function handleApiRequest(request, response) {
 
     if (/^\/v1\/staff\/[^/]+\/faith-profile$/.test(requestUrl.pathname)) {
       await handleStaffFaithProfile(request, response, requestUrl, session);
+      return;
+    }
+
+    // ── Staff scheduling profile (must be before /v1/staff/ catch-all) ───────
+    if (/^\/v1\/staff\/[^/]+\/scheduling-profile$/.test(requestUrl.pathname)) {
+      const schedulingProfileMatch = requestUrl.pathname.match(/^\/v1\/staff\/([^/]+)\/scheduling-profile$/);
+      await handleCounselorSchedulingProfile(request, response, schedulingProfileMatch[1], session);
       return;
     }
 
@@ -14729,6 +14779,293 @@ async function handlePracticeFaithProfile(request, response, session) {
   }
 
   writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+// ─── /v1/staff/:staffId/scheduling-profile ────────────────────────────────────
+
+async function handleCounselorSchedulingProfile(request, response, staffId, session) {
+  const role     = callerRole(request, session);
+  const tenantId = callerTenant(request, session);
+
+  if (!role) {
+    writeJson(response, 401, { error: 'Authentication required' });
+    return;
+  }
+
+  // Deny client role entirely
+  if (role === 'client') {
+    writeJson(response, 403, { error: 'Staff access required' });
+    return;
+  }
+
+  const targetStaffId = sanitizeStr(staffId, 64);
+  if (!targetStaffId) {
+    writeJson(response, 400, { error: 'staffId is required' });
+    return;
+  }
+
+  if (request.method === 'GET') {
+    const profile = await getSchedulingProfile(pool, tenantId, targetStaffId);
+    await emitAudit(request, 'self_scheduling.profile.read', 'counselor_scheduling_profile', targetStaffId, session);
+    writeJson(response, 200, { item: profile });
+    return;
+  }
+
+  if (request.method === 'PUT') {
+    // Role: counselor/intern may only update own profile; admin/owner may update any
+    const actorStaffId  = await resolveCallerStaffMemberId(session) ?? (request.headers['x-staff-id'] || null);
+    const isAdminCaller = isAdminRole(role);
+
+    if (!isAdminCaller && actorStaffId !== targetStaffId) {
+      await emitAudit(request, 'self_scheduling.profile.update.denied', 'counselor_scheduling_profile', targetStaffId, session);
+      writeJson(response, 403, { error: 'Counselors may only manage their own scheduling profile' });
+      return;
+    }
+
+    const payload = await readJsonBody(request);
+
+    // Validate allowlisted fields
+    if (payload.slotDurationMinutes !== undefined && !VALID_SLOT_DURATIONS.has(Number(payload.slotDurationMinutes))) {
+      writeJson(response, 400, { error: `slotDurationMinutes must be one of: ${[...VALID_SLOT_DURATIONS].join(', ')}` });
+      return;
+    }
+    if (payload.bufferMinutes !== undefined && !VALID_BUFFERS.has(Number(payload.bufferMinutes))) {
+      writeJson(response, 400, { error: `bufferMinutes must be one of: ${[...VALID_BUFFERS].join(', ')}` });
+      return;
+    }
+    if (payload.advanceBookingDays !== undefined && !VALID_ADVANCE_DAYS.has(Number(payload.advanceBookingDays))) {
+      writeJson(response, 400, { error: `advanceBookingDays must be one of: ${[...VALID_ADVANCE_DAYS].join(', ')}` });
+      return;
+    }
+    if (payload.minNoticeHours !== undefined && !VALID_NOTICE_HOURS.has(Number(payload.minNoticeHours))) {
+      writeJson(response, 400, { error: `minNoticeHours must be one of: ${[...VALID_NOTICE_HOURS].join(', ')}` });
+      return;
+    }
+    if (payload.availableApptTypes !== undefined && !Array.isArray(payload.availableApptTypes)) {
+      writeJson(response, 400, { error: 'availableApptTypes must be an array' });
+      return;
+    }
+    if (payload.availabilityBlocks !== undefined && !Array.isArray(payload.availabilityBlocks)) {
+      writeJson(response, 400, { error: 'availabilityBlocks must be an array' });
+      return;
+    }
+
+    try {
+      const profile = await upsertSchedulingProfile(pool, tenantId, targetStaffId, actorStaffId, role, payload);
+      await emitAudit(request, 'self_scheduling.profile.update', 'counselor_scheduling_profile', targetStaffId, session);
+      writeJson(response, 200, { item: profile });
+    } catch (err) {
+      if (err instanceof SelfSchedulingError) {
+        await emitAudit(request, 'self_scheduling.profile.update.denied', 'counselor_scheduling_profile', targetStaffId, session);
+        writeJson(response, err.statusCode, { error: err.message });
+        return;
+      }
+      throw err;
+    }
+    return;
+  }
+
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+// ─── /v1/clients/:clientId/booking-authorization ──────────────────────────────
+
+async function handleClientBookingAuthorization(request, response, clientId, session) {
+  const role     = callerRole(request, session);
+  const tenantId = callerTenant(request, session);
+
+  if (!role) {
+    writeJson(response, 401, { error: 'Authentication required' });
+    return;
+  }
+
+  // Deny client role entirely
+  if (role === 'client') {
+    await emitAudit(request, 'self_scheduling.authorization.read.denied', 'client_booking_authorization', clientId, session);
+    writeJson(response, 403, { error: 'Staff access required' });
+    return;
+  }
+
+  const targetClientId = sanitizeStr(clientId, 64);
+  if (!targetClientId) {
+    writeJson(response, 400, { error: 'clientId is required' });
+    return;
+  }
+
+  const counselorId = sanitizeStr(String(new URL(request.url ?? '/', 'http://x').searchParams.get('counselorId') ?? ''), 64) || null;
+
+  if (request.method === 'GET') {
+    if (!counselorId) {
+      writeJson(response, 400, { error: 'counselorId query parameter is required' });
+      return;
+    }
+    const auth = await getBookingAuthorization(pool, tenantId, targetClientId, counselorId);
+    await emitAudit(request, 'self_scheduling.authorization.read', 'client_booking_authorization', targetClientId, session);
+    writeJson(response, 200, { item: auth });
+    return;
+  }
+
+  if (request.method === 'PUT') {
+    // Only admin/owner and counselor/intern may write; scheduler_biller may not
+    const allowedWriteRoles = new Set(['practice_admin', 'practice_owner', 'platform_admin', 'counselor', 'intern']);
+    if (!allowedWriteRoles.has(role)) {
+      await emitAudit(request, 'self_scheduling.authorization.update.denied', 'client_booking_authorization', targetClientId, session);
+      writeJson(response, 403, { error: 'Insufficient permissions to manage booking authorization' });
+      return;
+    }
+
+    const payload = await readJsonBody(request);
+
+    const targetCounselorId = counselorId ?? sanitizeStr(payload.counselorId, 64);
+    if (!targetCounselorId) {
+      writeJson(response, 400, { error: 'counselorId is required' });
+      return;
+    }
+
+    // Validate bookingMode
+    if (payload.bookingMode !== undefined && !VALID_BOOKING_MODES.has(payload.bookingMode)) {
+      writeJson(response, 400, { error: `bookingMode must be one of: ${[...VALID_BOOKING_MODES].join(', ')}` });
+      return;
+    }
+
+    const auth = await upsertBookingAuthorization(pool, tenantId, targetClientId, targetCounselorId, payload);
+    await emitAudit(request, 'self_scheduling.authorization.update', 'client_booking_authorization', targetClientId, session);
+    writeJson(response, 200, { item: auth });
+    return;
+  }
+
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+// ─── /v1/portal/scheduling/* ──────────────────────────────────────────────────
+
+async function handlePortalSchedulingEntitlement(request, response, requestUrl, session) {
+  const role = callerRole(request, session);
+
+  if (request.method !== 'GET') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  // Require portal client identity
+  const clientId = callerClientId(request, session);
+  if (!clientId) {
+    writeJson(response, 401, { error: 'Portal session required' });
+    return;
+  }
+
+  const tenantId = callerTenant(request, session);
+  const entitlement = await getEntitlement(pool, tenantId, clientId);
+  await emitAudit(request, 'self_scheduling.entitlement.read', 'client_booking_authorization', clientId, session);
+  writeJson(response, 200, { items: entitlement });
+}
+
+async function handlePortalSchedulingSlots(request, response, requestUrl, session) {
+  if (request.method !== 'GET') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const clientId = callerClientId(request, session);
+  if (!clientId) {
+    writeJson(response, 401, { error: 'Portal session required' });
+    return;
+  }
+
+  const tenantId   = callerTenant(request, session);
+  const parsedUrl  = new URL(request.url ?? '/', 'http://x');
+  const counselorId = sanitizeStr(parsedUrl.searchParams.get('counselorId') ?? '', 64);
+  if (!counselorId) {
+    writeJson(response, 400, { error: 'counselorId query parameter is required' });
+    return;
+  }
+
+  const fromParam = parsedUrl.searchParams.get('from');
+  const toParam   = parsedUrl.searchParams.get('to');
+  const from = fromParam ? new Date(fromParam) : new Date();
+  const to   = toParam   ? new Date(toParam)   : new Date(Date.now() + 14 * 86_400_000);
+
+  if (isNaN(from.getTime()) || isNaN(to.getTime())) {
+    writeJson(response, 400, { error: 'from and to must be valid ISO date strings' });
+    return;
+  }
+
+  const apptType   = sanitizeStr(parsedUrl.searchParams.get('apptType') ?? '', 64) || null;
+  const daysRaw    = parsedUrl.searchParams.get('allowedDays');
+  const allowedDays = daysRaw
+    ? daysRaw.split(',').map((d) => Number(d.trim())).filter((d) => d >= 0 && d <= 6)
+    : null;
+
+  const slots = await getAvailableSlots(pool, tenantId, counselorId, { from, to, apptType, allowedDays });
+  await emitAudit(request, 'self_scheduling.slots.read', 'counselor_scheduling_profile', counselorId, session);
+  writeJson(response, 200, { items: slots });
+}
+
+async function handlePortalSchedulingBook(request, response, session) {
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const clientId = callerClientId(request, session);
+  if (!clientId) {
+    writeJson(response, 401, { error: 'Portal session required' });
+    return;
+  }
+
+  const tenantId = callerTenant(request, session);
+  const payload  = await readJsonBody(request);
+
+  const counselorId = sanitizeStr(payload.counselorId ?? '', 64);
+  const apptType    = sanitizeStr(payload.apptType    ?? '', 64);
+  const slotStartRaw = payload.slotStart;
+  const slotEndRaw   = payload.slotEnd;
+
+  if (!counselorId) {
+    writeJson(response, 400, { error: 'counselorId is required' });
+    return;
+  }
+  if (!apptType) {
+    writeJson(response, 400, { error: 'apptType is required' });
+    return;
+  }
+  if (!slotStartRaw) {
+    writeJson(response, 400, { error: 'slotStart is required' });
+    return;
+  }
+  if (!slotEndRaw) {
+    writeJson(response, 400, { error: 'slotEnd is required' });
+    return;
+  }
+
+  const slotStart = new Date(slotStartRaw);
+  const slotEnd   = new Date(slotEndRaw);
+
+  if (isNaN(slotStart.getTime()) || isNaN(slotEnd.getTime())) {
+    writeJson(response, 400, { error: 'slotStart and slotEnd must be valid ISO date strings' });
+    return;
+  }
+
+  try {
+    const result = await confirmBooking(pool, tenantId, clientId, counselorId, { apptType, slotStart, slotEnd });
+    await emitAudit(request, 'self_scheduling.booking.confirmed', 'appointment', result.appointmentId, session);
+    writeJson(response, 201, { item: result });
+  } catch (err) {
+    if (err instanceof SlotConflictError) {
+      await emitAudit(request, 'self_scheduling.booking.conflict', 'appointment', 'unknown', session);
+      writeJson(response, 409, { error: err.message });
+      return;
+    }
+    if (err instanceof SelfSchedulingError) {
+      const auditAction = err.statusCode === 403
+        ? 'self_scheduling.booking.denied'
+        : 'self_scheduling.booking.error';
+      await emitAudit(request, auditAction, 'appointment', 'unknown', session);
+      writeJson(response, err.statusCode, { error: err.message });
+      return;
+    }
+    throw err;
+  }
 }
 
 // ─── /v1/staff/:id/faith-profile ─────────────────────────────────────────────
