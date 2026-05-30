@@ -20,6 +20,84 @@ const AUDIT_HARMFUL_THRESHOLD = 16;
 const AUDIT_DEPENDENCE_THRESHOLD = 20;
 
 /**
+ * Rule: PHQ-9 somatic symptom cluster elevated.
+ * Items 3 (sleep), 4 (fatigue/energy), and 8 (psychomotor) all ≥ 2.
+ * Indicates somatic-focused interventions (sleep hygiene, exercise, medical review) are warranted.
+ */
+export function rulePhq9SomaticCluster(data, clientId) {
+  const latest = getLatestAssessment(data.assessments, 'PHQ-9');
+  if (!latest) return null;
+  const i3 = latest.item3Score ?? null;
+  const i4 = latest.item4Score ?? null;
+  const i8 = latest.item8Score ?? null;
+  if (i3 == null || i4 == null || i8 == null) return null;
+  if (i3 < 2 || i4 < 2 || i8 < 2) return null;
+  const total = i3 + i4 + i8;
+
+  return {
+    id: `rule_clinical_phq9_somatic:${clientId}`,
+    ruleId: 'rule_clinical_phq9_somatic',
+    category: 'clinical_caution',
+    title: 'PHQ-9 Somatic Symptom Cluster Elevated',
+    summary: `PHQ-9 items for sleep (${i3}/3), energy (${i4}/3), and psychomotor (${i8}/3) are all ≥ 2. Somatic symptoms are a prominent part of this client's depression presentation.`,
+    rationale: `When sleep, fatigue, and psychomotor disturbance each score ≥ 2 on the PHQ-9, the somatic symptom cluster is a prominent feature of the depressive episode. Targeted interventions — sleep hygiene, behavioral activation, exercise, or medical screening for underlying physical contributions — may be especially valuable alongside standard psychotherapy.`,
+    evidence: [
+      `Item 3 (sleep): ${i3}/3`,
+      `Item 4 (energy/fatigue): ${i4}/3`,
+      `Item 8 (psychomotor): ${i8}/3`,
+      `Somatic cluster total: ${total}/9`,
+    ],
+    priority: 6,
+    confidence: 0.80,
+    cautions: [
+      'Rule out medical causes for fatigue and sleep disturbance before attributing solely to depression.',
+    ],
+    actions: ['generate_session_agenda', 'generate_note_prep'],
+    faithNote: null,
+    status: 'pending',
+    orderedAfter: null,
+    docNote: 'Document somatic symptom review and any targeted interventions (sleep hygiene, exercise, medical referral).',
+  };
+}
+
+/**
+ * Rule: PHQ-9 anhedonia prominent.
+ * Item 1 (little interest/pleasure) ≥ 2, indicating significant loss of pleasure.
+ * Behavioral activation is the evidence-based first-line response.
+ */
+export function rulePhq9Anhedonia(data, clientId) {
+  const latest = getLatestAssessment(data.assessments, 'PHQ-9');
+  if (!latest) return null;
+  const i1 = latest.item1Score ?? null;
+  const i2 = latest.item2Score ?? null;
+  if (i1 == null || i1 < 2) return null;
+
+  const score1Label = ['Not at all', 'Several days', 'More than half the days', 'Nearly every day'][i1] ?? `${i1}/3`;
+  const score2Label = i2 != null ? ['Not at all', 'Several days', 'More than half the days', 'Nearly every day'][i2] ?? `${i2}/3` : null;
+
+  return {
+    id: `rule_clinical_phq9_anhedonia:${clientId}`,
+    ruleId: 'rule_clinical_phq9_anhedonia',
+    category: 'clinical_caution',
+    title: 'PHQ-9 Anhedonia Prominent',
+    summary: `Client reports little interest or pleasure in activities "${score1Label}" (item 1 = ${i1}/3). Behavioral activation is the evidence-based primary intervention for anhedonia.`,
+    rationale: `Anhedonia (loss of interest or pleasure) is one of the two cardinal symptoms of major depression. When PHQ-9 item 1 scores ≥ 2, it signals that engagement and reward-seeking behaviour have substantially diminished. Behavioural activation — systematically scheduling rewarding activities — is the evidence-based treatment target. Faith-integrated strategies such as reconnecting with worship, community, or spiritual practices can serve as meaningful activation targets for clients who have opted into faith integration.`,
+    evidence: [
+      `Item 1 (interest/pleasure): ${i1}/3 — "${score1Label}"`,
+      ...(i2 != null ? [`Item 2 (depressed mood): ${i2}/3 — "${score2Label}"`] : []),
+    ],
+    priority: 6,
+    confidence: 0.85,
+    cautions: [],
+    actions: ['generate_session_agenda', 'create_cbt_exercise', 'generate_note_prep'],
+    faithNote: 'Worship, service, and community connection can be behavioural activation targets for faith-integrated clients.',
+    status: 'pending',
+    orderedAfter: null,
+    docNote: 'Document anhedonia severity and plan for behavioral activation or structured activity scheduling.',
+  };
+}
+
+/**
  * Rule: PHQ-9 worsening trend (last 2–3 scores increasing)
  */
 export function rulePhq9Worsening(data, clientId) {

@@ -64,7 +64,11 @@ export const mockEmma = {
   assessments: [
     { id: 'phq-emma-1', inventoryName: 'PHQ-9', score: 14, item9Score: 0, scoredAt: daysAgo(45) },
     { id: 'phq-emma-2', inventoryName: 'PHQ-9', score: 18, item9Score: 1, scoredAt: daysAgo(17) },
-    { id: 'phq-emma-3', inventoryName: 'PHQ-9', score: 22, item9Score: 3, scoredAt: daysAgo(10) },
+    {
+      id: 'phq-emma-3', inventoryName: 'PHQ-9', score: 22, item9Score: 3, scoredAt: daysAgo(10),
+      item1Score: 3, item2Score: 3, item3Score: 3, item4Score: 3,
+      item5Score: 2, item6Score: 2, item7Score: 2, item8Score: 2,
+    },
     { id: 'pcl-emma-1', inventoryName: 'PCL-5', score: 38, scoredAt: daysAgo(17) },
   ],
   homeworkPending: [],
@@ -125,7 +129,11 @@ export const mockMarcus = {
   assessments: [
     { id: 'phq-m1', inventoryName: 'PHQ-9', score: 12, scoredAt: daysAgo(56) },
     { id: 'phq-m2', inventoryName: 'PHQ-9', score: 16, scoredAt: daysAgo(28) },
-    { id: 'phq-m3', inventoryName: 'PHQ-9', score: 18, scoredAt: daysAgo(14) },
+    {
+      id: 'phq-m3', inventoryName: 'PHQ-9', score: 18, scoredAt: daysAgo(14),
+      item1Score: 2, item2Score: 2, item3Score: 2, item4Score: 3,
+      item5Score: 2, item6Score: 2, item7Score: 2, item8Score: 1,
+    },
     { id: 'gad-m1', inventoryName: 'GAD-7', score: 15, scoredAt: daysAgo(14) },
   ],
   homeworkPending: [{ id: 'hw-m1', title: 'Thought Record', assignedAt: daysAgo(14), submittedAt: null }],

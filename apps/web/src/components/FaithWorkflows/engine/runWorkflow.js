@@ -28,6 +28,8 @@ import {
 // Clinical caution rules
 import {
   rulePhq9Worsening,
+  rulePhq9SomaticCluster,
+  rulePhq9Anhedonia,
   ruleGad7High,
   ruleNoTreatmentPlan,
   ruleStaleTreatmentPlan,
@@ -94,6 +96,8 @@ const ALL_RULES = [
   ruleRiskKeywordInNote,
   // Clinical
   rulePhq9Worsening,
+  rulePhq9SomaticCluster,
+  rulePhq9Anhedonia,
   ruleGad7High,
   rulePcl5Worsening,
   ruleGad7Worsening,

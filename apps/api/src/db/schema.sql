@@ -1444,6 +1444,25 @@ CREATE TABLE IF NOT EXISTS workflow_recommendation_states (
   CONSTRAINT fk_wf_state_counselor FOREIGN KEY (counselor_id) REFERENCES staff_members(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- ─── Workflow recommendation state history ────────────────────────────────────
+-- Append-only audit trail of every status transition.
+-- The current state lives in workflow_recommendation_states (upsert pattern);
+-- this table captures every change so counselors can see who did what and when.
+CREATE TABLE IF NOT EXISTS workflow_recommendation_state_history (
+  id           VARCHAR(64)   NOT NULL,
+  tenant_id    VARCHAR(64)   NOT NULL,
+  client_id    VARCHAR(64)   NOT NULL,
+  counselor_id VARCHAR(64)   NOT NULL,
+  rule_id      VARCHAR(128)  NOT NULL,
+  old_status   VARCHAR(16)   NULL,
+  new_status   VARCHAR(16)   NOT NULL,
+  changed_at   TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_wf_hist_client   (tenant_id, client_id, changed_at),
+  INDEX idx_wf_hist_rule     (tenant_id, client_id, rule_id, changed_at),
+  CONSTRAINT fk_wf_hist_client FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ─── Practices (extended) — add columns missing from initial definition ────────
 -- practices table was created earlier; these ALTER statements are idempotent-safe
 -- via the IF NOT EXISTS DDL for tables above. When running on a fresh DB the

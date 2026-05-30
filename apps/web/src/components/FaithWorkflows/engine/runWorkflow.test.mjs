@@ -747,3 +747,122 @@ test('ruleSupervisionMissing: fires when 2 consecutive no-shows present (no supe
   const rec = ruleSupervisionMissing(highNoShowData, mockEmma.client.id);
   assert.ok(rec !== null, 'Expected rule to fire due to consecutive no-shows even with low PHQ-9');
 });
+
+// ─── rulePhq9SomaticCluster ──────────────────────────────────────────────────
+
+import { rulePhq9SomaticCluster, rulePhq9Anhedonia } from './rules/clinicalRules.js';
+import { renderCareSummaryHtml } from './contentTemplates.js';
+
+function phq9Assessment(overrides = {}) {
+  return {
+    id: 'phq-test', inventoryName: 'PHQ-9', score: 18,
+    item1Score: 2, item2Score: 2, item3Score: 2, item4Score: 2,
+    item5Score: 1, item6Score: 2, item7Score: 2, item8Score: 2,
+    item9Score: 0, scoredAt: daysAgoDate(7),
+    ...overrides,
+  };
+}
+
+test('rulePhq9SomaticCluster: fires when items 3, 4, 8 all >= 2', () => {
+  const data = { client: { id: 'sc1' }, assessments: [phq9Assessment()], appointments: [], diagnoses: [], progressNotes: [], treatmentPlan: null, faithProfile: null, homeworkPending: [], referrals: [] };
+  const rec = rulePhq9SomaticCluster(data, 'sc1');
+  assert.ok(rec !== null, 'Expected somatic cluster rule to fire');
+  assert.equal(rec.ruleId, 'rule_clinical_phq9_somatic');
+  assert.equal(rec.category, 'clinical_caution');
+});
+
+test('rulePhq9SomaticCluster: does not fire when item 4 < 2', () => {
+  const data = { client: { id: 'sc2' }, assessments: [phq9Assessment({ item4Score: 1 })], appointments: [], diagnoses: [], progressNotes: [], treatmentPlan: null, faithProfile: null, homeworkPending: [], referrals: [] };
+  const rec = rulePhq9SomaticCluster(data, 'sc2');
+  assert.equal(rec, null, 'Should not fire when one somatic item is below threshold');
+});
+
+test('rulePhq9SomaticCluster: does not fire when sub-items are null (not available)', () => {
+  const data = { client: { id: 'sc3' }, assessments: [{ id: 'phq-no-items', inventoryName: 'PHQ-9', score: 18, scoredAt: daysAgoDate(7) }], appointments: [], diagnoses: [], progressNotes: [], treatmentPlan: null, faithProfile: null, homeworkPending: [], referrals: [] };
+  const rec = rulePhq9SomaticCluster(data, 'sc3');
+  assert.equal(rec, null, 'Should not fire when sub-items are not available');
+});
+
+test('rulePhq9SomaticCluster: fires for Emma (items 3=3, 4=3, 8=2)', () => {
+  const rec = rulePhq9SomaticCluster(mockEmma, mockEmma.client.id);
+  assert.ok(rec !== null, 'Expected somatic cluster to fire for Emma');
+});
+
+// ─── rulePhq9Anhedonia ───────────────────────────────────────────────────────
+
+test('rulePhq9Anhedonia: fires when item 1 >= 2', () => {
+  const data = { client: { id: 'an1' }, assessments: [phq9Assessment({ item1Score: 2 })], appointments: [], diagnoses: [], progressNotes: [], treatmentPlan: null, faithProfile: null, homeworkPending: [], referrals: [] };
+  const rec = rulePhq9Anhedonia(data, 'an1');
+  assert.ok(rec !== null, 'Expected anhedonia rule to fire when item1=2');
+  assert.equal(rec.ruleId, 'rule_clinical_phq9_anhedonia');
+});
+
+test('rulePhq9Anhedonia: does not fire when item 1 < 2', () => {
+  const data = { client: { id: 'an2' }, assessments: [phq9Assessment({ item1Score: 1 })], appointments: [], diagnoses: [], progressNotes: [], treatmentPlan: null, faithProfile: null, homeworkPending: [], referrals: [] };
+  const rec = rulePhq9Anhedonia(data, 'an2');
+  assert.equal(rec, null, 'Should not fire when item 1 < 2');
+});
+
+test('rulePhq9Anhedonia: fires for Emma (item1=3)', () => {
+  const rec = rulePhq9Anhedonia(mockEmma, mockEmma.client.id);
+  assert.ok(rec !== null, 'Expected anhedonia to fire for Emma (item1=3)');
+});
+
+test('rulePhq9Anhedonia: does not fire when no PHQ-9 assessment', () => {
+  const data = { client: { id: 'an3' }, assessments: [], appointments: [], diagnoses: [], progressNotes: [], treatmentPlan: null, faithProfile: null, homeworkPending: [], referrals: [] };
+  const rec = rulePhq9Anhedonia(data, 'an3');
+  assert.equal(rec, null, 'Should not fire with no assessment');
+});
+
+// ─── renderCareSummaryHtml ───────────────────────────────────────────────────
+
+test('renderCareSummaryHtml: returns a valid HTML document', () => {
+  const recs = runWorkflow(mockEmma);
+  const html = renderCareSummaryHtml(mockEmma, recs);
+  assert.ok(html.startsWith('<!DOCTYPE html>'), 'Should start with DOCTYPE');
+  assert.ok(html.includes('</html>'), 'Should close the html tag');
+});
+
+test('renderCareSummaryHtml: includes client first name', () => {
+  const recs = runWorkflow(mockEmma);
+  const html = renderCareSummaryHtml(mockEmma, recs);
+  assert.ok(html.includes('Emma'), 'Should include client first name');
+});
+
+test('renderCareSummaryHtml: includes diagnosis code', () => {
+  const recs = runWorkflow(mockEmma);
+  const html = renderCareSummaryHtml(mockEmma, recs);
+  assert.ok(html.includes('F32.2'), 'Should include diagnosis code');
+});
+
+test('renderCareSummaryHtml: includes PHQ-9 score', () => {
+  const recs = runWorkflow(mockEmma);
+  const html = renderCareSummaryHtml(mockEmma, recs);
+  assert.ok(html.includes('PHQ-9') || html.includes('22'), 'Should include PHQ-9 score');
+});
+
+test('renderCareSummaryHtml: includes recommendation titles', () => {
+  const recs = runWorkflow(mockEmma);
+  const html = renderCareSummaryHtml(mockEmma, recs);
+  assert.ok(recs.length > 0 && html.includes(recs[0].title.slice(0, 10)), 'Should include rec title text');
+});
+
+test('renderCareSummaryHtml: escapes HTML special characters in client name', () => {
+  const dataWithSpecialChars = { ...mockEmma, client: { ...mockEmma.client, firstName: 'Test<script>', lastName: 'User&Co' } };
+  const html = renderCareSummaryHtml(dataWithSpecialChars, []);
+  assert.ok(!html.includes('<script>'), 'Should escape < in client name');
+  assert.ok(html.includes('&lt;script&gt;'), 'Should include escaped version');
+});
+
+test('renderCareSummaryHtml: works with empty recommendations', () => {
+  const html = renderCareSummaryHtml(mockDavid, []);
+  assert.ok(html.includes('No workflow recommendations'), 'Should show no-recs message');
+});
+
+test('New rules: Emma has somatic and anhedonia recs in full workflow output', () => {
+  const recs = runWorkflow(mockEmma);
+  const somatic = recs.find((r) => r.ruleId === 'rule_clinical_phq9_somatic');
+  const anhedonia = recs.find((r) => r.ruleId === 'rule_clinical_phq9_anhedonia');
+  assert.ok(somatic, 'Expected rule_clinical_phq9_somatic to fire for Emma');
+  assert.ok(anhedonia, 'Expected rule_clinical_phq9_anhedonia to fire for Emma');
+});

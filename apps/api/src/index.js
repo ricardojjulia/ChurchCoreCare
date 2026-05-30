@@ -1959,6 +1959,16 @@ export async function handleApiRequest(request, response) {
       return;
     }
 
+    if (requestUrl.pathname === '/v1/workflows/recommendations/history') {
+      await handleWorkflowRecommendationHistory(request, response, requestUrl, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/workflows/recommendations/batch') {
+      await handleWorkflowRecommendationBatch(request, response, requestUrl, session);
+      return;
+    }
+
     if (requestUrl.pathname === '/v1/faith/overview') {
       await handleFaithOverview(request, response, requestUrl);
       return;
@@ -11269,8 +11279,8 @@ async function handleOfferingsSummary(request, response, session) {
 const VALID_WF_STATUSES = new Set(['pending', 'complete', 'deferred', 'hidden']);
 
 async function handleWorkflowRecommendationState(request, response, requestUrl, session) {
-  if (!session || session.role === 'client') {
-    writeJson(response, session ? 403 : 401, { error: session ? 'Staff access required' : 'Authentication required' });
+  if (callerRole(request, session) === 'client') {
+    writeJson(response, 403, { error: 'Staff access required' });
     return;
   }
 
@@ -11396,6 +11406,14 @@ async function handleWorkflowRecommendationState(request, response, requestUrl, 
     }
 
     stateId = genId('wfs');
+
+    // Capture old status before upsert for history
+    const [prevRows] = await pool.query(
+      'SELECT status FROM workflow_recommendation_states WHERE tenant_id = ? AND client_id = ? AND rule_id = ?',
+      [tenantId, client.id, ruleId],
+    );
+    const oldStatus = prevRows[0]?.status ?? null;
+
     await pool.query(
       `INSERT INTO workflow_recommendation_states
          (id, tenant_id, practice_id, client_id, counselor_id, rule_id, status, deferred_until, notes_enc, expires_at)
@@ -11417,6 +11435,16 @@ async function handleWorkflowRecommendationState(request, response, requestUrl, 
     );
     stateId = updated[0]?.id ?? stateId;
 
+    // Append-only history row (only write if status actually changed)
+    if (oldStatus !== status) {
+      await pool.query(
+        `INSERT INTO workflow_recommendation_state_history
+           (id, tenant_id, client_id, counselor_id, rule_id, old_status, new_status)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [genId('wfh'), tenantId, client.id, counselorId, ruleId, oldStatus, status],
+      );
+    }
+
   } else {
     stateId = genId('wfs');
   }
@@ -11431,6 +11459,152 @@ async function handleWorkflowRecommendationState(request, response, requestUrl, 
     deferredUntil: deferredUntil ?? null,
     actionedAt: new Date().toISOString(),
   });
+}
+
+// GET /v1/workflows/recommendations/history?clientId=X[&ruleId=Y]
+async function handleWorkflowRecommendationHistory(request, response, requestUrl, session) {
+  if (callerRole(request, session) === 'client') {
+    writeJson(response, 403, { error: 'Staff access required' });
+    return;
+  }
+  if (request.method !== 'GET') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const tenantId = callerTenant(request, session);
+  const clientId = requestUrl.searchParams.get('clientId');
+  const ruleId   = requestUrl.searchParams.get('ruleId') ?? null;
+
+  if (!clientId) {
+    writeJson(response, 400, { error: 'clientId query parameter is required' });
+    return;
+  }
+  const client = await resolveAuthorizedClient(request, response, clientId, session, 'faith.workflow.history.read');
+  if (!client) return;
+
+  if (process.env.DB_NAME) {
+    const params = [tenantId, client.id];
+    let sql = `SELECT id, rule_id, old_status, new_status, counselor_id, changed_at
+               FROM workflow_recommendation_state_history
+               WHERE tenant_id = ? AND client_id = ?`;
+    if (ruleId) {
+      sql += ' AND rule_id = ?';
+      params.push(sanitizeStr(ruleId, 128));
+    }
+    sql += ' ORDER BY changed_at DESC LIMIT 200';
+    const [rows] = await pool.query(sql, params);
+    const history = rows.map((r) => ({
+      id:         r.id,
+      ruleId:     r.rule_id,
+      oldStatus:  r.old_status ?? null,
+      newStatus:  r.new_status,
+      counselorId: r.counselor_id,
+      changedAt:  r.changed_at,
+    }));
+    await emitAudit(request, 'faith.workflow.history.read', 'workflow_recommendation_state_history', client.id, session);
+    writeJson(response, 200, { history });
+  } else {
+    writeJson(response, 200, { history: [] });
+  }
+}
+
+// PATCH /v1/workflows/recommendations/batch
+// Body: { clientId, rules: [{ ruleId, status, deferredUntil? }] }
+async function handleWorkflowRecommendationBatch(request, response, requestUrl, session) {
+  if (callerRole(request, session) === 'client') {
+    writeJson(response, 403, { error: 'Staff access required' });
+    return;
+  }
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const tenantId = callerTenant(request, session);
+  const payload  = await readJsonBody(request);
+  const clientId = sanitizeStr(payload.clientId, 64);
+  const rules    = Array.isArray(payload.rules) ? payload.rules : null;
+
+  if (!clientId || !rules || rules.length === 0) {
+    writeJson(response, 400, { error: 'clientId and non-empty rules array are required' });
+    return;
+  }
+  if (rules.length > 100) {
+    writeJson(response, 400, { error: 'rules array must not exceed 100 items' });
+    return;
+  }
+
+  const client = await resolveAuthorizedClient(request, response, clientId, session, 'faith.workflow.batch.set');
+  if (!client) return;
+
+  for (const rule of rules) {
+    if (!VALID_WF_STATUSES.has(sanitizeStr(rule.status, 16))) {
+      writeJson(response, 400, { error: `Invalid status '${rule.status}' for rule '${rule.ruleId}'` });
+      return;
+    }
+  }
+
+  let updatedCount = 0;
+
+  if (process.env.DB_NAME) {
+    const counselorId = await resolveCallerStaffMemberId(session);
+    if (!counselorId) {
+      writeJson(response, 403, { error: 'Staff member record required to record workflow actions' });
+      return;
+    }
+
+    for (const rule of rules) {
+      const ruleId   = sanitizeStr(rule.ruleId, 128);
+      const status   = sanitizeStr(rule.status, 16);
+      const deferredUntil = rule.deferredUntil ? sanitizeStr(rule.deferredUntil, 16) : null;
+
+      let expiresAt = null;
+      if (status === 'hidden') {
+        const d = new Date();
+        d.setDate(d.getDate() + 30);
+        expiresAt = d.toISOString().slice(0, 19).replace('T', ' ');
+      } else if (status === 'deferred' && deferredUntil) {
+        expiresAt = deferredUntil + ' 23:59:59';
+      }
+
+      const [prevRows] = await pool.query(
+        'SELECT status FROM workflow_recommendation_states WHERE tenant_id = ? AND client_id = ? AND rule_id = ?',
+        [tenantId, client.id, ruleId],
+      );
+      const oldStatus = prevRows[0]?.status ?? null;
+
+      const stateId = genId('wfs');
+      await pool.query(
+        `INSERT INTO workflow_recommendation_states
+           (id, tenant_id, practice_id, client_id, counselor_id, rule_id, status, deferred_until, notes_enc, expires_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
+         ON DUPLICATE KEY UPDATE
+           counselor_id   = VALUES(counselor_id),
+           status         = VALUES(status),
+           deferred_until = VALUES(deferred_until),
+           notes_enc      = VALUES(notes_enc),
+           actioned_at    = NOW(),
+           expires_at     = VALUES(expires_at)`,
+        [stateId, tenantId, tenantId, client.id, counselorId, ruleId, status, deferredUntil, expiresAt],
+      );
+
+      if (oldStatus !== status) {
+        await pool.query(
+          `INSERT INTO workflow_recommendation_state_history
+             (id, tenant_id, client_id, counselor_id, rule_id, old_status, new_status)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [genId('wfh'), tenantId, client.id, counselorId, ruleId, oldStatus, status],
+        );
+      }
+      updatedCount++;
+    }
+  } else {
+    updatedCount = rules.length;
+  }
+
+  await emitAudit(request, 'faith.workflow.batch.set', 'workflow_recommendation_state', client.id, session);
+  writeJson(response, 200, { updated: updatedCount });
 }
 
 async function handleFaithOverview(request, response, requestUrl) {
@@ -17300,6 +17474,8 @@ function resolveRoute(pathname) {
   if (pathname.startsWith('/v1/offerings/')) return '/v1/offerings/:id';
   if (pathname === '/v1/workflows/recommendations/state') return '/v1/workflows/recommendations/state';
   if (pathname.startsWith('/v1/workflows/recommendations/state/')) return '/v1/workflows/recommendations/state/:id';
+  if (pathname === '/v1/workflows/recommendations/history') return '/v1/workflows/recommendations/history';
+  if (pathname === '/v1/workflows/recommendations/batch') return '/v1/workflows/recommendations/batch';
   if (pathname === '/v1/faith/overview') return '/v1/faith/overview';
   if (pathname === '/v1/faith/note-templates') return '/v1/faith/note-templates';
   if (pathname === '/v1/faith/treatment-goals') return '/v1/faith/treatment-goals';
