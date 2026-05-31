@@ -2,6 +2,289 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## May 30, 2026 — i18n createLocale service and POST /v1/i18n/locales route
+
+### feat: add createLocale service method and POST /v1/i18n/locales endpoint
+
+**Date:** 2026-05-30
+**Affected area:** `apps/api/src/lib/i18n-store.js`, `apps/api/src/index.js`, `apps/api/test/`
+
+Adds the `createLocale(locale, label)` method to the i18n store. Validates the locale against `SUPPORTED_LOCALES`, returns `{ created: false, existed: true }` if the locale file already exists (idempotent), and writes a minimal scaffold file otherwise. Updates the `POST /v1/i18n/locales` route handler to call `createLocale` instead of `ensureLocale`, returning `{ created, existed, locale, label }` with 400 for unsupported locale codes. Adds 5 unit tests covering RBAC (counselor/client 403), validation (missing locale, unsupported code), and the happy path (practice_admin 200).
+
+**Modified files:**
+
+- `apps/api/src/lib/i18n-store.js` — added `createLocale` method to the store object
+- `apps/api/src/index.js` — updated `handleLocales` POST to call `createLocale`, surface unsupported_locale as 400
+
+**New files:**
+
+- `apps/api/test/i18n-locale-create.test.mjs` — 5 unit tests for POST /v1/i18n/locales
+
+---
+
+## May 30, 2026 — Subscription Tracker + Solo UI Persona frontend
+
+### feat: add Subscription tab, PersonaUpgradeModal, and solo/practice persona filtering
+
+**Date:** 2026-05-30
+**Affected area:** `apps/web/src/`, `packages/i18n/src/index.js`, `PLANS/FULL-SURFACE-MONITORING.md`
+
+Adds the Subscription tab to Workspace Studio showing plan usage, grace-period alerts, billing portal links, and a UI persona switcher. Adds `PersonaUpgradeModal` shown when a solo tenant adds a 2nd counselor (dismissible, mutable after 6 dismissals). Filters sidebar nav and Workspace Studio tabs based on `uiPersona`. Renames "Workspace Studio" to "My Practice" in solo mode.
+
+**New files:**
+
+- `apps/web/src/lib/useSubscriptionUsage.js` — hook that fetches `GET /api/v1/subscription/usage`
+- `apps/web/src/components/WorkspaceStudio/tabs/SubscriptionTab.jsx` — plan usage bars, grace alerts, billing portal, persona switcher
+- `apps/web/src/components/Onboarding/PersonaUpgradeModal.jsx` — solo-to-practice upgrade prompt modal
+
+**Modified files:**
+
+- `apps/web/src/App.jsx` — `uiPersona` from session, persona upgrade state + handlers, `PersonaUpgradeModal` rendered, `uiPersona` passed to Sidebar and WorkspaceStudioPage, `checkPersonaUpgradeAfterStaffCreate` wired to CounselorMaintenance
+- `apps/web/src/components/Sidebar.jsx` — accepts `uiPersona` prop; hides `counselors`/`users` in solo mode; renames workspace-studio label to "My Practice" in solo mode
+- `apps/web/src/components/WorkspaceStudio/WorkspaceStudioPage.jsx` — accepts `uiPersona` prop; hides `locations`/`staff` tabs in solo; adds `SubscriptionTab`; page title "My Practice" in solo mode
+- `apps/web/src/components/CounselorMaintenance.jsx` — adds optional `onCounselorCreated` callback prop called after successful counselor creation
+- `packages/i18n/src/index.js` — 13 new subscription/persona i18n keys
+- `PLANS/FULL-SURFACE-MONITORING.md` — added `studio.subscription` and `persona_upgrade_modal` surfaces
+
+---
+
+## May 30, 2026 — Subscription Plan Limits + UI Persona backend
+
+### feat: add subscription plan limits enforcement and ui_persona field
+
+**Date:** 2026-05-30
+**Affected area:** `apps/api/src/lib/subscriptionPlan.js`, `apps/api/src/db/migrate.js`, `apps/api/src/index.js`, `apps/api/src/lib/tenant-setup.js`, `apps/api/test/subscriptionPlan.test.mjs`
+
+Adds counselor and client limit enforcement for the `solo` plan (3 counselors, 100 active clients) with a 14-day grace period before hard-blocking. Adds a `ui_persona` field so the frontend knows to render simplified "solo mode" UI. Tracks persona upgrade modal dismissals.
+
+**New files:**
+
+- `apps/api/src/lib/subscriptionPlan.js` — plan limits service: `getTenantPlanInfo`, `getUsageCounts`, `getSubscriptionSummary`, `checkLimitBlock`, `setUiPersona`, `recordPersonaDismiss`, `mutePersonaUpgrade`, `applyPlanDefaults`
+- `apps/api/test/subscriptionPlan.test.mjs` — 10 unit tests covering auth, no-DB mode, and validation
+
+**Modified files:**
+
+- `apps/api/src/db/migrate.js` — added 6 new columns to `tenants` table (`ui_persona`, `counselor_limit`, `client_limit`, `limit_grace_started_at`, `persona_upgrade_dismiss_count`, `persona_upgrade_muted`); registered `subscription_limits_v1` migration
+- `apps/api/src/index.js` — imported `subscriptionPlan.js`; added routes `GET /v1/subscription/usage`, `PATCH /v1/tenant/ui-persona`, `POST /v1/tenant/persona-dismiss`; added counselor/client limit guards to staff/client creation; added `uiPersona` to `handleAuthMe` response
+- `apps/api/src/lib/tenant-setup.js` — calls `applyPlanDefaults` after tenant INSERT to set correct limits for new tenants
+
+---
+
+## May 30, 2026 — Ministry Plan frontend
+
+### feat: add Ministry Plan UI for church identity, ministry analytics, and client scholarship/directory fields
+
+**Date:** 2026-05-30
+**Affected area:** `apps/web/src/components/WorkspaceStudio/`, `apps/web/src/components/ClientDetail/`, `apps/web/src/lib/usePlanType.js`, `packages/i18n/src/index.js`, `PLANS/FULL-SURFACE-MONITORING.md`
+
+Added the complete Ministry Plan frontend for the `ministry` plan tier.
+
+**New files:**
+
+- `apps/web/src/lib/usePlanType.js` — `usePlanType()` hook; probes `GET /api/v1/ministry/summary` to detect the tenant's plan; returns `{ planType, loading, isMinistry }`
+- `apps/web/src/components/WorkspaceStudio/tabs/MinistryTab.jsx` — Ministry Overview tab; stat cards for total clients, scholarship clients, and total counselors; admin/owner only; shows upgrade prompt on 403 `ministry_plan_required`
+- `apps/web/src/components/ClientDetail/tabs/MinistryClientTab.jsx` — Client Ministry tab; church directory reference fields (ID + source) with grouped save; scholarship Switch with auto-save and inline Alert on activation; hidden on non-ministry plans
+
+**Modified files:**
+
+- `apps/web/src/components/WorkspaceStudio/tabs/PracticeTab.jsx` — added Church Identity section (ministry plan only) with ministry name, denomination Select, church size Select, parent organization, and directory URL pattern; uses `usePlanType()` hook to conditionally render
+- `apps/web/src/components/WorkspaceStudio/WorkspaceStudioPage.jsx` — added `ministry` tab entry to `STUDIO_TABS`; imports `MinistryTab`
+- `apps/web/src/components/ClientDetail/ClientDetailTabs.jsx` — added `ministry` tab; imports `MinistryClientTab`
+- `packages/i18n/src/index.js` — added 57 `ministry.*` and `studio.tab.ministry` / `client.tab.ministry` i18n keys
+
+**Surface registry:** added `studio.ministry` and `client.ministry` to `PLANS/FULL-SURFACE-MONITORING.md`
+
+---
+
+## May 30, 2026 — Onboarding Wizard frontend
+
+### feat: add OnboardingWizard and SetupChecklistBadge for first-login practice setup
+
+**Date:** 2026-05-30
+**Affected area:** `apps/web/src/components/Onboarding/`, `apps/web/src/App.jsx`, `apps/web/src/components/Sidebar.jsx`, `packages/i18n/src/index.js`, `PLANS/FULL-SURFACE-MONITORING.md`, `tests/e2e/onboarding-wizard.spec.mjs`
+
+Added the complete Onboarding Wizard UI feature.
+
+**New components:**
+
+- `OnboardingWizard.jsx` — full-screen Mantine v9 Modal with 4-step Stepper; steps: Practice Setup (name + timezone), Counselor Profile (name, license, tradition), First Client (optional), First Appointment (optional); non-dismissable until completed; uses `@mantine/form` per step with `LoadingOverlay` on submit; calls PATCH `/api/v1/onboarding/step/:n` per step and POST `/api/v1/onboarding/complete` on finish
+- `SetupChecklistBadge.jsx` — sidebar badge/button shown only when `shouldShowWizard=true`; re-opens the wizard on click
+
+**App.jsx changes:**
+
+- Fetches GET `/api/v1/onboarding/status` after auth for `practice_owner`, `practice_admin`, `platform_admin` roles
+- Auto-shows wizard if `shouldShowWizard=true`
+- Passes `shouldShowOnboarding` / `onOpenOnboarding` props to Sidebar
+
+**Sidebar.jsx changes:**
+
+- Imports and conditionally renders `SetupChecklistBadge`
+
+**i18n:** Added 9 `onboarding.*` keys to `packages/i18n/src/index.js`
+
+**Surface registry:** Registered `onboarding_wizard` modal surface in `PLANS/FULL-SURFACE-MONITORING.md`
+
+**E2E tests:** `tests/e2e/onboarding-wizard.spec.mjs` — happy path, step-1 validation, badge visibility, role gate (counselor role sees no wizard)
+
+---
+
+## May 30, 2026 — Ministry/Church Plan backend
+
+### feat: ministry plan tier with church identity, scholarship clients, and ministry summary
+
+**Date:** 2026-05-30
+**Affected area:** `apps/api/src/db/migrate.js`, `apps/api/src/lib/ministryPlan.js`, `apps/api/src/index.js`, `packages/domain/src/index.js`, `apps/api/test/ministryPlan.test.mjs`
+
+Added the complete server-side Ministry/Church Plan feature.
+
+**Database (migrate.js additions):**
+
+- `staff_members.ministry_admin_access` (BOOLEAN NOT NULL DEFAULT FALSE) — ministry admin access flag
+- `practices.ministry_name` (VARCHAR 255 NULL) — display name for the ministry
+- `practices.denomination` (VARCHAR 64 NULL) — validated denomination from allow-list
+- `practices.church_size` (VARCHAR 32 NULL) — validated size: small, medium, large, megachurch
+- `practices.parent_organization` (VARCHAR 255 NULL) — parent church organization name
+- `practices.church_directory_url_pattern` (TEXT NULL) — URL pattern for church directory links
+- `clients.scholarship_flag` (BOOLEAN NOT NULL DEFAULT FALSE) — blocks invoice creation when true
+- `clients.church_directory_id` (VARCHAR 128 NULL) — reference ID in external church directory
+- `clients.church_directory_source` (VARCHAR 64 NULL) — source system name for directory ID
+
+**Service layer (`apps/api/src/lib/ministryPlan.js`):**
+
+- `getChurchIdentity` — reads ministry_name, denomination, church_size, parent_organization, church_directory_url_pattern for a practice
+- `upsertChurchIdentity` — validates denomination/churchSize against allow-lists, then updates the practice row
+- `getChurchDirectoryRef` — reads church_directory_id and church_directory_source for a client
+- `upsertChurchDirectoryRef` — updates church directory reference fields on a client
+- `setScholarshipFlag` — sets the scholarship_flag boolean on a client
+- `getScholarshipFlag` — reads the scholarship_flag for a client
+- `getMinistrySummary` — aggregate counts: totalClients, scholarshipClients, totalCounselors
+- `checkScholarshipBlock` — returns true if client scholarship_flag is set (used in invoice guard)
+
+**API routes (apps/api/src/index.js):**
+
+- `GET /v1/practices/:id/church-identity` — admin/owner/counselor; returns null fields in no-DB mode
+- `PATCH /v1/practices/:id/church-identity` — admin/owner only; 400 on invalid denomination/churchSize
+- `PATCH /v1/clients/:id/church-directory-ref` — admin/owner only
+- `PATCH /v1/clients/:id/scholarship` — admin/owner only; 400 if scholarshipFlag is not boolean
+- `GET /v1/ministry/summary` — admin/owner only; 403 if tenant plan_type != 'ministry'
+
+**Guards:**
+
+- Invoice creation (POST /v1/billing/invoices): returns 422 `scholarship_client_no_invoice` for scholarship clients
+- All billing routes: returns 403 `ministry_admin_billing_denied` for ministry_admin role
+
+**Domain package:** Added `ministry_admin` to staffRoles array in `packages/domain/src/index.js`
+
+**Tests:** 10 tests in `apps/api/test/ministryPlan.test.mjs` — all passing; full suite 263 tests, 0 failures
+
+---
+
+## May 30, 2026 — AACC CEU Tracking backend
+
+### feat: AACC continuing education tracking for BCPCC and NCCA credentialing
+
+**Date:** 2026-05-30
+**Affected area:** `apps/api/src/db/migrate.js`, `apps/api/src/lib/aaccCeu.js`, `apps/api/src/index.js`, `apps/api/test/aaccCeu.test.mjs`
+
+Added the complete server-side AACC continuing education (CEU) tracking feature for counselors pursuing BCPCC or NCCA credentials.
+
+**Database (migrate.js additions):**
+
+- `staff_members.aacc_credential_type` (VARCHAR 32 NULL) — credential track: `bcpcc`, `ncca_fellow`, or `ncca_diplomate`
+- `staff_members.aacc_cycle_start_date` (DATE NULL) — renewal cycle start
+- `time_entries.aacc_ceu_id` (VARCHAR 64 NULL) — links a time entry to a CEU entry
+- `aacc_ceu_entries` table — CEU record per counselor with category, duration, date, description, and provider
+
+**Service layer (`apps/api/src/lib/aaccCeu.js`):**
+
+- `getCredentialStatus` — fetches credential type and cycle start for a staff member
+- `upsertCredential` — sets or updates credential type and cycle start date
+- `getCeuProgress` — computes hours summary: totalHours, remainingHours, percentComplete, cycleEndDate
+- `listCeuEntries` — returns all CEU entries ordered by entry date descending
+- `addCeuEntry` — validates and inserts a CEU entry; links time entry if `timeEntryId` provided
+- `deleteCeuEntry` — removes a CEU entry and unlinks any associated time entry
+- `renderRenewalReportHtml` — returns a print-ready HTML report grouped by category with subtotals
+
+**API routes (7 new):**
+
+- `PATCH /v1/staff/:staffId/aacc-credential` — set credential type and cycle start
+- `GET /v1/staff/:staffId/aacc-ceu/progress` — hours summary
+- `GET /v1/staff/:staffId/aacc-ceu/entries` — list CEU entries
+- `POST /v1/staff/:staffId/aacc-ceu/entries` — add a CEU entry
+- `DELETE /v1/staff/:staffId/aacc-ceu/entries/:entryId` — delete a CEU entry
+- `PATCH /v1/time-entries/:id/aacc-ceu` — link or unlink a time entry to a CEU entry
+- `GET /v1/staff/:staffId/aacc-ceu/renewal-report` — returns `text/html` print-ready renewal report
+
+**Tests:** 10 unit tests in `apps/api/test/aaccCeu.test.mjs` — all pass (253 total, 0 failures).
+
+---
+
+## May 30, 2026 — Client Self-Scheduling backend
+
+### feat: three-layer counselor-gated slot booking service
+
+**Date:** 2026-05-30
+**Affected area:** `apps/api/src/db/migrate.js`, `apps/api/src/lib/slotCalculator.js`, `apps/api/src/lib/selfScheduling.js`, `apps/api/src/index.js`
+
+Added the complete server-side half of client self-scheduling: DB schema, pure slot calculator, service layer, and 7 new API routes.
+
+**Database (3 new tables via migrate.js):**
+
+- `counselor_scheduling_profiles` — per-counselor availability config (enabled flag, slot duration, buffer, advance booking window, availability blocks as JSONB)
+- `client_booking_authorizations` — counselor-gated access control per client/counselor pair (`request` or `book` mode with optional day/type filters and expiry)
+- `self_booking_appointments` — immutable booking ledger linking appointments to the authorization that created them
+
+**Service layer (`apps/api/src/lib/selfScheduling.js`):**
+
+- `getSchedulingProfile` / `upsertSchedulingProfile` — profile CRUD with RBAC (counselors own-only, admin any-in-tenant)
+- `getBookingAuthorization` / `upsertBookingAuthorization` — authorization CRUD
+- `getEntitlement` — portal entitlement list for a client
+- `getAvailableSlots` — computes open slots via the pure slot calculator
+- `confirmBooking` — transactional slot booking with FOR UPDATE overlap check, appointment insert, self-booking ledger insert, and reminder insert; raises `SlotConflictError` on race condition
+
+**Pure slot calculator (`apps/api/src/lib/slotCalculator.js`):**
+
+- Zero DB calls, no new dependencies; uses `Intl.DateTimeFormat` for all timezone math
+- Handles availability blocks, buffer minutes, minNoticeHours, advanceBookingDays, allowedDays filter, and deduplication
+
+**API routes (7 new):**
+
+- `GET/PUT /v1/staff/:staffId/scheduling-profile`
+- `GET/PUT /v1/clients/:clientId/booking-authorization`
+- `GET /v1/portal/scheduling/entitlement`
+- `GET /v1/portal/scheduling/slots`
+- `POST /v1/portal/scheduling/book`
+
+**Tests:** 16 new tests (8 unit + 8 API), 233 total passing.
+
+---
+
+## May 29, 2026 — Faithful Workflows engine enhancements
+
+### feat: 2 new clinical rules, improved data wiring, 83-test coverage
+
+**Date:** 2026-05-29
+**Affected area:** `apps/web/src/components/FaithWorkflows/engine/`
+
+Closed six gaps identified in the Faithful Workflows engine (documented in `PLANS/FAITHFUL-WORKFLOWS-ENHANCEMENTS.md`).
+
+**Bug fixes:**
+
+- Fixed broken test (`rule_coordination_no_insurance` → `rule_coordination_gift_arrangement`)
+- Fixed `homeworkPending` and `referrals` not wired into `fetchClientWorkflowData` — rules that depended on them (pending homework, open referrals) could never fire in production
+- Fixed misleading "AI-assisted" watermark in `contentTemplates.js` — templates are deterministic, not LLM-generated
+
+**New rules (36 total, up from 34):**
+
+- `ruleSessionFrequencyDecline` — fires when appointment spacing widens > 1.5× over the session history, signalling possible disengagement (priority 5, confidence 0.80)
+- `ruleSupervisionMissing` — fires when a high-urgency client (PHQ-9 ≥ 20, active SI, or ≥ 2 no-shows) has no supervision note documented in the past 30 days (priority 7, confidence 0.85)
+
+**Refactor:**
+
+- Extracted `applyPersistedStates` from `FaithWorkflowsPage.jsx` to `engine/applyPersistedStates.js` for testability
+
+**Tests:** 83 tests, 83 passing (up from 52). New coverage: `scoreClient`, `contentTemplates` (all 7 renderers), `applyPersistedStates`, and both new rules.
+
 ## May 28, 2026 — Platform Admin App complete (apps/platform/)
 
 ### feat: platform admin web app — impersonation, data exports, retention policies

@@ -4,10 +4,11 @@ import {
   Textarea, Text,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { Video } from 'lucide-react';
+import { Video, Church } from 'lucide-react';
 import { useI18n } from '../../../lib/i18nContext.jsx';
 import { csrfHeaders } from '../../../lib/csrf.js';
 import { SectionHeader, SectionSurface, SurfaceState } from '../../ui/surface.jsx';
+import { usePlanType } from '../../../lib/usePlanType.js';
 
 async function apiFetch(url, options = {}) {
   const res = await fetch(url, options);
@@ -24,14 +25,50 @@ const TIMEZONE_OPTIONS = [
   'America/Phoenix', 'America/Anchorage', 'Pacific/Honolulu',
 ].map((tz) => ({ value: tz, label: tz.replace('America/', '').replace('Pacific/', '').replaceAll('_', ' ') + ` (${tz})` }));
 
+const DENOMINATION_OPTIONS_STATIC = [
+  'broadly_christian',
+  'southern_baptist',
+  'sbc_affiliated',
+  'nondenominational',
+  'assemblies_of_god',
+  'methodist',
+  'presbyterian',
+  'lutheran',
+  'catholic',
+  'reformed',
+  'charismatic',
+  'anglican',
+  'mennonite',
+  'quaker',
+  'other',
+];
+
+const CHURCH_SIZE_OPTIONS_STATIC = [
+  'small',
+  'medium',
+  'large',
+  'megachurch',
+];
+
 export default function PracticeTab() {
   const { t } = useI18n();
+  const { isMinistry } = usePlanType();
 
   const PRACTICE_TYPE_OPTIONS = [
     { value: 'solo', label: t('practice.type.solo') },
     { value: 'group', label: t('practice.type.group') },
     { value: 'multi_location', label: t('practice.type.multi_location') },
   ];
+
+  const DENOMINATION_OPTIONS = DENOMINATION_OPTIONS_STATIC.map((v) => ({
+    value: v,
+    label: t(`ministry.denomination.${v}`),
+  }));
+
+  const CHURCH_SIZE_OPTIONS = CHURCH_SIZE_OPTIONS_STATIC.map((v) => ({
+    value: v,
+    label: t(`ministry.size.${v}`),
+  }));
 
   const [practices, setPractices] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -46,6 +83,12 @@ export default function PracticeTab() {
   const [videoSaving, setVideoSaving] = useState(false);
   const [videoDirty, setVideoDirty] = useState(false);
 
+  // Church identity state (ministry plan only)
+  const [churchIdentityDraft, setChurchIdentityDraft] = useState(null);
+  const [churchIdentitySaving, setChurchIdentitySaving] = useState(false);
+  const [churchIdentityDirty, setChurchIdentityDirty] = useState(false);
+  const [churchIdentityLoading, setChurchIdentityLoading] = useState(false);
+
   useEffect(() => {
     setLoading(true);
     apiFetch('/api/v1/practices')
@@ -57,6 +100,36 @@ export default function PracticeTab() {
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, []);
+
+  // Fetch church identity when the practice is loaded and plan is ministry
+  useEffect(() => {
+    if (!isMinistry || !draft?.id) return;
+    setChurchIdentityLoading(true);
+    apiFetch(`/api/v1/practices/${draft.id}/church-identity`)
+      .then((payload) => {
+        setChurchIdentityDraft({
+          ministryName: payload.ministryName ?? '',
+          denomination: payload.denomination ?? null,
+          churchSize: payload.churchSize ?? null,
+          parentOrganization: payload.parentOrganization ?? '',
+          churchDirectoryUrlPattern: payload.churchDirectoryUrlPattern ?? '',
+        });
+        setChurchIdentityDirty(false);
+      })
+      .catch(() => {
+        // If endpoint returns 404 or errors, start with empty draft
+        setChurchIdentityDraft({
+          ministryName: '',
+          denomination: null,
+          churchSize: null,
+          parentOrganization: '',
+          churchDirectoryUrlPattern: '',
+        });
+        setChurchIdentityDirty(false);
+      })
+      .finally(() => setChurchIdentityLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMinistry, draft?.id]);
 
   function initDraft(practice) {
     setDraft({
@@ -118,6 +191,43 @@ export default function PracticeTab() {
       notifications.show({ title: t('practice.notify.error'), message: err.message, color: 'red' });
     } finally {
       setVideoSaving(false);
+    }
+  }
+
+  function updateChurchIdentity(field, value) {
+    setChurchIdentityDraft((prev) => ({ ...prev, [field]: value }));
+    setChurchIdentityDirty(true);
+  }
+
+  async function saveChurchIdentity() {
+    if (!draft?.id || !churchIdentityDraft) return;
+    setChurchIdentitySaving(true);
+    try {
+      await apiFetch(`/api/v1/practices/${draft.id}/church-identity`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
+        body: JSON.stringify({
+          ministryName: churchIdentityDraft.ministryName || null,
+          denomination: churchIdentityDraft.denomination || null,
+          churchSize: churchIdentityDraft.churchSize || null,
+          parentOrganization: churchIdentityDraft.parentOrganization || null,
+          churchDirectoryUrlPattern: churchIdentityDraft.churchDirectoryUrlPattern || null,
+        }),
+      });
+      setChurchIdentityDirty(false);
+      notifications.show({
+        title: t('demographics.notify.saved'),
+        message: t('ministry.church_identity.saved'),
+        color: 'green',
+      });
+    } catch (err) {
+      notifications.show({
+        title: t('ministry.church_identity.error'),
+        message: err.message,
+        color: 'red',
+      });
+    } finally {
+      setChurchIdentitySaving(false);
     }
   }
 
@@ -229,6 +339,67 @@ export default function PracticeTab() {
               </Group>
             ))}
           </Stack>
+        </SectionSurface>
+      )}
+
+      {isMinistry && (
+        <SectionSurface>
+          <SectionHeader
+            title={t('ministry.church_identity.title')}
+            description={t('ministry.church_identity.description')}
+            meta={<Badge leftSection={<Church size={12} />} color="violet" variant="light">Ministry</Badge>}
+          />
+          <Divider mb="md" />
+          {churchIdentityLoading ? (
+            <Text fz="sm" c="dimmed">{t('ministry.church_identity.loading')}</Text>
+          ) : churchIdentityDraft ? (
+            <Stack gap="sm">
+              <TextInput
+                label={t('ministry.church_identity.ministryName')}
+                value={churchIdentityDraft.ministryName}
+                onChange={(e) => updateChurchIdentity('ministryName', e.currentTarget.value)}
+              />
+              <Group grow>
+                <Select
+                  label={t('ministry.church_identity.denomination')}
+                  data={DENOMINATION_OPTIONS}
+                  value={churchIdentityDraft.denomination}
+                  onChange={(v) => updateChurchIdentity('denomination', v)}
+                  clearable
+                  searchable
+                />
+                <Select
+                  label={t('ministry.church_identity.churchSize')}
+                  data={CHURCH_SIZE_OPTIONS}
+                  value={churchIdentityDraft.churchSize}
+                  onChange={(v) => updateChurchIdentity('churchSize', v)}
+                  clearable
+                />
+              </Group>
+              <TextInput
+                label={t('ministry.church_identity.parentOrganization')}
+                value={churchIdentityDraft.parentOrganization}
+                onChange={(e) => updateChurchIdentity('parentOrganization', e.currentTarget.value)}
+              />
+              <TextInput
+                label={t('ministry.church_identity.directoryUrlPattern')}
+                value={churchIdentityDraft.churchDirectoryUrlPattern}
+                onChange={(e) => updateChurchIdentity('churchDirectoryUrlPattern', e.currentTarget.value)}
+                description={t('ministry.church_identity.directoryUrlPatternDesc')}
+                placeholder="https://myapp.planningcenteronline.com/people/AC{id}"
+              />
+              <Group justify="flex-end" mt="xs">
+                {churchIdentityDirty && <Badge color="yellow" variant="light">{t('practice.unsavedChanges')}</Badge>}
+                <Button
+                  onClick={saveChurchIdentity}
+                  loading={churchIdentitySaving}
+                  disabled={!churchIdentityDirty}
+                >
+                  {t('ministry.church_identity.save')}
+                </Button>
+              </Group>
+            </Stack>
+          ) : null}
         </SectionSurface>
       )}
 

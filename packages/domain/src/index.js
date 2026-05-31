@@ -2,6 +2,7 @@ export const staffRoles = Object.freeze([
   'platform_admin',
   'practice_owner',
   'practice_admin',
+  'ministry_admin',
   'counselor',
   'intern',
   'scheduler_biller',

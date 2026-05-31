@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { ActionIcon, Alert, Box, Group, Loader, Stack, Text, Title, Tooltip } from '@mantine/core';
+import { ActionIcon, Alert, Box, Button, Group, Loader, Stack, Text, Title, Tooltip } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { useI18n } from '../../lib/i18nContext.jsx';
 import SafetyBanner from './SafetyBanner.jsx';
@@ -10,6 +10,8 @@ import WorkflowCanvasPriority from './WorkflowCanvasPriority.jsx';
 import RecommendationDrawer from './RecommendationDrawer.jsx';
 import { runWorkflow, buildClientRankEntry, buildLightweightRankEntry } from './engine/runWorkflow.js';
 import { getMockClientData, MOCK_CLIENTS } from './engine/mockData.js';
+import { applyPersistedStates } from './engine/applyPersistedStates.js';
+import { renderCareSummaryHtml } from './engine/contentTemplates.js';
 
 // ─── View variant metadata ────────────────────────────────────────────────────
 
@@ -98,6 +100,8 @@ async function fetchClientWorkflowData(clientId, demoModeEnabled) {
     faithRes,
     appointmentsRes,
     assessmentsRes,
+    homeworkRes,
+    referralsRes,
   ] = await Promise.allSettled([
     fetch(`/api/v1/clients/${encodeURIComponent(clientId)}`,                    { credentials: 'include' }).then((r) => r.ok ? r.json() : null),
     fetch(`/api/v1/clients/${encodeURIComponent(clientId)}/diagnoses`,          { credentials: 'include' }).then((r) => r.ok ? r.json() : null),
@@ -106,6 +110,8 @@ async function fetchClientWorkflowData(clientId, demoModeEnabled) {
     fetch(`/api/v1/clients/${encodeURIComponent(clientId)}/faith-profile`,      { credentials: 'include' }).then((r) => r.ok ? r.json() : null),
     fetch(`/api/v1/appointments?clientId=${encodeURIComponent(clientId)}`,      { credentials: 'include' }).then((r) => r.ok ? r.json() : null),
     fetch(`/api/v1/forms/client-overview?clientId=${encodeURIComponent(clientId)}`, { credentials: 'include' }).then((r) => r.ok ? r.json() : null),
+    fetch(`/api/v1/forms/assignments?clientId=${encodeURIComponent(clientId)}&status=pending`, { credentials: 'include' }).then((r) => r.ok ? r.json() : null),
+    fetch(`/api/v1/faith/referral-coordination?clientId=${encodeURIComponent(clientId)}`, { credentials: 'include' }).then((r) => r.ok ? r.json() : null),
   ]);
 
   const val = (settled) => settled.status === 'fulfilled' ? settled.value : null;
@@ -128,7 +134,16 @@ async function fetchClientWorkflowData(clientId, demoModeEnabled) {
       score: sub.scoreValue != null ? Number(sub.scoreValue) : null,
       scoredAt: sub.submittedAt ?? null,
       completedAt: sub.submittedAt ?? null,
-      item9Score: sub.responses?.item9Score ?? sub.responses?.selfHarm ?? null,
+      item1Score: sub.responses?.phq1 != null ? Number(sub.responses.phq1) : null,
+      item2Score: sub.responses?.phq2 != null ? Number(sub.responses.phq2) : null,
+      item3Score: sub.responses?.phq3 != null ? Number(sub.responses.phq3) : null,
+      item4Score: sub.responses?.phq4 != null ? Number(sub.responses.phq4) : null,
+      item5Score: sub.responses?.phq5 != null ? Number(sub.responses.phq5) : null,
+      item6Score: sub.responses?.phq6 != null ? Number(sub.responses.phq6) : null,
+      item7Score: sub.responses?.phq7 != null ? Number(sub.responses.phq7) : null,
+      item8Score: sub.responses?.phq8 != null ? Number(sub.responses.phq8) : null,
+      item9Score: sub.responses?.phq9 != null ? Number(sub.responses.phq9)
+                : sub.responses?.item9Score ?? sub.responses?.selfHarm ?? null,
     }));
 
   return {
@@ -139,6 +154,8 @@ async function fetchClientWorkflowData(clientId, demoModeEnabled) {
     faithProfile: val(faithRes)?.item ?? val(faithRes) ?? null,
     appointments: val(appointmentsRes)?.items ?? [],
     assessments,
+    homeworkPending: val(homeworkRes)?.items ?? [],
+    referrals: val(referralsRes)?.items ?? [],
     status: 'ready',
     errorMessage: null,
   };
@@ -187,6 +204,41 @@ async function persistStateChange(clientId, ruleId, status, deferredUntil = null
 }
 
 /**
+ * Persist multiple status changes in one API call.
+ * Silently no-ops for mock clients.
+ */
+async function persistBatchStateChange(clientId, rules) {
+  if (clientId.startsWith('mock-')) return;
+  try {
+    await fetch('/api/v1/workflows/recommendations/batch', {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clientId, rules }),
+    });
+  } catch {
+    // Non-fatal: UI state is already updated optimistically
+  }
+}
+
+/**
+ * Fetch the audit history of state transitions for a single recommendation rule.
+ * Returns [] on any error or for mock clients.
+ */
+async function fetchRecommendationHistory(clientId, ruleId) {
+  if (clientId.startsWith('mock-')) return [];
+  try {
+    const url = `/api/v1/workflows/recommendations/history?clientId=${encodeURIComponent(clientId)}&ruleId=${encodeURIComponent(ruleId)}`;
+    const res = await fetch(url, { credentials: 'include' });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.history ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Faithful Workflows — main three-panel page.
  *
  * Props:
@@ -195,7 +247,7 @@ async function persistStateChange(clientId, ruleId, status, deferredUntil = null
  *   sharedOperationsSummary — canonical operations-summary payload for counts and urgency overlays
  */
 export default function FaithWorkflowsPage({ clients = [], currentUser, sharedOperationsSummary = null }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const demoModeEnabled = useMemo(() => isFaithWorkflowDemoEnabled(), []);
 
   // ─── Canvas view variant ─────────────────────────────────────────────────
@@ -409,6 +461,32 @@ export default function FaithWorkflowsPage({ clients = [], currentUser, sharedOp
   const handleToggleCategory = useCallback(() => {
   }, []);
 
+  const handleBulkMarkReviewed = useCallback(() => {
+    if (!selectedClientId) return;
+    const pending = recommendations.filter((r) => r.status === 'pending');
+    if (pending.length === 0) return;
+    // Optimistic update
+    setPersistedStates((prev) => {
+      const next = { ...prev };
+      for (const rec of pending) {
+        next[rec.ruleId] = { status: 'complete', deferredUntil: null, stateId: prev[rec.ruleId]?.stateId ?? null };
+      }
+      return next;
+    });
+    persistBatchStateChange(selectedClientId, pending.map((r) => ({ ruleId: r.ruleId, status: 'complete' })));
+  }, [selectedClientId, recommendations]);
+
+  const handleExport = useCallback(() => {
+    if (!selectedClientData || !selectedClientId) return;
+    const html = renderCareSummaryHtml(selectedClientData, recommendations, locale);
+    const win = window.open('', '_blank');
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    win.print();
+  }, [selectedClientData, recommendations, selectedClientId, locale]);
+
   const isLoadingSelected = selectedClientId && loadingSet.has(selectedClientId);
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -422,21 +500,53 @@ export default function FaithWorkflowsPage({ clients = [], currentUser, sharedOp
             <Text c="dimmed" size="sm">{t('workflow.subtitle')}</Text>
           </div>
 
-          {/* View picker — always visible in the header */}
-          <Tooltip label={VARIANT_LABELS[variant]} withArrow position="bottom">
-            <ActionIcon
-              size="lg"
-              variant="light"
-              color={VARIANT_COLORS[variant]}
-              radius="xl"
-              onClick={cycleVariant}
-              aria-label={VARIANT_LABELS[variant]}
-            >
-              <Text size="sm" style={{ lineHeight: 1 }}>
-                {VARIANT_ICONS[variant]}
-              </Text>
-            </ActionIcon>
-          </Tooltip>
+          <Group gap="xs">
+            {/* Bulk action — only visible when a client is selected and has pending recs */}
+            {selectedClientId && recommendations.filter((r) => r.status === 'pending').length > 0 && (
+              <Tooltip label="Mark all pending as reviewed" withArrow position="bottom">
+                <Button
+                  size="xs"
+                  variant="light"
+                  color="teal"
+                  onClick={handleBulkMarkReviewed}
+                >
+                  Mark all reviewed
+                </Button>
+              </Tooltip>
+            )}
+
+            {/* Export — only visible when a client is selected */}
+            {selectedClientId && (
+              <Tooltip label="Print / export care summary" withArrow position="bottom">
+                <ActionIcon
+                  size="lg"
+                  variant="light"
+                  color="gray"
+                  radius="xl"
+                  onClick={handleExport}
+                  aria-label="Print care summary"
+                >
+                  <Text size="sm" style={{ lineHeight: 1 }}>⎙</Text>
+                </ActionIcon>
+              </Tooltip>
+            )}
+
+            {/* View picker */}
+            <Tooltip label={VARIANT_LABELS[variant]} withArrow position="bottom">
+              <ActionIcon
+                size="lg"
+                variant="light"
+                color={VARIANT_COLORS[variant]}
+                radius="xl"
+                onClick={cycleVariant}
+                aria-label={VARIANT_LABELS[variant]}
+              >
+                <Text size="sm" style={{ lineHeight: 1 }}>
+                  {VARIANT_ICONS[variant]}
+                </Text>
+              </ActionIcon>
+            </Tooltip>
+          </Group>
         </Group>
       </Box>
 
@@ -549,36 +659,14 @@ export default function FaithWorkflowsPage({ clients = [], currentUser, sharedOp
         onClose={closeDrawer}
         onStatusChange={handleStatusChange}
         onAction={handleAction}
+        clientId={selectedClientId}
+        fetchHistory={fetchRecommendationHistory}
       />
     </Stack>
   );
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-const SAFETY_LOCK_THRESHOLD = 9;
-
-/**
- * Merge persisted DB states into the rules engine output.
- * Safety lock: any rec with priority >= SAFETY_LOCK_THRESHOLD cannot stay hidden/deferred.
- *
- * @param {import('./engine/types.js').Recommendation[]} recs
- * @param {Record<string, {status: string}>} states  — keyed by ruleId
- * @param {boolean} applyStates  — false for non-selected clients (skip merge)
- */
-function applyPersistedStates(recs, states, applyStates) {
-  if (!applyStates) return recs;
-  return recs.map((rec) => {
-    const persisted = states[rec.ruleId];
-    if (!persisted) return rec;
-    let status = persisted.status;
-    // Safety lock: high-priority recommendations cannot be hidden or deferred
-    if (rec.priority >= SAFETY_LOCK_THRESHOLD && (status === 'hidden' || status === 'deferred')) {
-      status = 'pending';
-    }
-    return { ...rec, status };
-  });
-}
 
 function classifyCountBand(total) {
   if (total >= 150) return '150_plus';

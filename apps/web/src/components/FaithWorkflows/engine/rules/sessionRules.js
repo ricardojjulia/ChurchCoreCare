@@ -4,6 +4,7 @@
  * - Overdue treatment goal (target date passed, not completed)
  * - Pending/incomplete homework assignment
  * - Pending unscored assessment
+ * - Session frequency declining (spacing widening = disengagement signal)
  */
 
 import { daysSince } from '../utils.js';
@@ -70,6 +71,59 @@ export function rulePendingHomework(data, clientId) {
     status: 'pending',
     orderedAfter: null,
     docNote: 'Document homework review, any barriers identified, and revised or new assignments.',
+  };
+}
+
+/**
+ * Rule: Session frequency declining — appointment spacing has widened significantly,
+ * suggesting the client may be disengaging from treatment.
+ *
+ * Fires when: ≥3 completed appointments AND the last inter-session gap is
+ * more than 1.5× the first gap AND the last gap exceeds 21 days.
+ */
+export function ruleSessionFrequencyDecline(data, clientId) {
+  const completed = (data.appointments ?? [])
+    .filter((a) => a.status === 'completed' && (a.startsAt || a.scheduledAt))
+    .sort((a, b) => new Date(a.startsAt ?? a.scheduledAt) - new Date(b.startsAt ?? b.scheduledAt));
+
+  if (completed.length < 3) return null;
+
+  const gaps = [];
+  for (let i = 1; i < completed.length; i++) {
+    const prev = new Date(completed[i - 1].startsAt ?? completed[i - 1].scheduledAt);
+    const curr = new Date(completed[i].startsAt ?? completed[i].scheduledAt);
+    gaps.push(Math.round((curr - prev) / (1000 * 60 * 60 * 24)));
+  }
+
+  const firstGap = gaps[0];
+  const lastGap = gaps[gaps.length - 1];
+
+  if (lastGap < firstGap * 1.5 || lastGap < 21) return null;
+
+  const drift = lastGap - firstGap;
+
+  return {
+    id: `rule_session_frequency_decline:${clientId}`,
+    ruleId: 'rule_session_frequency_decline',
+    category: 'session_focus',
+    title: 'Session Frequency Declining',
+    summary: `Appointment spacing has widened from ${firstGap} to ${lastGap} days (+${drift} days). This pattern may signal disengagement or practical barriers to attendance.`,
+    rationale: `A widening gap between sessions can indicate the client is beginning to disengage from treatment — whether due to avoidance, life logistics, improved symptoms, or ambivalence about continuing. Early detection allows the counselor to explore the meaning of the spacing change collaboratively before full dropout occurs. This is distinct from a planned step-down in frequency, which would be documented in the treatment plan.`,
+    evidence: [
+      `Session gap widened: ${firstGap} days → ${lastGap} days`,
+      `Drift over last ${completed.length} sessions: +${drift} days`,
+    ],
+    priority: 5,
+    confidence: 0.80,
+    cautions: [
+      'Confirm this is not a counselor-initiated step-down before flagging as disengagement.',
+      'Scheduled longer intervals (e.g., bi-weekly to monthly) are expected during maintenance phase.',
+    ],
+    actions: ['generate_session_agenda', 'draft_followup_message'],
+    faithNote: null,
+    status: 'pending',
+    orderedAfter: null,
+    docNote: 'Document discussion of session frequency and any agreed changes to the schedule.',
   };
 }
 

@@ -204,6 +204,87 @@ import {
   listLicensureGoals, createLicensureGoal,
   listSupervisorAssignments, createSupervisorAssignment, deleteSupervisorAssignment, isSupervisorOf,
 } from './db/queries/timeTracking.js';
+import {
+  getSchedulingProfile,
+  upsertSchedulingProfile,
+  getBookingAuthorization,
+  upsertBookingAuthorization,
+  getEntitlement,
+  getAvailableSlots,
+  confirmBooking,
+  SelfSchedulingError,
+  SlotConflictError,
+} from './lib/selfScheduling.js';
+import {
+  getOnboardingStatus,
+  markStepComplete,
+  completeOnboarding,
+  savePracticeName,
+  saveCounselorProfile,
+  createFirstClient,
+  createFirstAppointment,
+} from './lib/onboarding.js';
+import {
+  AACC_CATEGORIES,
+  VALID_CREDENTIAL_TYPES,
+  getCredentialStatus,
+  upsertCredential,
+  getCeuProgress,
+  listCeuEntries,
+  addCeuEntry,
+  deleteCeuEntry,
+  renderRenewalReportHtml,
+} from './lib/aaccCeu.js';
+import {
+  VALID_CHURCH_SIZES,
+  VALID_DENOMINATIONS,
+  getChurchIdentity,
+  upsertChurchIdentity,
+  getChurchDirectoryRef,
+  upsertChurchDirectoryRef,
+  setScholarshipFlag,
+  getMinistrySummary,
+  checkScholarshipBlock,
+} from './lib/ministryPlan.js';
+import {
+  getSubscriptionSummary,
+  checkLimitBlock,
+  setUiPersona,
+  recordPersonaDismiss,
+  mutePersonaUpgrade,
+  applyPlanDefaults,
+} from './lib/subscriptionPlan.js';
+
+// ─── Self-scheduling validation allowlists ────────────────────────────────────
+const VALID_SLOT_DURATIONS = new Set([30, 45, 50]);
+const ALLOWED_TIMEZONES = new Set([
+  'America/New_York','America/Chicago','America/Denver','America/Los_Angeles',
+  'America/Anchorage','America/Phoenix','America/Detroit','America/Indiana/Indianapolis',
+  'Pacific/Honolulu','America/Puerto_Rico','America/Toronto','America/Vancouver',
+  'America/Winnipeg','America/Halifax','America/St_Johns',
+  'Europe/London','Europe/Paris','Europe/Berlin','Europe/Rome','Europe/Madrid',
+  'Europe/Amsterdam','Europe/Stockholm','Europe/Zurich','Europe/Warsaw',
+  'Europe/Helsinki','Europe/Athens','Europe/Bucharest','Europe/Istanbul',
+  'Africa/Nairobi','Africa/Lagos','Africa/Cairo','Africa/Johannesburg',
+  'Asia/Kolkata','Asia/Karachi','Asia/Dhaka','Asia/Bangkok','Asia/Singapore',
+  'Asia/Shanghai','Asia/Tokyo','Asia/Seoul','Australia/Sydney','Pacific/Auckland',
+]);
+
+const ALLOWED_LICENSE_TYPES_ONBOARDING = new Set([
+  'lmft','lpc','lcsw','psychologist','pastoral_counselor','lpcc','mft',
+  'social_worker','counselor_intern','other',
+]);
+
+const ALLOWED_TRADITIONS_ONBOARDING = new Set([
+  'broadly_christian','evangelical_baptist','methodist','presbyterian_reformed',
+  'lutheran','anglican_episcopal','pentecostal_charismatic','nondenominational',
+  'catholic_roman','catholic_eastern','orthodox_eastern','orthodox_oriental',
+  'black_church','mennonite_anabaptist','messianic_jewish',
+]);
+const VALID_BUFFERS        = new Set([0, 10, 15]);
+const VALID_ADVANCE_DAYS   = new Set([7, 14, 30, 60]);
+const VALID_NOTICE_HOURS   = new Set([2, 4, 12, 24, 48]);
+const VALID_BOOKING_MODES  = new Set(['request', 'book']);
 
 const port = Number(process.env.PORT || 3001);
 const currentFilePath = fileURLToPath(import.meta.url);
@@ -1676,6 +1757,29 @@ export async function handleApiRequest(request, response) {
       return;
     }
 
+    // ── Client booking authorization (must be before /v1/clients/ catch-all) ──
+    {
+      const bookingAuthMatch = requestUrl.pathname.match(/^\/v1\/clients\/([^/]+)\/booking-authorization$/);
+      if (bookingAuthMatch) {
+        await handleClientBookingAuthorization(request, response, bookingAuthMatch[1], session);
+        return;
+      }
+    }
+
+    // ── Ministry plan: client church-directory-ref and scholarship ────────────
+    {
+      const churchDirMatch = requestUrl.pathname.match(/^\/v1\/clients\/([^/]+)\/church-directory-ref$/);
+      if (churchDirMatch) {
+        await handleClientChurchDirectoryRef(request, response, churchDirMatch[1], session);
+        return;
+      }
+      const scholarshipMatch = requestUrl.pathname.match(/^\/v1\/clients\/([^/]+)\/scholarship$/);
+      if (scholarshipMatch) {
+        await handleClientScholarship(request, response, scholarshipMatch[1], session);
+        return;
+      }
+    }
+
     if (requestUrl.pathname.startsWith('/v1/clients/')) {
       const sub = parseClientSubresource(requestUrl.pathname);
       if (sub) {
@@ -1812,21 +1916,38 @@ export async function handleApiRequest(request, response) {
     }
 
     if (requestUrl.pathname === '/v1/billing/subscription') {
+      // ministry_admin role may not perform billing actions
+      if (callerRole(request, session) === 'ministry_admin') {
+        writeJson(response, 403, { error: 'ministry_admin_billing_denied' });
+        return;
+      }
       await handleBillingSubscription(request, response, requestUrl, session);
       return;
     }
 
     if (requestUrl.pathname === '/v1/billing/portal') {
+      if (callerRole(request, session) === 'ministry_admin') {
+        writeJson(response, 403, { error: 'ministry_admin_billing_denied' });
+        return;
+      }
       await handleBillingPortal(request, response, requestUrl, session);
       return;
     }
 
     if (requestUrl.pathname === '/v1/billing/subscription/activate') {
+      if (callerRole(request, session) === 'ministry_admin') {
+        writeJson(response, 403, { error: 'ministry_admin_billing_denied' });
+        return;
+      }
       await handleBillingSubscriptionActivate(request, response, session);
       return;
     }
 
     if (requestUrl.pathname === '/v1/billing/subscription/upgrade') {
+      if (callerRole(request, session) === 'ministry_admin') {
+        writeJson(response, 403, { error: 'ministry_admin_billing_denied' });
+        return;
+      }
       await handleBillingSubscriptionUpgrade(request, response, session);
       return;
     }
@@ -1938,6 +2059,22 @@ export async function handleApiRequest(request, response) {
       return;
     }
 
+    // ── Portal self-scheduling routes ─────────────────────────────────────────
+    if (requestUrl.pathname === '/v1/portal/scheduling/entitlement') {
+      await handlePortalSchedulingEntitlement(request, response, requestUrl, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/portal/scheduling/slots') {
+      await handlePortalSchedulingSlots(request, response, requestUrl, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/portal/scheduling/book') {
+      await handlePortalSchedulingBook(request, response, session);
+      return;
+    }
+
     if (requestUrl.pathname === '/v1/offerings/summary') {
       await handleOfferingsSummary(request, response, session);
       return;
@@ -1956,6 +2093,16 @@ export async function handleApiRequest(request, response) {
     if (requestUrl.pathname === '/v1/workflows/recommendations/state' ||
         requestUrl.pathname.startsWith('/v1/workflows/recommendations/state/')) {
       await handleWorkflowRecommendationState(request, response, requestUrl, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/workflows/recommendations/history') {
+      await handleWorkflowRecommendationHistory(request, response, requestUrl, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/workflows/recommendations/batch') {
+      await handleWorkflowRecommendationBatch(request, response, requestUrl, session);
       return;
     }
 
@@ -2136,6 +2283,12 @@ export async function handleApiRequest(request, response) {
       return;
     }
 
+    // ── Ministry plan: church identity (must be before /v1/practices/ catch-all)
+    if (/^\/v1\/practices\/[^/]+\/church-identity$/.test(requestUrl.pathname)) {
+      await handleChurchIdentity(request, response, requestUrl, session);
+      return;
+    }
+
     if (requestUrl.pathname.startsWith('/v1/practices/')) {
       await handlePracticeById(request, response, requestUrl, session);
       return;
@@ -2196,13 +2349,99 @@ export async function handleApiRequest(request, response) {
       return;
     }
 
+    if (requestUrl.pathname === '/v1/practice/faith-profile') {
+      await handlePracticeFaithProfile(request, response, session);
+      return;
+    }
+
+    // ─── Onboarding wizard ──────────────────────────────────────────────────
+    if (requestUrl.pathname === '/v1/onboarding/status') {
+      await handleOnboarding(request, response, session, 'status');
+      return;
+    }
+    if (requestUrl.pathname === '/v1/onboarding/step/1') {
+      await handleOnboarding(request, response, session, 'step1');
+      return;
+    }
+    if (requestUrl.pathname === '/v1/onboarding/step/2') {
+      await handleOnboarding(request, response, session, 'step2');
+      return;
+    }
+    if (requestUrl.pathname === '/v1/onboarding/step/3') {
+      await handleOnboarding(request, response, session, 'step3');
+      return;
+    }
+    if (requestUrl.pathname === '/v1/onboarding/step/4') {
+      await handleOnboarding(request, response, session, 'step4');
+      return;
+    }
+    if (requestUrl.pathname === '/v1/onboarding/complete') {
+      await handleOnboarding(request, response, session, 'complete');
+      return;
+    }
+
     if (/^\/v1\/staff\/[^/]+\/faith-profile$/.test(requestUrl.pathname)) {
       await handleStaffFaithProfile(request, response, requestUrl, session);
       return;
     }
 
+    // ── Staff scheduling profile (must be before /v1/staff/ catch-all) ───────
+    if (/^\/v1\/staff\/[^/]+\/scheduling-profile$/.test(requestUrl.pathname)) {
+      const schedulingProfileMatch = requestUrl.pathname.match(/^\/v1\/staff\/([^/]+)\/scheduling-profile$/);
+      await handleCounselorSchedulingProfile(request, response, schedulingProfileMatch[1], session);
+      return;
+    }
+
+    // ── AACC CEU tracking (must be before /v1/staff/ catch-all) ─────────────
+    if (/^\/v1\/staff\/[^/]+\/aacc-credential$/.test(requestUrl.pathname)) {
+      await handleAaccCredential(request, response, requestUrl, session);
+      return;
+    }
+
+    if (/^\/v1\/staff\/[^/]+\/aacc-ceu\/progress$/.test(requestUrl.pathname)) {
+      await handleAaccCeuProgress(request, response, requestUrl, session);
+      return;
+    }
+
+    if (/^\/v1\/staff\/[^/]+\/aacc-ceu\/renewal-report$/.test(requestUrl.pathname)) {
+      await handleAaccRenewalReport(request, response, requestUrl, session);
+      return;
+    }
+
+    if (/^\/v1\/staff\/[^/]+\/aacc-ceu\/entries\/[^/]+$/.test(requestUrl.pathname)) {
+      await handleAaccCeuEntryById(request, response, requestUrl, session);
+      return;
+    }
+
+    if (/^\/v1\/staff\/[^/]+\/aacc-ceu\/entries$/.test(requestUrl.pathname)) {
+      await handleAaccCeuEntries(request, response, requestUrl, session);
+      return;
+    }
+
     if (requestUrl.pathname.startsWith('/v1/staff/')) {
       await handleStaffById(request, response, requestUrl, session);
+      return;
+    }
+
+    // ─── Ministry plan summary ────────────────────────────────────────────────
+    if (requestUrl.pathname === '/v1/ministry/summary') {
+      await handleMinistrySummary(request, response, session);
+      return;
+    }
+
+    // ─── Subscription plan limits + UI persona ────────────────────────────────
+    if (requestUrl.pathname === '/v1/subscription/usage') {
+      await handleSubscriptionUsage(request, response, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/tenant/ui-persona') {
+      await handleTenantUiPersona(request, response, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/tenant/persona-dismiss') {
+      await handleTenantPersonaDismiss(request, response, session);
       return;
     }
 
@@ -2235,6 +2474,10 @@ export async function handleApiRequest(request, response) {
     }
     if (requestUrl.pathname.startsWith('/v1/time-entries/') && requestUrl.pathname.endsWith('/verify')) {
       await handleVerifyTimeEntry(request, response, requestUrl, session);
+      return;
+    }
+    if (/^\/v1\/time-entries\/[^/]+\/aacc-ceu$/.test(requestUrl.pathname)) {
+      await handleTimeEntryAaccCeu(request, response, requestUrl, session);
       return;
     }
     if (requestUrl.pathname.startsWith('/v1/time-entries/')) {
@@ -2428,6 +2671,17 @@ async function handleAuthMe(request, response, session) {
     writeJson(response, 401, { error: 'Authentication required' });
     return;
   }
+
+  // Fetch tenant ui_persona for all authenticated callers
+  let uiPersona = 'practice';
+  if (process.env.DB_NAME) {
+    const [tenantRows] = await pool.query(
+      'SELECT ui_persona FROM tenants WHERE id = ? LIMIT 1',
+      [session.tenant_id],
+    );
+    uiPersona = tenantRows?.[0]?.ui_persona ?? 'practice';
+  }
+
   if (session.role === 'client') {
     const [rows] = await pool.query(
       'SELECT pa.email_enc, c.first_name_enc, c.last_name_enc FROM portal_accounts pa ' +
@@ -2441,6 +2695,7 @@ async function handleAuthMe(request, response, session) {
       portalAccountId: session.portal_account_id,
       tenantId: session.tenant_id,
       role: session.role,
+      uiPersona,
       name: row ? `${decrypt(row.first_name_enc)} ${decrypt(row.last_name_enc)}` : null,
       email: row?.email_enc ? decrypt(row.email_enc) : null,
     });
@@ -2458,6 +2713,7 @@ async function handleAuthMe(request, response, session) {
     staffAccountId: session.staff_account_id,
     tenantId: session.tenant_id,
     role: session.role,
+    uiPersona,
     name: row ? `${decrypt(row.first_name_enc)} ${decrypt(row.last_name_enc)}` : null,
     email: row?.email_enc ? decrypt(row.email_enc) : null,
   });
@@ -2581,6 +2837,11 @@ async function handleClientsCollection(request, response, requestUrl, session) {
   const tenantId = callerTenant(request, session);
 
   if (process.env.DB_NAME) {
+    const clientLimitCheck = await checkLimitBlock(tenantId, 'client', pool);
+    if (clientLimitCheck.blocked) {
+      writeJson(response, 422, { error: 'client_limit_exceeded', reason: clientLimitCheck.reason });
+      return;
+    }
     const id = genId('c');
     const faithBackground = sanitizeStr(payload.faithBackground, 500) ?? 'Undeclared';
     await pool.query(
@@ -8038,6 +8299,12 @@ async function handleInvoices(request, response, requestUrl, session) {
 
     if (process.env.DB_NAME) {
       const tenantId = callerTenant(request, session);
+      // Scholarship clients may not be invoiced
+      const isScholarship = await checkScholarshipBlock(tenantId, clientId, pool);
+      if (isScholarship) {
+        writeJson(response, 422, { error: 'scholarship_client_no_invoice' });
+        return;
+      }
       const [clientRows] = await pool.query('SELECT * FROM clients WHERE id = ? AND tenant_id = ?', [clientId, tenantId]);
       if (!clientRows[0]) { writeJson(response, 400, { error: 'Valid clientId is required' }); return; }
       const totals = computeInvoiceTotals(lineItems, payload.adjustments, 0);
@@ -11269,8 +11536,8 @@ async function handleOfferingsSummary(request, response, session) {
 const VALID_WF_STATUSES = new Set(['pending', 'complete', 'deferred', 'hidden']);
 
 async function handleWorkflowRecommendationState(request, response, requestUrl, session) {
-  if (!session || session.role === 'client') {
-    writeJson(response, session ? 403 : 401, { error: session ? 'Staff access required' : 'Authentication required' });
+  if (callerRole(request, session) === 'client') {
+    writeJson(response, 403, { error: 'Staff access required' });
     return;
   }
 
@@ -11396,17 +11663,25 @@ async function handleWorkflowRecommendationState(request, response, requestUrl, 
     }
 
     stateId = genId('wfs');
+
+    // Capture old status before upsert for history
+    const [prevRows] = await pool.query(
+      'SELECT status FROM workflow_recommendation_states WHERE tenant_id = ? AND client_id = ? AND rule_id = ?',
+      [tenantId, client.id, ruleId],
+    );
+    const oldStatus = prevRows[0]?.status ?? null;
+
     await pool.query(
       `INSERT INTO workflow_recommendation_states
          (id, tenant_id, practice_id, client_id, counselor_id, rule_id, status, deferred_until, notes_enc, expires_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE
-         counselor_id   = VALUES(counselor_id),
-         status         = VALUES(status),
-         deferred_until = VALUES(deferred_until),
-         notes_enc      = VALUES(notes_enc),
+       ON CONFLICT (tenant_id, client_id, rule_id) DO UPDATE SET
+         counselor_id   = EXCLUDED.counselor_id,
+         status         = EXCLUDED.status,
+         deferred_until = EXCLUDED.deferred_until,
+         notes_enc      = EXCLUDED.notes_enc,
          actioned_at    = NOW(),
-         expires_at     = VALUES(expires_at)`,
+         expires_at     = EXCLUDED.expires_at`,
       [stateId, tenantId, practiceId, client.id, counselorId, ruleId, status, deferredUntil, notesEnc, expiresAt],
     );
 
@@ -11416,6 +11691,16 @@ async function handleWorkflowRecommendationState(request, response, requestUrl, 
       [tenantId, client.id, ruleId],
     );
     stateId = updated[0]?.id ?? stateId;
+
+    // Append-only history row (only write if status actually changed)
+    if (oldStatus !== status) {
+      await pool.query(
+        `INSERT INTO workflow_recommendation_state_history
+           (id, tenant_id, client_id, counselor_id, rule_id, old_status, new_status)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [genId('wfh'), tenantId, client.id, counselorId, ruleId, oldStatus, status],
+      );
+    }
 
   } else {
     stateId = genId('wfs');
@@ -11431,6 +11716,152 @@ async function handleWorkflowRecommendationState(request, response, requestUrl, 
     deferredUntil: deferredUntil ?? null,
     actionedAt: new Date().toISOString(),
   });
+}
+
+// GET /v1/workflows/recommendations/history?clientId=X[&ruleId=Y]
+async function handleWorkflowRecommendationHistory(request, response, requestUrl, session) {
+  if (callerRole(request, session) === 'client') {
+    writeJson(response, 403, { error: 'Staff access required' });
+    return;
+  }
+  if (request.method !== 'GET') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const tenantId = callerTenant(request, session);
+  const clientId = requestUrl.searchParams.get('clientId');
+  const ruleId   = requestUrl.searchParams.get('ruleId') ?? null;
+
+  if (!clientId) {
+    writeJson(response, 400, { error: 'clientId query parameter is required' });
+    return;
+  }
+  const client = await resolveAuthorizedClient(request, response, clientId, session, 'faith.workflow.history.read');
+  if (!client) return;
+
+  if (process.env.DB_NAME) {
+    const params = [tenantId, client.id];
+    let sql = `SELECT id, rule_id, old_status, new_status, counselor_id, changed_at
+               FROM workflow_recommendation_state_history
+               WHERE tenant_id = ? AND client_id = ?`;
+    if (ruleId) {
+      sql += ' AND rule_id = ?';
+      params.push(sanitizeStr(ruleId, 128));
+    }
+    sql += ' ORDER BY changed_at DESC LIMIT 200';
+    const [rows] = await pool.query(sql, params);
+    const history = rows.map((r) => ({
+      id:         r.id,
+      ruleId:     r.rule_id,
+      oldStatus:  r.old_status ?? null,
+      newStatus:  r.new_status,
+      counselorId: r.counselor_id,
+      changedAt:  r.changed_at,
+    }));
+    await emitAudit(request, 'faith.workflow.history.read', 'workflow_recommendation_state_history', client.id, session);
+    writeJson(response, 200, { history });
+  } else {
+    writeJson(response, 200, { history: [] });
+  }
+}
+
+// PATCH /v1/workflows/recommendations/batch
+// Body: { clientId, rules: [{ ruleId, status, deferredUntil? }] }
+async function handleWorkflowRecommendationBatch(request, response, requestUrl, session) {
+  if (callerRole(request, session) === 'client') {
+    writeJson(response, 403, { error: 'Staff access required' });
+    return;
+  }
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const tenantId = callerTenant(request, session);
+  const payload  = await readJsonBody(request);
+  const clientId = sanitizeStr(payload.clientId, 64);
+  const rules    = Array.isArray(payload.rules) ? payload.rules : null;
+
+  if (!clientId || !rules || rules.length === 0) {
+    writeJson(response, 400, { error: 'clientId and non-empty rules array are required' });
+    return;
+  }
+  if (rules.length > 100) {
+    writeJson(response, 400, { error: 'rules array must not exceed 100 items' });
+    return;
+  }
+
+  const client = await resolveAuthorizedClient(request, response, clientId, session, 'faith.workflow.batch.set');
+  if (!client) return;
+
+  for (const rule of rules) {
+    if (!VALID_WF_STATUSES.has(sanitizeStr(rule.status, 16))) {
+      writeJson(response, 400, { error: `Invalid status '${rule.status}' for rule '${rule.ruleId}'` });
+      return;
+    }
+  }
+
+  let updatedCount = 0;
+
+  if (process.env.DB_NAME) {
+    const counselorId = await resolveCallerStaffMemberId(session);
+    if (!counselorId) {
+      writeJson(response, 403, { error: 'Staff member record required to record workflow actions' });
+      return;
+    }
+
+    for (const rule of rules) {
+      const ruleId   = sanitizeStr(rule.ruleId, 128);
+      const status   = sanitizeStr(rule.status, 16);
+      const deferredUntil = rule.deferredUntil ? sanitizeStr(rule.deferredUntil, 16) : null;
+
+      let expiresAt = null;
+      if (status === 'hidden') {
+        const d = new Date();
+        d.setDate(d.getDate() + 30);
+        expiresAt = d.toISOString().slice(0, 19).replace('T', ' ');
+      } else if (status === 'deferred' && deferredUntil) {
+        expiresAt = deferredUntil + ' 23:59:59';
+      }
+
+      const [prevRows] = await pool.query(
+        'SELECT status FROM workflow_recommendation_states WHERE tenant_id = ? AND client_id = ? AND rule_id = ?',
+        [tenantId, client.id, ruleId],
+      );
+      const oldStatus = prevRows[0]?.status ?? null;
+
+      const stateId = genId('wfs');
+      await pool.query(
+        `INSERT INTO workflow_recommendation_states
+           (id, tenant_id, practice_id, client_id, counselor_id, rule_id, status, deferred_until, notes_enc, expires_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
+         ON CONFLICT (tenant_id, client_id, rule_id) DO UPDATE SET
+           counselor_id   = EXCLUDED.counselor_id,
+           status         = EXCLUDED.status,
+           deferred_until = EXCLUDED.deferred_until,
+           notes_enc      = EXCLUDED.notes_enc,
+           actioned_at    = NOW(),
+           expires_at     = EXCLUDED.expires_at`,
+        [stateId, tenantId, tenantId, client.id, counselorId, ruleId, status, deferredUntil, expiresAt],
+      );
+
+      if (oldStatus !== status) {
+        await pool.query(
+          `INSERT INTO workflow_recommendation_state_history
+             (id, tenant_id, client_id, counselor_id, rule_id, old_status, new_status)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [genId('wfh'), tenantId, client.id, counselorId, ruleId, oldStatus, status],
+        );
+      }
+      updatedCount++;
+    }
+  } else {
+    updatedCount = rules.length;
+  }
+
+  await emitAudit(request, 'faith.workflow.batch.set', 'workflow_recommendation_state', client.id, session);
+  writeJson(response, 200, { updated: updatedCount });
 }
 
 async function handleFaithOverview(request, response, requestUrl) {
@@ -13718,6 +14149,11 @@ async function handleStaffCollection(request, response, session) {
 
   if (process.env.DB_NAME) {
     const tenantId = callerTenant(request, session);
+    const limitCheck = await checkLimitBlock(tenantId, 'counselor', pool);
+    if (limitCheck.blocked) {
+      writeJson(response, 422, { error: 'counselor_limit_exceeded', reason: limitCheck.reason });
+      return;
+    }
     const item = await createStaff({
       id: genId('s'),
       tenantId,
@@ -14370,6 +14806,711 @@ async function handleStaffEmployment(request, response, requestUrl, session) {
   writeJson(response, 503, { error: 'Database not configured' });
 }
 
+// ─── /v1/practice/faith-profile ──────────────────────────────────────────────
+
+const ALLOWED_TRADITIONS = new Set([
+  'broadly_christian', 'evangelical_baptist', 'methodist', 'presbyterian_reformed',
+  'lutheran', 'anglican_episcopal', 'pentecostal_charismatic', 'nondenominational',
+  'catholic_roman', 'catholic_eastern', 'orthodox_eastern', 'orthodox_oriental',
+  'black_church', 'mennonite_anabaptist', 'messianic_jewish',
+]);
+
+const ALLOWED_INTEGRATION_LEVELS = new Set(['none', 'open', 'preferred', 'required']);
+
+function practiceFaithProfileItem(row) {
+  return {
+    tradition:                  row.tradition,
+    vocabularyPreset:           typeof row.vocabulary_preset === 'string'
+      ? JSON.parse(row.vocabulary_preset)
+      : (row.vocabulary_preset ?? {}),
+    defaultIntegrationLevel:    row.default_integration_level,
+    contentGuidelinesConfigured: row.content_guidelines_enc != null,
+    updatedAt:                  row.updated_at,
+  };
+}
+
+async function handlePracticeFaithProfile(request, response, session) {
+  const role     = callerRole(request, session);
+  const tenantId = callerTenant(request, session);
+
+  // Deny unauthenticated callers
+  if (!role) {
+    writeJson(response, 401, { error: 'Authentication required' });
+    return;
+  }
+
+  if (request.method === 'GET') {
+    // Allowed roles: practice_admin, practice_owner, counselor — deny client
+    if (role === 'client') {
+      await emitAudit(request, 'practice.faith_profile.read.denied', 'practice_faith_profile', tenantId, session);
+      writeJson(response, 403, { error: 'Staff access required' });
+      return;
+    }
+
+    if (!process.env.DB_NAME) {
+      writeJson(response, 200, { item: null });
+      return;
+    }
+
+    const [rows] = await pool.query(
+      'SELECT * FROM practice_faith_profiles WHERE tenant_id = ? LIMIT 1',
+      [tenantId],
+    );
+    const row = rows[0] ?? null;
+    await emitAudit(request, 'practice.faith_profile.read', 'practice_faith_profile', tenantId, session);
+    writeJson(response, 200, { item: row ? practiceFaithProfileItem(row) : null });
+    return;
+  }
+
+  if (request.method === 'PUT') {
+    // Allowed roles: practice_admin, practice_owner only
+    if (role !== 'practice_admin' && role !== 'practice_owner') {
+      await emitAudit(request, 'practice.faith_profile.upsert.denied', 'practice_faith_profile', tenantId, session);
+      writeJson(response, 403, { error: 'Admin role required' });
+      return;
+    }
+
+    const payload = await readJsonBody(request);
+
+    // Validate tradition
+    if (!payload.tradition) {
+      writeJson(response, 400, { error: 'tradition is required' });
+      return;
+    }
+    if (!ALLOWED_TRADITIONS.has(payload.tradition)) {
+      writeJson(response, 400, { error: `tradition must be one of the allowed values` });
+      return;
+    }
+
+    // Validate vocabularyPreset
+    if (!payload.vocabularyPreset || typeof payload.vocabularyPreset !== 'object' || Array.isArray(payload.vocabularyPreset)) {
+      writeJson(response, 400, { error: 'vocabularyPreset is required and must be an object' });
+      return;
+    }
+    const vp = payload.vocabularyPreset;
+    if (!Array.isArray(vp.prayerTerms) || vp.prayerTerms.length < 1 || vp.prayerTerms.length > 5) {
+      writeJson(response, 400, { error: 'vocabularyPreset.prayerTerms must be an array of 1–5 items' });
+      return;
+    }
+    if (!Array.isArray(vp.scriptureTerms) || vp.scriptureTerms.length < 1 || vp.scriptureTerms.length > 5) {
+      writeJson(response, 400, { error: 'vocabularyPreset.scriptureTerms must be an array of 1–5 items' });
+      return;
+    }
+    if (!Array.isArray(vp.communityTerms) || vp.communityTerms.length < 1 || vp.communityTerms.length > 5) {
+      writeJson(response, 400, { error: 'vocabularyPreset.communityTerms must be an array of 1–5 items' });
+      return;
+    }
+    if (typeof vp.spiritualLeaderTitle !== 'string' || vp.spiritualLeaderTitle.length > 64) {
+      writeJson(response, 400, { error: 'vocabularyPreset.spiritualLeaderTitle must be a string max 64 chars' });
+      return;
+    }
+    if (typeof vp.practiceType !== 'string' || vp.practiceType.length > 64) {
+      writeJson(response, 400, { error: 'vocabularyPreset.practiceType must be a string max 64 chars' });
+      return;
+    }
+
+    // Validate defaultIntegrationLevel
+    if (!payload.defaultIntegrationLevel) {
+      writeJson(response, 400, { error: 'defaultIntegrationLevel is required' });
+      return;
+    }
+    if (!ALLOWED_INTEGRATION_LEVELS.has(payload.defaultIntegrationLevel)) {
+      writeJson(response, 400, { error: `defaultIntegrationLevel must be one of: none, open, preferred, required` });
+      return;
+    }
+
+    // Validate contentGuidelines (optional)
+    if (payload.contentGuidelines != null) {
+      if (typeof payload.contentGuidelines !== 'string' || payload.contentGuidelines.length > 4000) {
+        writeJson(response, 400, { error: 'contentGuidelines must be a string max 4000 chars' });
+        return;
+      }
+    }
+
+    const tradition             = sanitizeStr(payload.tradition, 64);
+    const defaultIntegrationLevel = sanitizeStr(payload.defaultIntegrationLevel, 32);
+    const vocabularyPresetJson  = JSON.stringify({
+      prayerTerms:          vp.prayerTerms.map((t) => sanitizeStr(String(t), 64)),
+      scriptureTerms:       vp.scriptureTerms.map((t) => sanitizeStr(String(t), 64)),
+      communityTerms:       vp.communityTerms.map((t) => sanitizeStr(String(t), 64)),
+      spiritualLeaderTitle: sanitizeStr(vp.spiritualLeaderTitle, 64),
+      practiceType:         sanitizeStr(vp.practiceType, 64),
+    });
+    const contentGuidelinesEnc = payload.contentGuidelines
+      ? encrypt(payload.contentGuidelines)
+      : null;
+    const updatedBy = callerIdentity(request, session)?.staffId ?? 'system';
+
+    if (!process.env.DB_NAME) {
+      // No-DB mode: return the shape the caller would receive after a real upsert
+      const syntheticRow = {
+        tradition,
+        vocabulary_preset:         JSON.parse(vocabularyPresetJson),
+        default_integration_level: defaultIntegrationLevel,
+        content_guidelines_enc:    contentGuidelinesEnc,
+        updated_at:                new Date().toISOString(),
+      };
+      writeJson(response, 200, { item: practiceFaithProfileItem(syntheticRow) });
+      return;
+    }
+
+    // Look up existing row id to preserve it on upsert
+    const [existingRows] = await pool.query(
+      'SELECT id FROM practice_faith_profiles WHERE tenant_id = ? LIMIT 1',
+      [tenantId],
+    );
+    const id = existingRows[0]?.id ?? crypto.randomUUID();
+
+    await pool.query(
+      `INSERT INTO practice_faith_profiles
+         (id, tenant_id, tradition, vocabulary_preset, content_guidelines_enc, default_integration_level, updated_at, updated_by)
+       VALUES (?, ?, ?, ?, ?, ?, NOW(), ?)
+       ON CONFLICT (tenant_id) DO UPDATE SET
+         tradition                 = EXCLUDED.tradition,
+         vocabulary_preset         = EXCLUDED.vocabulary_preset,
+         content_guidelines_enc    = EXCLUDED.content_guidelines_enc,
+         default_integration_level = EXCLUDED.default_integration_level,
+         updated_at                = NOW(),
+         updated_by                = EXCLUDED.updated_by`,
+      [id, tenantId, tradition, vocabularyPresetJson, contentGuidelinesEnc, defaultIntegrationLevel, updatedBy],
+    );
+
+    const [updatedRows] = await pool.query(
+      'SELECT * FROM practice_faith_profiles WHERE tenant_id = ? LIMIT 1',
+      [tenantId],
+    );
+    const updatedRow = updatedRows[0];
+    await emitAudit(request, 'practice.faith_profile.upsert', 'practice_faith_profile', tenantId, session);
+    writeJson(response, 200, { item: practiceFaithProfileItem(updatedRow) });
+    return;
+  }
+
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+// ─── /v1/onboarding/* ────────────────────────────────────────────────────────
+
+async function handleOnboarding(request, response, session, step) {
+  const role     = callerRole(request, session);
+  const tenantId = callerTenant(request, session);
+
+  // Auth guard — admin only
+  if (!['practice_owner', 'practice_admin'].includes(role)) {
+    // No role at all → not authenticated; role present but insufficient → forbidden
+    const isAuthenticated = Boolean(role);
+    writeJson(response, isAuthenticated ? 403 : 401, {
+      error: isAuthenticated ? 'Admin access required' : 'Authentication required',
+    });
+    return;
+  }
+
+  // GET /v1/onboarding/status
+  if (step === 'status') {
+    if (request.method !== 'GET') {
+      writeJson(response, 405, { error: 'Method not allowed' });
+      return;
+    }
+
+    if (!process.env.DB_NAME) {
+      writeJson(response, 200, { onboardingCompleted: false, stepsCompleted: {}, shouldShowWizard: true });
+      return;
+    }
+
+    const status = await getOnboardingStatus(pool, tenantId);
+    writeJson(response, 200, {
+      ...status,
+      shouldShowWizard: !status.onboardingCompleted,
+    });
+    return;
+  }
+
+  // POST /v1/onboarding/complete
+  if (step === 'complete') {
+    if (request.method !== 'POST') {
+      writeJson(response, 405, { error: 'Method not allowed' });
+      return;
+    }
+
+    if (process.env.DB_NAME) {
+      await completeOnboarding(pool, tenantId);
+    }
+    await emitAudit(request, 'onboarding.complete', 'tenant', tenantId, session);
+    writeJson(response, 200, { completed: true });
+    return;
+  }
+
+  // PATCH only for step routes
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+
+  // ── Step 1: practice name + timezone ──────────────────────────────────────
+  if (step === 'step1') {
+    const practiceName = typeof payload.practiceName === 'string' ? payload.practiceName.trim() : '';
+    if (!practiceName || practiceName.length > 255) {
+      writeJson(response, 400, { error: 'practiceName is required (max 255 characters)' });
+      return;
+    }
+    const timezone = typeof payload.timezone === 'string' ? payload.timezone.trim() : '';
+    if (!ALLOWED_TIMEZONES.has(timezone)) {
+      writeJson(response, 400, { error: 'timezone must be a supported IANA timezone' });
+      return;
+    }
+
+    if (process.env.DB_NAME) {
+      await savePracticeName(pool, tenantId, practiceName, timezone);
+      await markStepComplete(pool, tenantId, 'step1');
+    }
+    const prevRoute = request.route;
+    request.route = 'onboarding_wizard';
+    await emitAudit(request, 'practice.record.update', 'practice', tenantId, session);
+    request.route = prevRoute;
+    writeJson(response, 200, { ok: true });
+    return;
+  }
+
+  // ── Step 2: counselor profile ─────────────────────────────────────────────
+  if (step === 'step2') {
+    const firstName = typeof payload.firstName === 'string' ? payload.firstName.trim() : '';
+    const lastName  = typeof payload.lastName  === 'string' ? payload.lastName.trim()  : '';
+    if (!firstName) {
+      writeJson(response, 400, { error: 'firstName is required' });
+      return;
+    }
+    if (!lastName) {
+      writeJson(response, 400, { error: 'lastName is required' });
+      return;
+    }
+    const licenseType = typeof payload.licenseType === 'string' ? payload.licenseType.trim() : '';
+    if (!ALLOWED_LICENSE_TYPES_ONBOARDING.has(licenseType)) {
+      writeJson(response, 400, { error: 'licenseType must be a supported value' });
+      return;
+    }
+    const faithTradition = typeof payload.faithTradition === 'string' ? payload.faithTradition.trim() : '';
+    if (!ALLOWED_TRADITIONS_ONBOARDING.has(faithTradition)) {
+      writeJson(response, 400, { error: 'faithTradition must be a supported tradition value' });
+      return;
+    }
+    if (payload.bio != null) {
+      if (typeof payload.bio !== 'string' || payload.bio.length > 2000) {
+        writeJson(response, 400, { error: 'bio must be a string max 2000 characters' });
+        return;
+      }
+    }
+
+    if (process.env.DB_NAME) {
+      const staffId = callerIdentity(request, session)?.staffAccountId ?? 'unknown';
+      await saveCounselorProfile(pool, tenantId, staffId, {
+        firstName,
+        lastName,
+        licenseType,
+        faithTradition,
+        bio: payload.bio ?? null,
+      }, encrypt, null);
+      await markStepComplete(pool, tenantId, 'step2');
+    }
+    const prevRoute = request.route;
+    request.route = 'onboarding_wizard';
+    await emitAudit(request, 'counselor.record.update', 'staff_member', tenantId, session);
+    request.route = prevRoute;
+    writeJson(response, 200, { ok: true });
+    return;
+  }
+
+  // ── Step 3: first client ──────────────────────────────────────────────────
+  if (step === 'step3') {
+    if (payload.skip === true) {
+      writeJson(response, 200, { skipped: true });
+      return;
+    }
+
+    const firstName = typeof payload.firstName === 'string' ? payload.firstName.trim() : '';
+    const lastName  = typeof payload.lastName  === 'string' ? payload.lastName.trim()  : '';
+    if (!firstName) {
+      writeJson(response, 400, { error: 'firstName is required' });
+      return;
+    }
+    if (!lastName) {
+      writeJson(response, 400, { error: 'lastName is required' });
+      return;
+    }
+    if (payload.email != null && typeof payload.email !== 'string') {
+      writeJson(response, 400, { error: 'email must be a string' });
+      return;
+    }
+    if (payload.pronouns != null && typeof payload.pronouns !== 'string') {
+      writeJson(response, 400, { error: 'pronouns must be a string' });
+      return;
+    }
+
+    let clientId;
+    if (process.env.DB_NAME) {
+      clientId = await createFirstClient(pool, tenantId, {
+        firstName,
+        lastName,
+        email: payload.email ?? null,
+        pronouns: payload.pronouns ?? null,
+      }, encrypt);
+      await markStepComplete(pool, tenantId, 'step3');
+    } else {
+      clientId = 'preview-client-id';
+    }
+    const prevRoute = request.route;
+    request.route = 'onboarding_wizard';
+    await emitAudit(request, 'client.record.create', 'client', tenantId, session);
+    request.route = prevRoute;
+    writeJson(response, 200, { clientId });
+    return;
+  }
+
+  // ── Step 4: first appointment ─────────────────────────────────────────────
+  if (step === 'step4') {
+    if (payload.skip === true) {
+      writeJson(response, 200, { skipped: true });
+      return;
+    }
+
+    const clientId = typeof payload.clientId === 'string' ? payload.clientId.trim() : '';
+    if (!clientId) {
+      writeJson(response, 400, { error: 'clientId is required' });
+      return;
+    }
+    const date = typeof payload.date === 'string' ? payload.date.trim() : '';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(Date.parse(date))) {
+      writeJson(response, 400, { error: 'date must be a valid ISO date (YYYY-MM-DD)' });
+      return;
+    }
+    const time = typeof payload.time === 'string' ? payload.time.trim() : '';
+    if (!/^\d{2}:\d{2}$/.test(time)) {
+      writeJson(response, 400, { error: 'time must be in HH:MM format' });
+      return;
+    }
+    const apptType = typeof payload.apptType === 'string' ? payload.apptType.trim() : '';
+    if (!apptType) {
+      writeJson(response, 400, { error: 'apptType is required' });
+      return;
+    }
+    const durationMinutes = Number(payload.durationMinutes);
+    if (!Number.isInteger(durationMinutes) || durationMinutes <= 0) {
+      writeJson(response, 400, { error: 'durationMinutes must be a positive integer' });
+      return;
+    }
+
+    let appointmentId;
+    if (process.env.DB_NAME) {
+      const staffId = callerIdentity(request, session)?.staffAccountId ?? 'unknown';
+      appointmentId = await createFirstAppointment(pool, tenantId, staffId, {
+        clientId,
+        date,
+        time,
+        apptType,
+        durationMinutes,
+      });
+      await markStepComplete(pool, tenantId, 'step4');
+    } else {
+      appointmentId = 'preview-appointment-id';
+    }
+    const prevRoute = request.route;
+    request.route = 'onboarding_wizard';
+    await emitAudit(request, 'appointment.record.create', 'appointment', tenantId, session);
+    request.route = prevRoute;
+    writeJson(response, 200, { appointmentId });
+    return;
+  }
+
+  writeJson(response, 404, { error: 'Not found' });
+}
+
+// ─── /v1/staff/:staffId/scheduling-profile ────────────────────────────────────
+
+async function handleCounselorSchedulingProfile(request, response, staffId, session) {
+  const role     = callerRole(request, session);
+  const tenantId = callerTenant(request, session);
+
+  if (!role) {
+    writeJson(response, 401, { error: 'Authentication required' });
+    return;
+  }
+
+  // Deny client role entirely
+  if (role === 'client') {
+    writeJson(response, 403, { error: 'Staff access required' });
+    return;
+  }
+
+  const targetStaffId = sanitizeStr(staffId, 64);
+  if (!targetStaffId) {
+    writeJson(response, 400, { error: 'staffId is required' });
+    return;
+  }
+
+  if (request.method === 'GET') {
+    const profile = await getSchedulingProfile(pool, tenantId, targetStaffId);
+    await emitAudit(request, 'self_scheduling.profile.read', 'counselor_scheduling_profile', targetStaffId, session);
+    writeJson(response, 200, { item: profile });
+    return;
+  }
+
+  if (request.method === 'PUT') {
+    // Role: counselor/intern may only update own profile; admin/owner may update any
+    const actorStaffId  = await resolveCallerStaffMemberId(session) ?? (request.headers['x-staff-id'] || null);
+    const isAdminCaller = isAdminRole(role);
+
+    if (!isAdminCaller && actorStaffId !== targetStaffId) {
+      await emitAudit(request, 'self_scheduling.profile.update.denied', 'counselor_scheduling_profile', targetStaffId, session);
+      writeJson(response, 403, { error: 'Counselors may only manage their own scheduling profile' });
+      return;
+    }
+
+    const payload = await readJsonBody(request);
+
+    // Validate allowlisted fields
+    if (payload.slotDurationMinutes !== undefined && !VALID_SLOT_DURATIONS.has(Number(payload.slotDurationMinutes))) {
+      writeJson(response, 400, { error: `slotDurationMinutes must be one of: ${[...VALID_SLOT_DURATIONS].join(', ')}` });
+      return;
+    }
+    if (payload.bufferMinutes !== undefined && !VALID_BUFFERS.has(Number(payload.bufferMinutes))) {
+      writeJson(response, 400, { error: `bufferMinutes must be one of: ${[...VALID_BUFFERS].join(', ')}` });
+      return;
+    }
+    if (payload.advanceBookingDays !== undefined && !VALID_ADVANCE_DAYS.has(Number(payload.advanceBookingDays))) {
+      writeJson(response, 400, { error: `advanceBookingDays must be one of: ${[...VALID_ADVANCE_DAYS].join(', ')}` });
+      return;
+    }
+    if (payload.minNoticeHours !== undefined && !VALID_NOTICE_HOURS.has(Number(payload.minNoticeHours))) {
+      writeJson(response, 400, { error: `minNoticeHours must be one of: ${[...VALID_NOTICE_HOURS].join(', ')}` });
+      return;
+    }
+    if (payload.availableApptTypes !== undefined && !Array.isArray(payload.availableApptTypes)) {
+      writeJson(response, 400, { error: 'availableApptTypes must be an array' });
+      return;
+    }
+    if (payload.availabilityBlocks !== undefined && !Array.isArray(payload.availabilityBlocks)) {
+      writeJson(response, 400, { error: 'availabilityBlocks must be an array' });
+      return;
+    }
+
+    try {
+      const profile = await upsertSchedulingProfile(pool, tenantId, targetStaffId, actorStaffId, role, payload);
+      await emitAudit(request, 'self_scheduling.profile.update', 'counselor_scheduling_profile', targetStaffId, session);
+      writeJson(response, 200, { item: profile });
+    } catch (err) {
+      if (err instanceof SelfSchedulingError) {
+        await emitAudit(request, 'self_scheduling.profile.update.denied', 'counselor_scheduling_profile', targetStaffId, session);
+        writeJson(response, err.statusCode, { error: err.message });
+        return;
+      }
+      throw err;
+    }
+    return;
+  }
+
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+// ─── /v1/clients/:clientId/booking-authorization ──────────────────────────────
+
+async function handleClientBookingAuthorization(request, response, clientId, session) {
+  const role     = callerRole(request, session);
+  const tenantId = callerTenant(request, session);
+
+  if (!role) {
+    writeJson(response, 401, { error: 'Authentication required' });
+    return;
+  }
+
+  // Deny client role entirely
+  if (role === 'client') {
+    await emitAudit(request, 'self_scheduling.authorization.read.denied', 'client_booking_authorization', clientId, session);
+    writeJson(response, 403, { error: 'Staff access required' });
+    return;
+  }
+
+  const targetClientId = sanitizeStr(clientId, 64);
+  if (!targetClientId) {
+    writeJson(response, 400, { error: 'clientId is required' });
+    return;
+  }
+
+  const counselorId = sanitizeStr(String(new URL(request.url ?? '/', 'http://x').searchParams.get('counselorId') ?? ''), 64) || null;
+
+  if (request.method === 'GET') {
+    if (!counselorId) {
+      writeJson(response, 400, { error: 'counselorId query parameter is required' });
+      return;
+    }
+    const auth = await getBookingAuthorization(pool, tenantId, targetClientId, counselorId);
+    await emitAudit(request, 'self_scheduling.authorization.read', 'client_booking_authorization', targetClientId, session);
+    writeJson(response, 200, { item: auth });
+    return;
+  }
+
+  if (request.method === 'PUT') {
+    // Only admin/owner and counselor/intern may write; scheduler_biller may not
+    const allowedWriteRoles = new Set(['practice_admin', 'practice_owner', 'platform_admin', 'counselor', 'intern']);
+    if (!allowedWriteRoles.has(role)) {
+      await emitAudit(request, 'self_scheduling.authorization.update.denied', 'client_booking_authorization', targetClientId, session);
+      writeJson(response, 403, { error: 'Insufficient permissions to manage booking authorization' });
+      return;
+    }
+
+    const payload = await readJsonBody(request);
+
+    const targetCounselorId = counselorId ?? sanitizeStr(payload.counselorId, 64);
+    if (!targetCounselorId) {
+      writeJson(response, 400, { error: 'counselorId is required' });
+      return;
+    }
+
+    // Validate bookingMode
+    if (payload.bookingMode !== undefined && !VALID_BOOKING_MODES.has(payload.bookingMode)) {
+      writeJson(response, 400, { error: `bookingMode must be one of: ${[...VALID_BOOKING_MODES].join(', ')}` });
+      return;
+    }
+
+    const auth = await upsertBookingAuthorization(pool, tenantId, targetClientId, targetCounselorId, payload);
+    await emitAudit(request, 'self_scheduling.authorization.update', 'client_booking_authorization', targetClientId, session);
+    writeJson(response, 200, { item: auth });
+    return;
+  }
+
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+// ─── /v1/portal/scheduling/* ──────────────────────────────────────────────────
+
+async function handlePortalSchedulingEntitlement(request, response, requestUrl, session) {
+  const role = callerRole(request, session);
+
+  if (request.method !== 'GET') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  // Require portal client identity
+  const clientId = callerClientId(request, session);
+  if (!clientId) {
+    writeJson(response, 401, { error: 'Portal session required' });
+    return;
+  }
+
+  const tenantId = callerTenant(request, session);
+  const entitlement = await getEntitlement(pool, tenantId, clientId);
+  await emitAudit(request, 'self_scheduling.entitlement.read', 'client_booking_authorization', clientId, session);
+  writeJson(response, 200, { items: entitlement });
+}
+
+async function handlePortalSchedulingSlots(request, response, requestUrl, session) {
+  if (request.method !== 'GET') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const clientId = callerClientId(request, session);
+  if (!clientId) {
+    writeJson(response, 401, { error: 'Portal session required' });
+    return;
+  }
+
+  const tenantId   = callerTenant(request, session);
+  const parsedUrl  = new URL(request.url ?? '/', 'http://x');
+  const counselorId = sanitizeStr(parsedUrl.searchParams.get('counselorId') ?? '', 64);
+  if (!counselorId) {
+    writeJson(response, 400, { error: 'counselorId query parameter is required' });
+    return;
+  }
+
+  const fromParam = parsedUrl.searchParams.get('from');
+  const toParam   = parsedUrl.searchParams.get('to');
+  const from = fromParam ? new Date(fromParam) : new Date();
+  const to   = toParam   ? new Date(toParam)   : new Date(Date.now() + 14 * 86_400_000);
+
+  if (isNaN(from.getTime()) || isNaN(to.getTime())) {
+    writeJson(response, 400, { error: 'from and to must be valid ISO date strings' });
+    return;
+  }
+
+  const apptType   = sanitizeStr(parsedUrl.searchParams.get('apptType') ?? '', 64) || null;
+  const daysRaw    = parsedUrl.searchParams.get('allowedDays');
+  const allowedDays = daysRaw
+    ? daysRaw.split(',').map((d) => Number(d.trim())).filter((d) => d >= 0 && d <= 6)
+    : null;
+
+  const slots = await getAvailableSlots(pool, tenantId, counselorId, { from, to, apptType, allowedDays });
+  await emitAudit(request, 'self_scheduling.slots.read', 'counselor_scheduling_profile', counselorId, session);
+  writeJson(response, 200, { items: slots });
+}
+
+async function handlePortalSchedulingBook(request, response, session) {
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const clientId = callerClientId(request, session);
+  if (!clientId) {
+    writeJson(response, 401, { error: 'Portal session required' });
+    return;
+  }
+
+  const tenantId = callerTenant(request, session);
+  const payload  = await readJsonBody(request);
+
+  const counselorId = sanitizeStr(payload.counselorId ?? '', 64);
+  const apptType    = sanitizeStr(payload.apptType    ?? '', 64);
+  const slotStartRaw = payload.slotStart;
+  const slotEndRaw   = payload.slotEnd;
+
+  if (!counselorId) {
+    writeJson(response, 400, { error: 'counselorId is required' });
+    return;
+  }
+  if (!apptType) {
+    writeJson(response, 400, { error: 'apptType is required' });
+    return;
+  }
+  if (!slotStartRaw) {
+    writeJson(response, 400, { error: 'slotStart is required' });
+    return;
+  }
+  if (!slotEndRaw) {
+    writeJson(response, 400, { error: 'slotEnd is required' });
+    return;
+  }
+
+  const slotStart = new Date(slotStartRaw);
+  const slotEnd   = new Date(slotEndRaw);
+
+  if (isNaN(slotStart.getTime()) || isNaN(slotEnd.getTime())) {
+    writeJson(response, 400, { error: 'slotStart and slotEnd must be valid ISO date strings' });
+    return;
+  }
+
+  try {
+    const result = await confirmBooking(pool, tenantId, clientId, counselorId, { apptType, slotStart, slotEnd });
+    await emitAudit(request, 'self_scheduling.booking.confirmed', 'appointment', result.appointmentId, session);
+    writeJson(response, 201, { item: result });
+  } catch (err) {
+    if (err instanceof SlotConflictError) {
+      await emitAudit(request, 'self_scheduling.booking.conflict', 'appointment', 'unknown', session);
+      writeJson(response, 409, { error: err.message });
+      return;
+    }
+    if (err instanceof SelfSchedulingError) {
+      const auditAction = err.statusCode === 403
+        ? 'self_scheduling.booking.denied'
+        : 'self_scheduling.booking.error';
+      await emitAudit(request, auditAction, 'appointment', 'unknown', session);
+      writeJson(response, err.statusCode, { error: err.message });
+      return;
+    }
+    throw err;
+  }
+}
+
 // ─── /v1/staff/:id/faith-profile ─────────────────────────────────────────────
 
 async function handleStaffFaithProfile(request, response, requestUrl, session) {
@@ -14434,13 +15575,21 @@ async function handleLocales(request, response, session) {
     if (requirePracticeAdmin(request, response, session)) return;
     const payload = await readJsonBody(request);
     const locale = (payload.locale ?? '').trim();
-    const label = (payload.label ?? '').trim();
+    const label = (payload.label ?? '').trim() || undefined;
     if (!locale) {
       writeJson(response, 400, { error: 'locale is required' });
       return;
     }
-    const catalog = await i18nStore.ensureLocale(locale, label);
-    writeJson(response, 201, catalog);
+    try {
+      const result = await i18nStore.createLocale(locale, label);
+      writeJson(response, 200, result);
+    } catch (err) {
+      if (err.code === 'unsupported_locale') {
+        writeJson(response, 400, { error: err.message });
+        return;
+      }
+      throw err;
+    }
     return;
   }
 
@@ -17300,6 +18449,8 @@ function resolveRoute(pathname) {
   if (pathname.startsWith('/v1/offerings/')) return '/v1/offerings/:id';
   if (pathname === '/v1/workflows/recommendations/state') return '/v1/workflows/recommendations/state';
   if (pathname.startsWith('/v1/workflows/recommendations/state/')) return '/v1/workflows/recommendations/state/:id';
+  if (pathname === '/v1/workflows/recommendations/history') return '/v1/workflows/recommendations/history';
+  if (pathname === '/v1/workflows/recommendations/batch') return '/v1/workflows/recommendations/batch';
   if (pathname === '/v1/faith/overview') return '/v1/faith/overview';
   if (pathname === '/v1/faith/note-templates') return '/v1/faith/note-templates';
   if (pathname === '/v1/faith/treatment-goals') return '/v1/faith/treatment-goals';
@@ -17343,6 +18494,12 @@ function resolveRoute(pathname) {
   if (pathname.startsWith('/v1/staff/')) return '/v1/staff/:id';
   if (pathname.startsWith('/v1/i18n/catalog/')) return '/v1/i18n/catalog/:locale';
   if (pathname.startsWith('/v1/i18n/settings/')) return '/v1/i18n/settings/:locale';
+  if (pathname === '/v1/onboarding/status') return '/v1/onboarding/status';
+  if (pathname === '/v1/onboarding/step/1') return '/v1/onboarding/step/1';
+  if (pathname === '/v1/onboarding/step/2') return '/v1/onboarding/step/2';
+  if (pathname === '/v1/onboarding/step/3') return '/v1/onboarding/step/3';
+  if (pathname === '/v1/onboarding/step/4') return '/v1/onboarding/step/4';
+  if (pathname === '/v1/onboarding/complete') return '/v1/onboarding/complete';
   return pathname;
 }
 
@@ -17520,6 +18677,595 @@ async function emitAudit(request, action, targetType, targetId, session = null) 
       targetId: String(targetId),
       error: auditError,
     });
+  }
+}
+
+// ─── AACC CEU — helpers ───────────────────────────────────────────────────────
+
+/**
+ * Returns true if the caller can read/write AACC CEU data for staffId.
+ * - admin/owner/platform_admin: always allowed
+ * - counselor: only for their own staffId (resolved via x-staff-id header)
+ * - client: always denied
+ */
+function aaccCeuAccessDenied(request, response, session, staffId) {
+  const role = callerRole(request, session);
+  if (role === 'client') {
+    writeJson(response, 403, { error: 'Access denied' });
+    return true;
+  }
+  if (isAdminRole(role)) return false;
+  // counselor or intern: may only act on own record
+  const callerId = callerIdentity(request, session)?.staffId
+    ?? (request.headers['x-staff-id'] || '').trim();
+  if (callerId && callerId === staffId) return false;
+  writeJson(response, 403, { error: 'Access denied' });
+  return true;
+}
+
+// ─── PATCH /v1/staff/:staffId/aacc-credential ─────────────────────────────────
+
+async function handleAaccCredential(request, response, requestUrl, session) {
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const staffId = requestUrl.pathname.split('/')[3];
+  const tenantId = callerTenant(request, session);
+
+  if (aaccCeuAccessDenied(request, response, session, staffId)) return;
+
+  const payload = await readJsonBody(request);
+  const credentialType = sanitizeStr(payload.credentialType, 32);
+  const cycleStartDate = sanitizeStr(payload.cycleStartDate, 32);
+
+  if (!credentialType || !VALID_CREDENTIAL_TYPES.has(credentialType)) {
+    writeJson(response, 400, { error: 'credentialType must be one of: bcpcc, ncca_fellow, ncca_diplomate' });
+    return;
+  }
+  if (!cycleStartDate || Number.isNaN(Date.parse(cycleStartDate))) {
+    writeJson(response, 400, { error: 'cycleStartDate must be a valid date string (YYYY-MM-DD)' });
+    return;
+  }
+
+  if (!process.env.DB_NAME) {
+    writeJson(response, 200, { updated: true });
+    return;
+  }
+
+  try {
+    const result = await upsertCredential(tenantId, staffId, { credentialType, cycleStartDate }, pool);
+    await emitAudit(request, 'staff.aacc_credential.update', 'staff', staffId, session);
+    writeJson(response, 200, result);
+  } catch (err) {
+    if (err.code === 'staff_not_found') {
+      writeJson(response, 404, { error: 'Staff not found' });
+      return;
+    }
+    throw err;
+  }
+}
+
+// ─── GET /v1/staff/:staffId/aacc-ceu/progress ─────────────────────────────────
+
+async function handleAaccCeuProgress(request, response, requestUrl, session) {
+  if (request.method !== 'GET') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const staffId = requestUrl.pathname.split('/')[3];
+  const tenantId = callerTenant(request, session);
+
+  if (aaccCeuAccessDenied(request, response, session, staffId)) return;
+
+  if (!process.env.DB_NAME) {
+    writeJson(response, 200, { credentialType: null });
+    return;
+  }
+
+  const progress = await getCeuProgress(tenantId, staffId, pool);
+  if (progress === null) {
+    writeJson(response, 404, { error: 'Staff not found' });
+    return;
+  }
+
+  await emitAudit(request, 'staff.aacc_ceu.progress.read', 'staff', staffId, session);
+  writeJson(response, 200, progress);
+}
+
+// ─── GET|POST /v1/staff/:staffId/aacc-ceu/entries ─────────────────────────────
+
+async function handleAaccCeuEntries(request, response, requestUrl, session) {
+  const staffId = requestUrl.pathname.split('/')[3];
+  const tenantId = callerTenant(request, session);
+
+  if (aaccCeuAccessDenied(request, response, session, staffId)) return;
+
+  if (request.method === 'GET') {
+    if (!process.env.DB_NAME) {
+      writeJson(response, 200, { entries: [] });
+      return;
+    }
+    const entries = await listCeuEntries(tenantId, staffId, pool);
+    await emitAudit(request, 'staff.aacc_ceu.entries.list', 'staff', staffId, session);
+    writeJson(response, 200, { entries });
+    return;
+  }
+
+  if (request.method === 'POST') {
+    const payload = await readJsonBody(request);
+    const category = sanitizeStr(payload.category, 64);
+    const durationMinutes = payload.durationMinutes != null ? Number(payload.durationMinutes) : undefined;
+    const entryDate = sanitizeStr(payload.entryDate, 32);
+    const description = sanitizeStr(payload.description, 2000) ?? null;
+    const provider = sanitizeStr(payload.provider, 255) ?? null;
+    const entryType = sanitizeStr(payload.entryType, 16) ?? 'standalone';
+    const timeEntryId = sanitizeStr(payload.timeEntryId, 64) ?? null;
+
+    if (!category || !AACC_CATEGORIES.has(category)) {
+      writeJson(response, 400, { error: `category must be one of: ${[...AACC_CATEGORIES].join(', ')}` });
+      return;
+    }
+    if (durationMinutes === undefined || !Number.isFinite(durationMinutes) || durationMinutes <= 0) {
+      writeJson(response, 400, { error: 'durationMinutes must be greater than 0' });
+      return;
+    }
+    if (durationMinutes > 480) {
+      writeJson(response, 400, { error: 'durationMinutes must not exceed 480' });
+      return;
+    }
+    if (!entryDate || Number.isNaN(Date.parse(entryDate))) {
+      writeJson(response, 400, { error: 'entryDate must be a valid date string' });
+      return;
+    }
+
+    if (!process.env.DB_NAME) {
+      writeJson(response, 503, { error: 'Database not configured' });
+      return;
+    }
+
+    try {
+      const entry = await addCeuEntry(tenantId, staffId, {
+        category, durationMinutes, entryDate, description, provider, entryType, timeEntryId,
+      }, pool);
+      await emitAudit(request, 'staff.aacc_ceu.entry.create', 'aacc_ceu_entry', entry.id, session);
+      writeJson(response, 201, { entry });
+    } catch (err) {
+      if (err.code === 'validation_error') {
+        writeJson(response, 400, { error: err.message });
+        return;
+      }
+      throw err;
+    }
+    return;
+  }
+
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+// ─── DELETE /v1/staff/:staffId/aacc-ceu/entries/:entryId ──────────────────────
+
+async function handleAaccCeuEntryById(request, response, requestUrl, session) {
+  if (request.method !== 'DELETE') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const parts = requestUrl.pathname.split('/');
+  const staffId = parts[3];
+  const entryId = parts[6];
+  const tenantId = callerTenant(request, session);
+
+  if (aaccCeuAccessDenied(request, response, session, staffId)) return;
+
+  if (!process.env.DB_NAME) {
+    writeJson(response, 503, { error: 'Database not configured' });
+    return;
+  }
+
+  try {
+    const result = await deleteCeuEntry(tenantId, staffId, entryId, pool);
+    await emitAudit(request, 'staff.aacc_ceu.entry.delete', 'aacc_ceu_entry', entryId, session);
+    writeJson(response, 200, result);
+  } catch (err) {
+    if (err.code === 'not_found') {
+      writeJson(response, 404, { error: 'CEU entry not found' });
+      return;
+    }
+    throw err;
+  }
+}
+
+// ─── GET /v1/staff/:staffId/aacc-ceu/renewal-report ──────────────────────────
+
+async function handleAaccRenewalReport(request, response, requestUrl, session) {
+  if (request.method !== 'GET') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const staffId = requestUrl.pathname.split('/')[3];
+  const tenantId = callerTenant(request, session);
+
+  if (aaccCeuAccessDenied(request, response, session, staffId)) return;
+
+  if (!process.env.DB_NAME) {
+    response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    response.end('<!doctype html><html lang="en"><head><meta charset="utf-8" /><title>AACC CE Renewal Report</title></head><body style="font-family:Arial,sans-serif;padding:40px;"><h1>AACC CE Renewal Report</h1><p>No credential data available.</p></body></html>');
+    return;
+  }
+
+  const html = await renderRenewalReportHtml(tenantId, staffId, pool);
+  await emitAudit(request, 'staff.aacc_ceu.renewal_report.read', 'staff', staffId, session);
+  response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+  response.end(html);
+}
+
+// ─── PATCH /v1/time-entries/:id/aacc-ceu ─────────────────────────────────────
+
+async function handleTimeEntryAaccCeu(request, response, requestUrl, session) {
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const role = callerRole(request, session);
+  if (role === 'client') {
+    writeJson(response, 403, { error: 'Access denied' });
+    return;
+  }
+
+  const timeEntryId = requestUrl.pathname.split('/')[3];
+  const tenantId = callerTenant(request, session);
+
+  if (!process.env.DB_NAME) {
+    writeJson(response, 503, { error: 'Database not configured' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  // aaccCeuId may be null to unlink
+  const aaccCeuId = payload.aaccCeuId !== undefined
+    ? (payload.aaccCeuId === null ? null : sanitizeStr(payload.aaccCeuId, 64))
+    : undefined;
+
+  if (aaccCeuId === undefined) {
+    writeJson(response, 400, { error: 'aaccCeuId is required' });
+    return;
+  }
+
+  const result = await pool.query(
+    'UPDATE time_entries SET aacc_ceu_id = $1 WHERE id = $2 AND tenant_id = $3',
+    [aaccCeuId, timeEntryId, tenantId],
+  );
+
+  if (result.rowCount === 0) {
+    writeJson(response, 404, { error: 'Time entry not found' });
+    return;
+  }
+
+  await emitAudit(request, 'time_entry.aacc_ceu.link', 'time_entry', timeEntryId, session);
+  writeJson(response, 200, { updated: true, aaccCeuId });
+}
+
+// ─── GET|PATCH /v1/practices/:practiceId/church-identity ──────────────────────
+
+async function handleChurchIdentity(request, response, requestUrl, session) {
+  const practiceId = requestUrl.pathname.split('/')[3];
+  const tenantId = callerTenant(request, session);
+  const role = callerRole(request, session);
+
+  if (request.method === 'GET') {
+    // client role is denied
+    if (role === 'client') {
+      writeJson(response, 403, { error: 'Access denied' });
+      return;
+    }
+
+    if (!process.env.DB_NAME) {
+      writeJson(response, 200, {
+        ministryName: null,
+        denomination: null,
+        churchSize: null,
+        parentOrganization: null,
+        churchDirectoryUrlPattern: null,
+      });
+      return;
+    }
+
+    const identity = await getChurchIdentity(tenantId, practiceId, pool);
+    if (identity === null) {
+      writeJson(response, 404, { error: 'Practice not found' });
+      return;
+    }
+
+    await emitAudit(request, 'practice.church_identity.read', 'practice', practiceId, session);
+    writeJson(response, 200, identity);
+    return;
+  }
+
+  if (request.method === 'PATCH') {
+    // admin/owner only
+    if (!isAdminRole(role)) {
+      writeJson(response, 403, { error: 'Access denied' });
+      return;
+    }
+
+    const payload = await readJsonBody(request);
+    const fields = {
+      ministryName: payload.ministryName !== undefined ? sanitizeStr(payload.ministryName, 255) : undefined,
+      denomination: payload.denomination !== undefined ? sanitizeStr(payload.denomination, 64) : undefined,
+      churchSize: payload.churchSize !== undefined ? sanitizeStr(payload.churchSize, 32) : undefined,
+      parentOrganization: payload.parentOrganization !== undefined ? sanitizeStr(payload.parentOrganization, 255) : undefined,
+      churchDirectoryUrlPattern: payload.churchDirectoryUrlPattern !== undefined ? sanitizeStr(payload.churchDirectoryUrlPattern, 2048) : undefined,
+    };
+
+    // Validate denomination and churchSize before hitting DB
+    if (fields.denomination !== undefined && fields.denomination !== null && !VALID_DENOMINATIONS.has(fields.denomination)) {
+      writeJson(response, 400, { error: `denomination must be one of: ${[...VALID_DENOMINATIONS].join(', ')}` });
+      return;
+    }
+    if (fields.churchSize !== undefined && fields.churchSize !== null && !VALID_CHURCH_SIZES.has(fields.churchSize)) {
+      writeJson(response, 400, { error: `churchSize must be one of: ${[...VALID_CHURCH_SIZES].join(', ')}` });
+      return;
+    }
+
+    if (!process.env.DB_NAME) {
+      writeJson(response, 200, { updated: true });
+      return;
+    }
+
+    try {
+      const result = await upsertChurchIdentity(tenantId, practiceId, fields, pool);
+      await emitAudit(request, 'practice.church_identity.update', 'practice', practiceId, session);
+      writeJson(response, 200, result);
+    } catch (err) {
+      if (err.code === 'practice_not_found') {
+        writeJson(response, 404, { error: 'Practice not found' });
+        return;
+      }
+      if (err.code === 'validation_error') {
+        writeJson(response, 400, { error: err.message });
+        return;
+      }
+      throw err;
+    }
+    return;
+  }
+
+  writeJson(response, 405, { error: 'Method not allowed' });
+}
+
+// ─── PATCH /v1/clients/:clientId/church-directory-ref ─────────────────────────
+
+async function handleClientChurchDirectoryRef(request, response, clientId, session) {
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const role = callerRole(request, session);
+  if (!isAdminRole(role)) {
+    writeJson(response, 403, { error: 'Access denied' });
+    return;
+  }
+
+  const tenantId = callerTenant(request, session);
+  const payload = await readJsonBody(request);
+  const churchDirectoryId = sanitizeStr(payload.churchDirectoryId, 128) ?? null;
+  const churchDirectorySource = sanitizeStr(payload.churchDirectorySource, 64) ?? null;
+
+  if (!process.env.DB_NAME) {
+    writeJson(response, 200, { updated: true });
+    return;
+  }
+
+  try {
+    const result = await upsertChurchDirectoryRef(tenantId, clientId, { churchDirectoryId, churchDirectorySource }, pool);
+    await emitAudit(request, 'client.church_directory_ref.update', 'client', clientId, session);
+    writeJson(response, 200, result);
+  } catch (err) {
+    if (err.code === 'client_not_found') {
+      writeJson(response, 404, { error: 'Client not found' });
+      return;
+    }
+    throw err;
+  }
+}
+
+// ─── PATCH /v1/clients/:clientId/scholarship ──────────────────────────────────
+
+async function handleClientScholarship(request, response, clientId, session) {
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const role = callerRole(request, session);
+  if (!isAdminRole(role)) {
+    writeJson(response, 403, { error: 'Access denied' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+
+  if (typeof payload.scholarshipFlag !== 'boolean') {
+    writeJson(response, 400, { error: 'scholarshipFlag must be a boolean' });
+    return;
+  }
+
+  const tenantId = callerTenant(request, session);
+
+  if (!process.env.DB_NAME) {
+    writeJson(response, 200, { updated: true });
+    return;
+  }
+
+  try {
+    const result = await setScholarshipFlag(tenantId, clientId, payload.scholarshipFlag, pool);
+    await emitAudit(request, 'client.scholarship_flag.update', 'client', clientId, session);
+    writeJson(response, 200, result);
+  } catch (err) {
+    if (err.code === 'client_not_found') {
+      writeJson(response, 404, { error: 'Client not found' });
+      return;
+    }
+    throw err;
+  }
+}
+
+// ─── GET /v1/ministry/summary ─────────────────────────────────────────────────
+
+async function handleMinistrySummary(request, response, session) {
+  if (request.method !== 'GET') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  const role = callerRole(request, session);
+  if (!isAdminRole(role)) {
+    writeJson(response, 403, { error: 'Access denied' });
+    return;
+  }
+
+  const tenantId = callerTenant(request, session);
+
+  // Require ministry plan
+  if (process.env.DB_NAME) {
+    const [tenantRows] = await pool.query(
+      'SELECT plan_type FROM tenants WHERE id = ? LIMIT 1',
+      [tenantId],
+    );
+    const planType = tenantRows?.[0]?.plan_type ?? null;
+    if (planType !== 'ministry') {
+      writeJson(response, 403, { error: 'ministry_plan_required' });
+      return;
+    }
+
+    const summary = await getMinistrySummary(tenantId, pool);
+    await emitAudit(request, 'ministry.summary.read', 'tenant', tenantId, session);
+    writeJson(response, 200, summary);
+    return;
+  }
+
+  // No-DB mode
+  writeJson(response, 200, { totalClients: 0, scholarshipClients: 0, totalCounselors: 0 });
+}
+
+// ─── Subscription plan usage ──────────────────────────────────────────────────
+
+const SUBSCRIPTION_USAGE_STUB = Object.freeze({
+  plan: { planType: 'standard', uiPersona: 'practice', planDisplayName: 'Practice', counselorLimit: null, clientLimit: null },
+  usage: { activeCounselors: 0, activeClients: 0 },
+  grace: { counselorsInGrace: false, clientsInGrace: false, graceStartedAt: null, graceDaysRemaining: null, graceExpired: false },
+  personaUpgrade: { dismissCount: 0, muted: false, shouldPromptUpgrade: false },
+});
+
+async function handleSubscriptionUsage(request, response, session) {
+  if (request.method !== 'GET') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (!isAdminRole(callerRole(request, session))) {
+    writeJson(response, 403, { error: 'Access denied' });
+    return;
+  }
+
+  if (!process.env.DB_NAME) {
+    writeJson(response, 200, SUBSCRIPTION_USAGE_STUB);
+    return;
+  }
+
+  const tenantId = callerTenant(request, session);
+  try {
+    const summary = await getSubscriptionSummary(tenantId, pool);
+    writeJson(response, 200, summary);
+  } catch (err) {
+    logError('subscription.usage.error', { message: err.message });
+    writeJson(response, 500, { error: 'Internal server error' });
+  }
+}
+
+// ─── Tenant UI persona ────────────────────────────────────────────────────────
+
+async function handleTenantUiPersona(request, response, session) {
+  if (request.method !== 'PATCH') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (!isAdminRole(callerRole(request, session))) {
+    writeJson(response, 403, { error: 'Access denied' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const persona = payload?.persona;
+
+  if (!persona || (persona !== 'solo' && persona !== 'practice')) {
+    writeJson(response, 400, { error: 'persona must be "solo" or "practice"' });
+    return;
+  }
+
+  if (!process.env.DB_NAME) {
+    writeJson(response, 200, { updated: true });
+    return;
+  }
+
+  const tenantId = callerTenant(request, session);
+  try {
+    const result = await setUiPersona(tenantId, persona, pool);
+    writeJson(response, 200, result);
+  } catch (err) {
+    if (err.code === 'validation_error') {
+      writeJson(response, 400, { error: err.message });
+      return;
+    }
+    if (err.code === 'tenant_not_found') {
+      writeJson(response, 404, { error: 'Tenant not found' });
+      return;
+    }
+    logError('tenant.ui_persona.error', { message: err.message });
+    writeJson(response, 500, { error: 'Internal server error' });
+  }
+}
+
+// ─── Tenant persona dismiss ───────────────────────────────────────────────────
+
+async function handleTenantPersonaDismiss(request, response, session) {
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+
+  if (!isAdminRole(callerRole(request, session))) {
+    writeJson(response, 403, { error: 'Access denied' });
+    return;
+  }
+
+  const payload = await readJsonBody(request);
+  const mute = payload?.mute === true;
+
+  if (!process.env.DB_NAME) {
+    writeJson(response, 200, { dismissCount: 1, muted: mute });
+    return;
+  }
+
+  const tenantId = callerTenant(request, session);
+  try {
+    if (mute) {
+      const result = await mutePersonaUpgrade(tenantId, pool);
+      writeJson(response, 200, { dismissCount: null, muted: result.muted });
+      return;
+    }
+    const result = await recordPersonaDismiss(tenantId, pool);
+    writeJson(response, 200, { dismissCount: result.dismissCount, muted: false });
+  } catch (err) {
+    logError('tenant.persona_dismiss.error', { message: err.message });
+    writeJson(response, 500, { error: 'Internal server error' });
   }
 }
 

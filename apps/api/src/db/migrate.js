@@ -45,6 +45,14 @@ try {
   // report schema version across tenant DBs.
   await recordMigration(connection, 'core_schema_initial');
   await recordMigration(connection, 'column_migrations_batch_1');
+  await recordMigration(connection, 'practice_faith_profiles_v1');
+  await recordMigration(connection, 'counselor_scheduling_profiles_v1');
+  await recordMigration(connection, 'client_booking_authorizations_v1');
+  await recordMigration(connection, 'self_booking_appointments_v1');
+  await recordMigration(connection, 'onboarding_wizard_v1');
+  await recordMigration(connection, 'aacc_ceu_entries_v1');
+  await recordMigration(connection, 'ministry_plan_v1');
+  await recordMigration(connection, 'subscription_limits_v1');
 
   // Seed a default tenant + system practice for local dev
   await seedDevData(connection);
@@ -434,6 +442,14 @@ async function applyColumnMigrations(conn) {
   // ── Practice billing gate ─────────────────────────────────────────────────
   await addColumnIfMissing('portal_settings', 'insurance_billing_enabled', 'BOOLEAN NOT NULL DEFAULT FALSE');
 
+  // ── Onboarding wizard state ───────────────────────────────────────────────
+  const onboardingCompletedAdded = await addColumnIfMissing('tenants', 'onboarding_completed', 'BOOLEAN NOT NULL DEFAULT FALSE');
+  await addColumnIfMissing('tenants', 'onboarding_steps_completed', "JSONB NOT NULL DEFAULT '{}'");
+  if (onboardingCompletedAdded) {
+    // Backfill: all existing tenants already have data — mark them complete
+    await conn.query('UPDATE tenants SET onboarding_completed = TRUE');
+  }
+
   // ── Phase A1: Tenant slug registry ───────────────────────────────────────
   await conn.query(`
     CREATE TABLE IF NOT EXISTS tenant_slugs (
@@ -600,6 +616,130 @@ async function applyColumnMigrations(conn) {
   `);
   await conn.query(`CREATE INDEX IF NOT EXISTS idx_relational_unit_members_unit ON relational_unit_members (unit_id, tenant_id)`);
   await conn.query(`CREATE INDEX IF NOT EXISTS idx_relational_unit_members_client ON relational_unit_members (client_id, tenant_id)`);
+
+  // ── Practice faith profile ────────────────────────────────────────────────
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS practice_faith_profiles (
+      id                        VARCHAR(64)   NOT NULL,
+      tenant_id                 VARCHAR(64)   NOT NULL,
+      tradition                 VARCHAR(64)   NOT NULL DEFAULT 'broadly_christian',
+      vocabulary_preset         JSONB         NOT NULL DEFAULT '{}',
+      content_guidelines_enc    TEXT          NULL,
+      default_integration_level VARCHAR(32)   NOT NULL DEFAULT 'preferred',
+      updated_at                TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+      updated_by                VARCHAR(64)   NOT NULL,
+      PRIMARY KEY (id)
+    )
+  `);
+  await addIndexIfMissing('practice_faith_profiles', 'idx_practice_faith_profiles_tenant', '(tenant_id)');
+  await addUniqueIndexIfMissing('practice_faith_profiles', 'uq_practice_faith_profile_tenant', '(tenant_id)');
+
+  // ── Client Self-Scheduling ────────────────────────────────────────────────
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS counselor_scheduling_profiles (
+      id                    VARCHAR(64)  NOT NULL,
+      tenant_id             VARCHAR(64)  NOT NULL,
+      staff_id              VARCHAR(64)  NOT NULL,
+      enabled               BOOLEAN      NOT NULL DEFAULT FALSE,
+      slot_duration_minutes SMALLINT     NOT NULL DEFAULT 50,
+      buffer_minutes        SMALLINT     NOT NULL DEFAULT 0,
+      advance_booking_days  SMALLINT     NOT NULL DEFAULT 14,
+      min_notice_hours      SMALLINT     NOT NULL DEFAULT 24,
+      available_appt_types  JSONB        NOT NULL DEFAULT '[]',
+      availability_blocks   JSONB        NOT NULL DEFAULT '[]',
+      created_at            TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+      updated_at            TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (id)
+    )
+  `);
+  await addUniqueIndexIfMissing('counselor_scheduling_profiles', 'uq_counselor_sched_profile', '(staff_id)');
+  await addIndexIfMissing('counselor_scheduling_profiles', 'idx_csp_tenant', '(tenant_id)');
+
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS client_booking_authorizations (
+      id               VARCHAR(64)  NOT NULL,
+      tenant_id        VARCHAR(64)  NOT NULL,
+      client_id        VARCHAR(64)  NOT NULL,
+      counselor_id     VARCHAR(64)  NOT NULL,
+      booking_mode     VARCHAR(16)  NOT NULL DEFAULT 'request',
+      allowed_appt_types JSONB      NULL,
+      allowed_days     JSONB        NULL,
+      expires_at       TIMESTAMPTZ  NULL,
+      created_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+      updated_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (id)
+    )
+  `);
+  await addUniqueIndexIfMissing('client_booking_authorizations', 'uq_client_booking_auth', '(tenant_id, client_id, counselor_id)');
+  await addIndexIfMissing('client_booking_authorizations', 'idx_cba_client', '(tenant_id, client_id)');
+  await addIndexIfMissing('client_booking_authorizations', 'idx_cba_counselor', '(tenant_id, counselor_id)');
+
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS self_booking_appointments (
+      id               VARCHAR(64)  NOT NULL,
+      tenant_id        VARCHAR(64)  NOT NULL,
+      client_id        VARCHAR(64)  NOT NULL,
+      counselor_id     VARCHAR(64)  NOT NULL,
+      appointment_id   VARCHAR(64)  NOT NULL,
+      authorization_id VARCHAR(64)  NOT NULL,
+      slot_start_utc   TIMESTAMPTZ  NOT NULL,
+      slot_end_utc     TIMESTAMPTZ  NOT NULL,
+      appointment_type VARCHAR(64)  NOT NULL,
+      booked_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (id)
+    )
+  `);
+  await addIndexIfMissing('self_booking_appointments', 'idx_sba_client', '(tenant_id, client_id)');
+  await addIndexIfMissing('self_booking_appointments', 'idx_sba_appointment', '(appointment_id)');
+
+  // ── AACC CEU tracking ──────────────────────────────────────────────────────
+  await addColumnIfMissing('staff_members', 'aacc_credential_type', 'VARCHAR(32) NULL');
+  await addColumnIfMissing('staff_members', 'aacc_cycle_start_date', 'DATE NULL');
+  await addColumnIfMissing('time_entries', 'aacc_ceu_id', 'VARCHAR(64) NULL');
+
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS aacc_ceu_entries (
+      id               VARCHAR(64)  NOT NULL,
+      tenant_id        VARCHAR(64)  NOT NULL,
+      staff_id         VARCHAR(64)  NOT NULL,
+      entry_type       VARCHAR(16)  NOT NULL DEFAULT 'standalone',
+      time_entry_id    VARCHAR(64)  NULL,
+      category         VARCHAR(64)  NOT NULL,
+      duration_minutes INTEGER      NOT NULL,
+      entry_date       DATE         NOT NULL,
+      description      TEXT         NULL,
+      provider         VARCHAR(255) NULL,
+      created_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+      updated_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (id)
+    )
+  `);
+  await addIndexIfMissing('aacc_ceu_entries', 'idx_aacc_ceu_staff', '(tenant_id, staff_id)');
+  await addIndexIfMissing('aacc_ceu_entries', 'idx_aacc_ceu_time_entry', '(tenant_id, time_entry_id)');
+
+  // ── Ministry / Church Plan fields ──────────────────────────────────────────
+  // staff_members — ministry admin access flag
+  await addColumnIfMissing('staff_members', 'ministry_admin_access', 'BOOLEAN NOT NULL DEFAULT FALSE');
+
+  // practices — church identity fields
+  await addColumnIfMissing('practices', 'ministry_name', 'VARCHAR(255) NULL');
+  await addColumnIfMissing('practices', 'denomination', 'VARCHAR(64) NULL');
+  await addColumnIfMissing('practices', 'church_size', 'VARCHAR(32) NULL');
+  await addColumnIfMissing('practices', 'parent_organization', 'VARCHAR(255) NULL');
+  await addColumnIfMissing('practices', 'church_directory_url_pattern', 'TEXT NULL');
+
+  // clients — scholarship and church directory fields
+  await addColumnIfMissing('clients', 'scholarship_flag', 'BOOLEAN NOT NULL DEFAULT FALSE');
+  await addColumnIfMissing('clients', 'church_directory_id', 'VARCHAR(128) NULL');
+  await addColumnIfMissing('clients', 'church_directory_source', 'VARCHAR(64) NULL');
+
+  // ── Subscription plan limits + UI persona ─────────────────────────────────
+  await addColumnIfMissing('tenants', 'ui_persona', "VARCHAR(16) NOT NULL DEFAULT 'practice'");
+  await addColumnIfMissing('tenants', 'counselor_limit', 'INT NULL');
+  await addColumnIfMissing('tenants', 'client_limit', 'INT NULL');
+  await addColumnIfMissing('tenants', 'limit_grace_started_at', 'TIMESTAMPTZ NULL');
+  await addColumnIfMissing('tenants', 'persona_upgrade_dismiss_count', 'INT NOT NULL DEFAULT 0');
+  await addColumnIfMissing('tenants', 'persona_upgrade_muted', 'BOOLEAN NOT NULL DEFAULT FALSE');
 
   console.log('Column migrations done.');
 }

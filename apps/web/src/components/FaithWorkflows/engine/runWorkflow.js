@@ -28,6 +28,8 @@ import {
 // Clinical caution rules
 import {
   rulePhq9Worsening,
+  rulePhq9SomaticCluster,
+  rulePhq9Anhedonia,
   ruleGad7High,
   ruleNoTreatmentPlan,
   ruleStaleTreatmentPlan,
@@ -36,6 +38,7 @@ import {
   rulePcl5Worsening,
   ruleGad7Worsening,
   ruleAuditHigh,
+  ruleSupervisionMissing,
 } from './rules/clinicalRules.js';
 
 // Session focus rules
@@ -43,6 +46,7 @@ import {
   ruleOverdueGoals,
   rulePendingHomework,
   rulePendingAssessment,
+  ruleSessionFrequencyDecline,
 } from './rules/sessionRules.js';
 
 // Homework rules
@@ -92,6 +96,8 @@ const ALL_RULES = [
   ruleRiskKeywordInNote,
   // Clinical
   rulePhq9Worsening,
+  rulePhq9SomaticCluster,
+  rulePhq9Anhedonia,
   ruleGad7High,
   rulePcl5Worsening,
   ruleGad7Worsening,
@@ -100,10 +106,12 @@ const ALL_RULES = [
   ruleStaleTreatmentPlan,
   ruleNoRecentNote,
   ruleDiagnosisWithoutGoal,
+  ruleSupervisionMissing,
   // Session
   ruleOverdueGoals,
   rulePendingHomework,
   rulePendingAssessment,
+  ruleSessionFrequencyDecline,
   // Homework
   ruleNoRecentHomework,
   ruleJournalSuggestion,

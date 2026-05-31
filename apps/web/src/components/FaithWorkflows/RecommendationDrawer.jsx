@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Alert,
   Badge,
   Button,
+  Collapse,
   CopyButton,
   Divider,
   Drawer,
@@ -43,12 +44,33 @@ export default function RecommendationDrawer({
   onClose,
   onStatusChange,
   onAction,
+  clientId = null,
+  fetchHistory = null,
 }) {
   const { t } = useI18n();
   const [actionOutput, setActionOutput] = useState(null);
   const [actionRunning, setActionRunning] = useState(false);
   const [deferDate, setDeferDate] = useState('');
   const [showDeferInput, setShowDeferInput] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [history, setHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  // Load history when the history section is opened
+  useEffect(() => {
+    if (!historyOpen || !fetchHistory || !clientId || !rec?.ruleId) return;
+    setHistoryLoading(true);
+    fetchHistory(clientId, rec.ruleId).then((rows) => {
+      setHistory(rows);
+      setHistoryLoading(false);
+    });
+  }, [historyOpen, fetchHistory, clientId, rec?.ruleId]);
+
+  // Reset history panel when rec changes
+  useEffect(() => {
+    setHistoryOpen(false);
+    setHistory([]);
+  }, [rec?.ruleId]);
 
   if (!rec) return null;
 
@@ -374,6 +396,40 @@ export default function RecommendationDrawer({
             </Button>
           )}
         </Stack>
+
+        {/* Activity history */}
+        <Divider mt="md" />
+        <Button
+          size="xs"
+          variant="subtle"
+          color="gray"
+          onClick={() => setHistoryOpen((o) => !o)}
+          style={{ alignSelf: 'flex-start' }}
+        >
+          {historyOpen ? '▲' : '▼'} Activity history
+        </Button>
+        <Collapse in={historyOpen}>
+          {historyLoading ? (
+            <Group gap="xs" mt="xs">
+              <Loader size="xs" />
+              <Text size="xs" c="dimmed">Loading history…</Text>
+            </Group>
+          ) : history.length === 0 ? (
+            <Text size="xs" c="dimmed" mt="xs">No state changes recorded yet.</Text>
+          ) : (
+            <Stack gap={4} mt="xs">
+              {history.map((row) => {
+                const fmtDate = (iso) => { try { return new Date(iso).toLocaleString(); } catch { return String(iso); } };
+                const arrow = `${row.oldStatus ?? 'new'} → ${row.newStatus}`;
+                return (
+                  <Text key={row.id} size="xs" c="dimmed">
+                    {fmtDate(row.changedAt)} — {arrow}
+                  </Text>
+                );
+              })}
+            </Stack>
+          )}
+        </Collapse>
       </Stack>
     </Drawer>
   );

@@ -6,6 +6,7 @@ import {
 import { ArrowLeft, Plus, Calendar, Users, FileText, DollarSign } from 'lucide-react';
 import { csrfHeaders } from '../../lib/csrf.js';
 import GroupSessionNotesForm from '../ClinicalChart/GroupSessionNotesForm.jsx';
+import { useI18n } from '../../lib/i18nContext.jsx';
 
 function MemberBadge({ member, onRemove }) {
   return (
@@ -18,13 +19,14 @@ function MemberBadge({ member, onRemove }) {
 }
 
 function SessionRow({ session, onCancel, onViewNotes, onSubmitBilling }) {
+  const { formatDate } = useI18n();
   const isPast = new Date(session.scheduledAt) < new Date();
   return (
     <Paper withBorder radius="md" p="sm">
       <Group justify="space-between" align="center" wrap="wrap" gap="xs">
         <Stack gap={2}>
           <Text fz="sm" fw={600} c={isPast ? 'dimmed' : undefined}>
-            {new Date(session.scheduledAt).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+            {formatDate(new Date(session.scheduledAt), 'datetime')}
           </Text>
           <Text fz="xs" c="dimmed">{session.durationMinutes} min · {session.status}</Text>
         </Stack>

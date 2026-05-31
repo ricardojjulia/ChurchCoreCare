@@ -251,11 +251,11 @@ test('Priya: monitoring rec fires (reassessment overdue — PHQ-9 is 95 days old
   assert.ok(monitoring.length > 0, 'Expected at least one monitoring rec for Priya');
 });
 
-test('Priya: coordination rec fires (no insurance)', () => {
+test('Priya: coordination rec fires (gift arrangement not documented)', () => {
   const recs = runWorkflow(mockPriya);
-  const noInsurance = recs.find((r) => r.ruleId === 'rule_coordination_no_insurance');
-  assert.ok(noInsurance, 'Expected rule_coordination_no_insurance to fire for Priya');
-  assert.equal(noInsurance.category, 'coordination');
+  const giftArrangement = recs.find((r) => r.ruleId === 'rule_coordination_gift_arrangement');
+  assert.ok(giftArrangement, 'Expected rule_coordination_gift_arrangement to fire for Priya (no gift/financial arrangement documented)');
+  assert.equal(giftArrangement.category, 'coordination');
 });
 
 test('Priya: no spiritual recommendations (no faith profile)', () => {
@@ -424,4 +424,445 @@ test('Idempotency: running runWorkflow twice for same client produces identical 
   const run1 = runWorkflow(mockEmma);
   const run2 = runWorkflow(mockEmma);
   assert.deepEqual(run1, run2, 'runWorkflow(mockEmma) must be deterministic');
+});
+
+// ─── scoreClient ─────────────────────────────────────────────────────────────
+
+import { scoreClient } from './scoreClient.js';
+
+test('scoreClient: Emma scores critical (PHQ-9=22, SI item9=3)', () => {
+  const recs = runWorkflow(mockEmma);
+  const { urgencyScore, urgencyLevel } = scoreClient(mockEmma, recs);
+  assert.equal(urgencyLevel, 'critical', `Emma urgencyLevel should be critical, got ${urgencyLevel} (score ${urgencyScore})`);
+  assert.ok(urgencyScore >= 70, `Emma urgencyScore should be >= 70, got ${urgencyScore}`);
+});
+
+test('scoreClient: David scores routine (PHQ-9=6, stable)', () => {
+  const recs = runWorkflow(mockDavid);
+  const { urgencyScore, urgencyLevel } = scoreClient(mockDavid, recs);
+  assert.ok(['routine', 'moderate'].includes(urgencyLevel), `David urgencyLevel should be routine or moderate, got ${urgencyLevel}`);
+  assert.ok(urgencyScore < 40, `David urgencyScore should be < 40, got ${urgencyScore}`);
+});
+
+test('scoreClient: Marcus scores high (worsening PHQ-9, GAD-7=15)', () => {
+  const recs = runWorkflow(mockMarcus);
+  const { urgencyLevel } = scoreClient(mockMarcus, recs);
+  assert.ok(['high', 'moderate'].includes(urgencyLevel), `Marcus urgencyLevel should be high or moderate, got ${urgencyLevel}`);
+});
+
+test('scoreClient: returns topReasonChips array with at most 3 items', () => {
+  const recs = runWorkflow(mockEmma);
+  const { topReasonChips } = scoreClient(mockEmma, recs);
+  assert.ok(Array.isArray(topReasonChips), 'topReasonChips should be an array');
+  assert.ok(topReasonChips.length <= 3, `topReasonChips should have at most 3 items, got ${topReasonChips.length}`);
+});
+
+test('scoreClient: urgencyScore is always 0–100', () => {
+  const clients = [mockEmma, mockMarcus, mockPriya, mockDavid, mockSarah];
+  for (const client of clients) {
+    const recs = runWorkflow(client);
+    const { urgencyScore } = scoreClient(client, recs);
+    assert.ok(urgencyScore >= 0 && urgencyScore <= 100, `urgencyScore out of range: ${urgencyScore}`);
+  }
+});
+
+test('scoreClient: diagnosisSummary is a string', () => {
+  const recs = runWorkflow(mockEmma);
+  const { diagnosisSummary } = scoreClient(mockEmma, recs);
+  assert.equal(typeof diagnosisSummary, 'string');
+});
+
+test('scoreClient: empty data returns routine score', () => {
+  const minimalData = { client: { id: 'x' }, assessments: [], appointments: [], diagnoses: [], progressNotes: [], treatmentPlan: null };
+  const { urgencyScore, urgencyLevel } = scoreClient(minimalData, []);
+  assert.ok(urgencyScore >= 0 && urgencyScore < 20, `Minimal data should yield routine, got ${urgencyScore}`);
+  assert.equal(urgencyLevel, 'routine');
+});
+
+// ─── contentTemplates ─────────────────────────────────────────────────────────
+
+import {
+  AI_DISCLAIMER,
+  renderSessionAgenda,
+  renderNotePrep,
+  renderVerseSuggestions,
+  renderPrayerPrompt,
+  renderCbtExercise,
+  renderJournalPrompt,
+  renderFollowupMessage,
+  renderActionContent,
+} from './contentTemplates.js';
+
+const sampleRec = {
+  ruleId: 'rule_test',
+  category: 'safety',
+  title: 'Test Recommendation',
+  summary: 'A sample recommendation summary.',
+  evidence: ['Evidence A', 'Evidence B'],
+  cautions: ['Caution note'],
+  docNote: 'Document the thing.',
+  faithNote: null,
+  priority: 5,
+  status: 'pending',
+};
+
+test('AI_DISCLAIMER does not contain "AI-assisted"', () => {
+  assert.ok(!AI_DISCLAIMER.includes('AI-assisted'), `Disclaimer should not say "AI-assisted": "${AI_DISCLAIMER}"`);
+});
+
+test('renderSessionAgenda: returns a string containing client name', () => {
+  const recs = runWorkflow(mockEmma);
+  const out = renderSessionAgenda('Emma R.', recs);
+  assert.equal(typeof out, 'string');
+  assert.ok(out.includes('Emma R.'), 'Session agenda should include client name');
+  assert.ok(out.includes(AI_DISCLAIMER), 'Session agenda should include disclaimer');
+});
+
+test('renderSessionAgenda: empty rec list returns no-items message', () => {
+  const out = renderSessionAgenda('Test Client', []);
+  assert.ok(out.includes('No open workflow items'), 'Expected no-items fallback message');
+});
+
+test('renderNotePrep: returns a string with title and disclaimer', () => {
+  const out = renderNotePrep(sampleRec);
+  assert.equal(typeof out, 'string');
+  assert.ok(out.includes(sampleRec.title), 'Note prep should include rec title');
+  assert.ok(out.includes(AI_DISCLAIMER), 'Note prep should include disclaimer');
+});
+
+test('renderVerseSuggestions: returns a string for each known category', () => {
+  const categories = ['safety', 'clinical_caution', 'session_focus', 'homework', 'relationship', 'spiritual', 'coordination', 'monitoring'];
+  for (const cat of categories) {
+    const rec = { ...sampleRec, category: cat };
+    const out = renderVerseSuggestions(rec);
+    assert.equal(typeof out, 'string', `Expected string for category ${cat}`);
+    assert.ok(out.length > 0, `Expected non-empty output for category ${cat}`);
+  }
+});
+
+test('renderPrayerPrompt: returns a string including rec title', () => {
+  const out = renderPrayerPrompt(sampleRec);
+  assert.ok(out.includes(sampleRec.title));
+  assert.ok(out.includes(AI_DISCLAIMER));
+});
+
+test('renderCbtExercise: returns grounding exercise for anxiety rec', () => {
+  const anxietyRec = { ...sampleRec, category: 'clinical_caution', evidence: ['GAD-7 elevated'] };
+  const out = renderCbtExercise(anxietyRec);
+  assert.ok(out.includes('5-4-3-2-1'), 'Expected grounding exercise for anxiety');
+});
+
+test('renderCbtExercise: returns thought record for non-anxiety rec', () => {
+  const out = renderCbtExercise(sampleRec);
+  assert.ok(out.includes('Thought Record'), 'Expected thought record for non-anxiety rec');
+});
+
+test('renderJournalPrompt: includes faith reflection for faith-integrated rec', () => {
+  const faithRec = { ...sampleRec, faithNote: 'Faith note here' };
+  const out = renderJournalPrompt(faithRec);
+  assert.ok(out.includes("Where did you sense God"), 'Expected faith reflection prompt');
+});
+
+test('renderFollowupMessage: includes client first name', () => {
+  const out = renderFollowupMessage('Marcus', sampleRec);
+  assert.ok(out.includes('Marcus'), 'Follow-up message should include client first name');
+  assert.ok(out.includes(AI_DISCLAIMER));
+});
+
+test('renderActionContent: dispatches correctly to each renderer', () => {
+  const ctx = { clientName: 'Test Client', clientFirstName: 'Test', allRecommendations: [sampleRec] };
+  const keys = ['generate_session_agenda', 'generate_note_prep', 'suggest_verses', 'create_prayer_prompt', 'create_cbt_exercise', 'create_journal_prompt', 'draft_followup_message'];
+  for (const key of keys) {
+    const out = renderActionContent(key, sampleRec, ctx);
+    assert.equal(typeof out, 'string', `Expected string output for action key '${key}'`);
+  }
+});
+
+test('renderActionContent: unknown key returns null', () => {
+  assert.equal(renderActionContent('unknown_action', sampleRec, {}), null);
+});
+
+// ─── applyPersistedStates ────────────────────────────────────────────────────
+
+import { applyPersistedStates } from './applyPersistedStates.js';
+
+test('applyPersistedStates: returns original recs when applyStates=false', () => {
+  const recs = runWorkflow(mockDavid);
+  const states = { [recs[0].ruleId]: { status: 'deferred' } };
+  const result = applyPersistedStates(recs, states, false);
+  assert.equal(result, recs, 'When applyStates=false, must return the exact same array reference');
+});
+
+test('applyPersistedStates: applies deferred status from persisted state', () => {
+  const recs = runWorkflow(mockDavid);
+  const lowPriorityRec = recs.find((r) => r.priority < 9);
+  assert.ok(lowPriorityRec, 'Need a low-priority rec for this test');
+  const states = { [lowPriorityRec.ruleId]: { status: 'deferred' } };
+  const result = applyPersistedStates(recs, states, true);
+  const applied = result.find((r) => r.ruleId === lowPriorityRec.ruleId);
+  assert.equal(applied.status, 'deferred', 'Low-priority rec should be deferred');
+});
+
+test('applyPersistedStates: safety lock blocks deferred for high-priority recs', () => {
+  const recs = runWorkflow(mockEmma);
+  const highRec = recs.find((r) => r.priority >= 9);
+  assert.ok(highRec, 'Need a high-priority safety rec from Emma');
+  const states = { [highRec.ruleId]: { status: 'deferred' } };
+  const result = applyPersistedStates(recs, states, true);
+  const applied = result.find((r) => r.ruleId === highRec.ruleId);
+  assert.equal(applied.status, 'pending', `Safety lock: high-priority rec must not be deferred, got '${applied.status}'`);
+});
+
+test('applyPersistedStates: safety lock blocks hidden for high-priority recs', () => {
+  const recs = runWorkflow(mockEmma);
+  const highRec = recs.find((r) => r.priority >= 9);
+  const states = { [highRec.ruleId]: { status: 'hidden' } };
+  const result = applyPersistedStates(recs, states, true);
+  const applied = result.find((r) => r.ruleId === highRec.ruleId);
+  assert.equal(applied.status, 'pending', `Safety lock: high-priority rec must not be hidden, got '${applied.status}'`);
+});
+
+test('applyPersistedStates: rec with no persisted state is unchanged', () => {
+  const recs = runWorkflow(mockDavid);
+  const result = applyPersistedStates(recs, {}, true);
+  for (let i = 0; i < recs.length; i++) {
+    assert.equal(result[i].status, recs[i].status, `Rec ${recs[i].ruleId} status should be unchanged`);
+  }
+});
+
+// ─── ruleSessionFrequencyDecline ─────────────────────────────────────────────
+
+import { ruleSessionFrequencyDecline } from './rules/sessionRules.js';
+
+function makeAppt(id, daysAgoN, status = 'completed') {
+  const d = new Date();
+  d.setDate(d.getDate() - daysAgoN);
+  return { id, status, startsAt: d.toISOString(), durationMinutes: 50 };
+}
+
+test('ruleSessionFrequencyDecline: fires when spacing widens from 7 to 21+ days', () => {
+  const data = {
+    client: { id: 'test-freq', status: 'active' },
+    appointments: [
+      makeAppt('a1', 70),
+      makeAppt('a2', 63), // 7d gap
+      makeAppt('a3', 56), // 7d gap
+      makeAppt('a4', 35), // 21d gap — widening
+    ],
+    assessments: [], diagnoses: [], progressNotes: [], treatmentPlan: null, faithProfile: null, homeworkPending: [], referrals: [],
+  };
+  const rec = ruleSessionFrequencyDecline(data, 'test-freq');
+  assert.ok(rec !== null, 'Expected rule to fire when spacing widened 7d → 21d');
+  assert.equal(rec.category, 'session_focus');
+  assert.equal(rec.ruleId, 'rule_session_frequency_decline');
+});
+
+test('ruleSessionFrequencyDecline: does not fire when spacing is stable', () => {
+  const data = {
+    client: { id: 'test-freq2', status: 'active' },
+    appointments: [
+      makeAppt('b1', 42),
+      makeAppt('b2', 28), // 14d gap
+      makeAppt('b3', 14), // 14d gap
+      makeAppt('b4', 0),  // 14d gap
+    ],
+    assessments: [], diagnoses: [], progressNotes: [], treatmentPlan: null, faithProfile: null, homeworkPending: [], referrals: [],
+  };
+  const rec = ruleSessionFrequencyDecline(data, 'test-freq2');
+  assert.equal(rec, null, 'Should not fire when spacing is stable');
+});
+
+test('ruleSessionFrequencyDecline: does not fire with fewer than 3 completed appointments', () => {
+  const data = {
+    client: { id: 'test-freq3' },
+    appointments: [makeAppt('c1', 28), makeAppt('c2', 7)],
+    assessments: [], diagnoses: [], progressNotes: [], treatmentPlan: null, faithProfile: null, homeworkPending: [], referrals: [],
+  };
+  const rec = ruleSessionFrequencyDecline(data, 'test-freq3');
+  assert.equal(rec, null, 'Should not fire with < 3 appointments');
+});
+
+test('ruleSessionFrequencyDecline: ignores no-show appointments when computing gaps', () => {
+  const data = {
+    client: { id: 'test-freq4' },
+    appointments: [
+      makeAppt('d1', 70),
+      makeAppt('d2', 63),
+      { id: 'd3', status: 'no_show', startsAt: makeAppt('d3', 56).startsAt, durationMinutes: 50 },
+      makeAppt('d4', 49), // 7d gap, not inflated
+    ],
+    assessments: [], diagnoses: [], progressNotes: [], treatmentPlan: null, faithProfile: null, homeworkPending: [], referrals: [],
+  };
+  const rec = ruleSessionFrequencyDecline(data, 'test-freq4');
+  assert.equal(rec, null, 'Should not fire when no-show is excluded and spacing is stable');
+});
+
+// ─── ruleSupervisionMissing ──────────────────────────────────────────────────
+
+import { ruleSupervisionMissing } from './rules/clinicalRules.js';
+
+function daysAgoDate(n) {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toISOString();
+}
+
+test('ruleSupervisionMissing: fires for Emma (PHQ-9=22, no supervision note)', () => {
+  const rec = ruleSupervisionMissing(mockEmma, mockEmma.client.id);
+  assert.ok(rec !== null, 'Expected rule to fire for Emma (severe PHQ-9, no supervision note)');
+  assert.equal(rec.category, 'clinical_caution');
+  assert.equal(rec.ruleId, 'rule_clinical_supervision_missing');
+});
+
+test('ruleSupervisionMissing: does not fire when supervision note exists in last 30 days', () => {
+  const dataWithSupervision = {
+    ...mockEmma,
+    progressNotes: [
+      ...mockEmma.progressNotes,
+      {
+        id: 'sup-note-1',
+        noteType: 'supervision_note',
+        summary: 'Discussed safety plan with supervisor.',
+        locked: true,
+        createdAt: daysAgoDate(5),
+        appointmentId: null,
+      },
+    ],
+  };
+  const rec = ruleSupervisionMissing(dataWithSupervision, mockEmma.client.id);
+  assert.equal(rec, null, 'Should not fire when recent supervision note exists');
+});
+
+test('ruleSupervisionMissing: does not fire for routine client (low PHQ-9, no no-shows)', () => {
+  const rec = ruleSupervisionMissing(mockDavid, mockDavid.client.id);
+  assert.equal(rec, null, 'Should not fire for David (routine risk, low PHQ-9)');
+});
+
+test('ruleSupervisionMissing: fires when 2 consecutive no-shows present (no supervision)', () => {
+  const highNoShowData = {
+    ...mockEmma,
+    assessments: [{ id: 'phq-low', inventoryName: 'PHQ-9', score: 8, item9Score: 0, scoredAt: daysAgoDate(7) }],
+    progressNotes: [],
+  };
+  const rec = ruleSupervisionMissing(highNoShowData, mockEmma.client.id);
+  assert.ok(rec !== null, 'Expected rule to fire due to consecutive no-shows even with low PHQ-9');
+});
+
+// ─── rulePhq9SomaticCluster ──────────────────────────────────────────────────
+
+import { rulePhq9SomaticCluster, rulePhq9Anhedonia } from './rules/clinicalRules.js';
+import { renderCareSummaryHtml } from './contentTemplates.js';
+
+function phq9Assessment(overrides = {}) {
+  return {
+    id: 'phq-test', inventoryName: 'PHQ-9', score: 18,
+    item1Score: 2, item2Score: 2, item3Score: 2, item4Score: 2,
+    item5Score: 1, item6Score: 2, item7Score: 2, item8Score: 2,
+    item9Score: 0, scoredAt: daysAgoDate(7),
+    ...overrides,
+  };
+}
+
+test('rulePhq9SomaticCluster: fires when items 3, 4, 8 all >= 2', () => {
+  const data = { client: { id: 'sc1' }, assessments: [phq9Assessment()], appointments: [], diagnoses: [], progressNotes: [], treatmentPlan: null, faithProfile: null, homeworkPending: [], referrals: [] };
+  const rec = rulePhq9SomaticCluster(data, 'sc1');
+  assert.ok(rec !== null, 'Expected somatic cluster rule to fire');
+  assert.equal(rec.ruleId, 'rule_clinical_phq9_somatic');
+  assert.equal(rec.category, 'clinical_caution');
+});
+
+test('rulePhq9SomaticCluster: does not fire when item 4 < 2', () => {
+  const data = { client: { id: 'sc2' }, assessments: [phq9Assessment({ item4Score: 1 })], appointments: [], diagnoses: [], progressNotes: [], treatmentPlan: null, faithProfile: null, homeworkPending: [], referrals: [] };
+  const rec = rulePhq9SomaticCluster(data, 'sc2');
+  assert.equal(rec, null, 'Should not fire when one somatic item is below threshold');
+});
+
+test('rulePhq9SomaticCluster: does not fire when sub-items are null (not available)', () => {
+  const data = { client: { id: 'sc3' }, assessments: [{ id: 'phq-no-items', inventoryName: 'PHQ-9', score: 18, scoredAt: daysAgoDate(7) }], appointments: [], diagnoses: [], progressNotes: [], treatmentPlan: null, faithProfile: null, homeworkPending: [], referrals: [] };
+  const rec = rulePhq9SomaticCluster(data, 'sc3');
+  assert.equal(rec, null, 'Should not fire when sub-items are not available');
+});
+
+test('rulePhq9SomaticCluster: fires for Emma (items 3=3, 4=3, 8=2)', () => {
+  const rec = rulePhq9SomaticCluster(mockEmma, mockEmma.client.id);
+  assert.ok(rec !== null, 'Expected somatic cluster to fire for Emma');
+});
+
+// ─── rulePhq9Anhedonia ───────────────────────────────────────────────────────
+
+test('rulePhq9Anhedonia: fires when item 1 >= 2', () => {
+  const data = { client: { id: 'an1' }, assessments: [phq9Assessment({ item1Score: 2 })], appointments: [], diagnoses: [], progressNotes: [], treatmentPlan: null, faithProfile: null, homeworkPending: [], referrals: [] };
+  const rec = rulePhq9Anhedonia(data, 'an1');
+  assert.ok(rec !== null, 'Expected anhedonia rule to fire when item1=2');
+  assert.equal(rec.ruleId, 'rule_clinical_phq9_anhedonia');
+});
+
+test('rulePhq9Anhedonia: does not fire when item 1 < 2', () => {
+  const data = { client: { id: 'an2' }, assessments: [phq9Assessment({ item1Score: 1 })], appointments: [], diagnoses: [], progressNotes: [], treatmentPlan: null, faithProfile: null, homeworkPending: [], referrals: [] };
+  const rec = rulePhq9Anhedonia(data, 'an2');
+  assert.equal(rec, null, 'Should not fire when item 1 < 2');
+});
+
+test('rulePhq9Anhedonia: fires for Emma (item1=3)', () => {
+  const rec = rulePhq9Anhedonia(mockEmma, mockEmma.client.id);
+  assert.ok(rec !== null, 'Expected anhedonia to fire for Emma (item1=3)');
+});
+
+test('rulePhq9Anhedonia: does not fire when no PHQ-9 assessment', () => {
+  const data = { client: { id: 'an3' }, assessments: [], appointments: [], diagnoses: [], progressNotes: [], treatmentPlan: null, faithProfile: null, homeworkPending: [], referrals: [] };
+  const rec = rulePhq9Anhedonia(data, 'an3');
+  assert.equal(rec, null, 'Should not fire with no assessment');
+});
+
+// ─── renderCareSummaryHtml ───────────────────────────────────────────────────
+
+test('renderCareSummaryHtml: returns a valid HTML document', () => {
+  const recs = runWorkflow(mockEmma);
+  const html = renderCareSummaryHtml(mockEmma, recs);
+  assert.ok(html.startsWith('<!DOCTYPE html>'), 'Should start with DOCTYPE');
+  assert.ok(html.includes('</html>'), 'Should close the html tag');
+});
+
+test('renderCareSummaryHtml: includes client first name', () => {
+  const recs = runWorkflow(mockEmma);
+  const html = renderCareSummaryHtml(mockEmma, recs);
+  assert.ok(html.includes('Emma'), 'Should include client first name');
+});
+
+test('renderCareSummaryHtml: includes diagnosis code', () => {
+  const recs = runWorkflow(mockEmma);
+  const html = renderCareSummaryHtml(mockEmma, recs);
+  assert.ok(html.includes('F32.2'), 'Should include diagnosis code');
+});
+
+test('renderCareSummaryHtml: includes PHQ-9 score', () => {
+  const recs = runWorkflow(mockEmma);
+  const html = renderCareSummaryHtml(mockEmma, recs);
+  assert.ok(html.includes('PHQ-9') || html.includes('22'), 'Should include PHQ-9 score');
+});
+
+test('renderCareSummaryHtml: includes recommendation titles', () => {
+  const recs = runWorkflow(mockEmma);
+  const html = renderCareSummaryHtml(mockEmma, recs);
+  assert.ok(recs.length > 0 && html.includes(recs[0].title.slice(0, 10)), 'Should include rec title text');
+});
+
+test('renderCareSummaryHtml: escapes HTML special characters in client name', () => {
+  const dataWithSpecialChars = { ...mockEmma, client: { ...mockEmma.client, firstName: 'Test<script>', lastName: 'User&Co' } };
+  const html = renderCareSummaryHtml(dataWithSpecialChars, []);
+  assert.ok(!html.includes('<script>'), 'Should escape < in client name');
+  assert.ok(html.includes('&lt;script&gt;'), 'Should include escaped version');
+});
+
+test('renderCareSummaryHtml: works with empty recommendations', () => {
+  const html = renderCareSummaryHtml(mockDavid, []);
+  assert.ok(html.includes('No workflow recommendations'), 'Should show no-recs message');
+});
+
+test('New rules: Emma has somatic and anhedonia recs in full workflow output', () => {
+  const recs = runWorkflow(mockEmma);
+  const somatic = recs.find((r) => r.ruleId === 'rule_clinical_phq9_somatic');
+  const anhedonia = recs.find((r) => r.ruleId === 'rule_clinical_phq9_anhedonia');
+  assert.ok(somatic, 'Expected rule_clinical_phq9_somatic to fire for Emma');
+  assert.ok(anhedonia, 'Expected rule_clinical_phq9_anhedonia to fire for Emma');
 });

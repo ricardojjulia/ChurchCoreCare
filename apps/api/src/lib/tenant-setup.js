@@ -14,6 +14,7 @@
 
 import crypto from 'node:crypto';
 import pg from 'pg';
+import { applyPlanDefaults } from './subscriptionPlan.js';
 
 const { Pool } = pg;
 
@@ -192,6 +193,9 @@ export async function bootstrapTenantSchema({
       `INSERT INTO tenants (id, name, plan_type) VALUES ($1, $2, 'trial') ON CONFLICT (id) DO NOTHING`,
       [tenantRecordId, practiceName],
     );
+
+    // Apply plan defaults (limits + ui_persona) for the initial plan type
+    await applyPlanDefaults(tenantRecordId, 'trial', client);
 
     await client.query(
       `INSERT INTO practices (id, tenant_id, name, practice_type) VALUES ($1, $2, $3, 'solo') ON CONFLICT (id) DO NOTHING`,

@@ -10,13 +10,16 @@ import LifecycleTab from './tabs/LifecycleTab.jsx';
 import AppointmentsTab from './tabs/AppointmentsTab.jsx';
 import ChartTab from './tabs/ChartTab.jsx';
 import ClientsTab from './tabs/ClientsTab.jsx';
+import FaithContextTab from './tabs/FaithContextTab.jsx';
+import MinistryTab from './tabs/MinistryTab.jsx';
+import SubscriptionTab from './tabs/SubscriptionTab.jsx';
 import { useI18n } from '../../lib/i18nContext.jsx';
 import { PageSurface, SectionSurface } from '../ui/surface.jsx';
 
 const STUDIO_TABS = [
   { id: 'practice', labelKey: 'studio.tab.practice' },
-  { id: 'locations', labelKey: 'studio.tab.locations' },
-  { id: 'staff', labelKey: 'studio.tab.staff' },
+  { id: 'locations', labelKey: 'studio.tab.locations', soloHidden: true },
+  { id: 'staff', labelKey: 'studio.tab.staff', soloHidden: true },
   { id: 'lifecycle', labelKey: 'studio.tab.lifecycle' },
   { id: 'chart', labelKey: 'studio.tab.chart' },
   { id: 'documentsStudio', labelKey: 'studio.tab.documentsStudio' },
@@ -24,27 +27,34 @@ const STUDIO_TABS = [
   { id: 'appointments', labelKey: 'studio.tab.appointments' },
   { id: 'offerings', labelKey: 'studio.tab.offerings' },
   { id: 'portal', labelKey: 'studio.tab.portal' },
+  { id: 'faith', labelKey: 'studio.tab.faith' },
+  { id: 'ministry', labelKey: 'studio.tab.ministry' },
+  { id: 'subscription', labelKey: 'studio.tab.subscription' },
 ];
 
-export default function WorkspaceStudioPage({ initialTab = 'portal', onSchedulePortalRequest, onViewClient, onOpenCounselorMaintenance, initialDocumentsClientId = '' }) {
+export default function WorkspaceStudioPage({ initialTab = 'portal', onSchedulePortalRequest, onViewClient, onOpenCounselorMaintenance, initialDocumentsClientId = '', userRole = null, uiPersona = null }) {
   const { t } = useI18n();
+  const isSolo = uiPersona === 'solo';
+  const visibleTabs = STUDIO_TABS.filter((tab) => !(isSolo && tab.soloHidden));
   const [activeTab, setActiveTab] = useState(initialTab || 'portal');
   useEffect(() => {
     setActiveTab(initialTab || 'portal');
   }, [initialTab]);
 
+  const pageTitle = isSolo ? t('nav.myPractice') : t('studio.title');
+
   return (
-    <PageSurface title={t('studio.title')}>
+    <PageSurface title={pageTitle}>
       <SectionSurface>
         <Tabs value={activeTab} onChange={(value) => setActiveTab(value || 'portal')}>
           <Tabs.List style={{ overflowX: 'auto', flexWrap: 'nowrap' }}>
-            {STUDIO_TABS.map((tab) => (
+            {visibleTabs.map((tab) => (
               <Tabs.Tab key={tab.id} value={tab.id} style={{ whiteSpace: 'nowrap' }}>
                 {t(tab.labelKey)}
               </Tabs.Tab>
             ))}
           </Tabs.List>
-          {STUDIO_TABS.map((tab) => (
+          {visibleTabs.map((tab) => (
             <Tabs.Panel key={tab.id} value={tab.id} pt="md">
               {tab.id === 'portal' ? (
                 <PortalTab onSchedulePortalRequest={onSchedulePortalRequest} onViewClient={onViewClient} />
@@ -66,6 +76,12 @@ export default function WorkspaceStudioPage({ initialTab = 'portal', onScheduleP
                 <ChartTab />
               ) : tab.id === 'clients' ? (
                 <ClientsTab onViewClient={onViewClient} />
+              ) : tab.id === 'faith' ? (
+                <FaithContextTab userRole={userRole} />
+              ) : tab.id === 'ministry' ? (
+                <MinistryTab userRole={userRole} />
+              ) : tab.id === 'subscription' ? (
+                <SubscriptionTab />
               ) : (
                 <Text c="dimmed" fz="sm">{t('studio.placeholderForTab', { tab: t(tab.labelKey) })}</Text>
               )}

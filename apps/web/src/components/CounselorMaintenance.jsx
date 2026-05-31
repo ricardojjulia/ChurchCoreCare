@@ -44,7 +44,7 @@ const ROLE_COLORS = {
 
 const COUNSELOR_ROLES = new Set(['counselor', 'intern']);
 
-export default function CounselorMaintenance({ userRole, onViewCounselor }) {
+export default function CounselorMaintenance({ userRole, onViewCounselor, onCounselorCreated }) {
   const { t } = useI18n();
   const [items,   setItems]   = useState([]);
   const [loading, setLoading] = useState(true);
@@ -130,6 +130,7 @@ export default function CounselorMaintenance({ userRole, onViewCounselor }) {
           autoClose: tempPassword ? false : 4000,
         });
         form.reset();
+        onCounselorCreated?.();
       }
       await loadStaff();
     } catch (err) {

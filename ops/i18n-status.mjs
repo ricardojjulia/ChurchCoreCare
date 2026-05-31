@@ -10,7 +10,8 @@
  *   API_BASE_URL=http://127.0.0.1:3001 node ops/i18n-status.mjs
  */
 
-const API_BASE = process.env.API_BASE_URL || 'http://127.0.0.1:3001';
+const API_PORT = process.env.API_PORT || 3101;
+const API_BASE = process.env.API_BASE_URL || `http://127.0.0.1:${API_PORT}`;
 
 const headers = {
   'x-staff-role': 'practice_admin',

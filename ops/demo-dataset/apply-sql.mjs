@@ -1,4 +1,4 @@
-import { createRequire } from 'node:module';
+import pg from 'pg';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -6,8 +6,6 @@ import { fileURLToPath } from 'node:url';
 import { closeDemoDatasetPool, hasDbEnv, verifyDemoDataset } from './common.mjs';
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
-const requireFromApiWorkspace = createRequire(new URL('../../apps/api/package.json', import.meta.url));
-const mysql = requireFromApiWorkspace('mysql2/promise');
 const defaultSqlPath = path.join(currentDir, 'generated', 'demo-dataset.apply.sql');
 const sqlPath = process.env.DEMO_SQL_PATH
   ? path.resolve(process.cwd(), process.env.DEMO_SQL_PATH)
@@ -24,21 +22,20 @@ if (!hasDbEnv()) {
 
 try {
   const sql = await readFile(sqlPath, 'utf8');
-  const connection = await mysql.createConnection({
+  const client = new pg.Client({
     host: process.env.DB_HOST || '127.0.0.1',
-    port: Number(process.env.DB_PORT || 3306),
+    port: Number(process.env.DB_PORT || 5432),
     database: process.env.DB_NAME,
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: true } : false,
-    multipleStatements: true,
-    timezone: 'Z',
   });
+  await client.connect();
 
   try {
-    await connection.query(sql);
+    await client.query(sql);
   } finally {
-    await connection.end();
+    await client.end();
   }
 
   const verification = await verifyDemoDataset();

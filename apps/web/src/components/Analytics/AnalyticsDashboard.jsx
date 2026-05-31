@@ -7,6 +7,7 @@ import {
   useSessionVolume, useRevenueStats, useOutcomeTrends,
   useCounselorProductivity, exportCsv,
 } from '../../lib/useAnalytics.js';
+import { useI18n } from '../../lib/i18nContext.jsx';
 import StatCard from './StatCard.jsx';
 import SessionVolumeChart from './SessionVolumeChart.jsx';
 import CounselorProductivityTable from './CounselorProductivityTable.jsx';
@@ -20,12 +21,12 @@ const PRESETS = [
   { label: 'Year', value: 'year' },
 ];
 
-function fmtCurrency(n) {
-  return typeof n === 'number' ? `$${n.toLocaleString('en-US', { minimumFractionDigits: 0 })}` : '—';
-}
-
 export default function AnalyticsDashboard() {
   const [preset, setPreset] = useState('month');
+  const { formatCurrency } = useI18n();
+
+  // Revenue values from the API are dollar amounts (DECIMAL); convert to integer cents for formatCurrency.
+  const fmtCurrency = (n) => typeof n === 'number' ? formatCurrency(Math.round(n * 100)) : '—';
 
   const sessions = useSessionVolume({ preset });
   const revenue = useRevenueStats({ preset });
