@@ -306,11 +306,12 @@ export function renderFollowupMessage(clientFirstName, rec) {
  *
  * @param {{ client: Object, diagnoses?: Object[], assessments?: Object[], faithProfile?: Object|null, treatmentPlan?: Object|null }} data
  * @param {import('./types.js').Recommendation[]} recommendations
+ * @param {string} [locale='en-US'] — BCP 47 locale tag; pass `useI18n().locale` from the calling component
  * @returns {string} complete HTML document
  */
-export function renderCareSummaryHtml(data, recommendations) {
+export function renderCareSummaryHtml(data, recommendations, locale = 'en-US') {
   const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  const fmt = (iso) => { try { return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }); } catch { return String(iso ?? '—'); } };
+  const fmt = (iso) => { try { return new Date(iso).toLocaleDateString(locale, { year: 'numeric', month: 'long', day: 'numeric' }); } catch { return String(iso ?? '—'); } };
 
   const client = data.client ?? {};
   const clientName = esc(`${client.firstName ?? ''} ${client.lastName ?? ''}`.trim() || 'Unknown Client');

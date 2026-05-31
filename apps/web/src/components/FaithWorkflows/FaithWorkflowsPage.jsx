@@ -247,7 +247,7 @@ async function fetchRecommendationHistory(clientId, ruleId) {
  *   sharedOperationsSummary — canonical operations-summary payload for counts and urgency overlays
  */
 export default function FaithWorkflowsPage({ clients = [], currentUser, sharedOperationsSummary = null }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const demoModeEnabled = useMemo(() => isFaithWorkflowDemoEnabled(), []);
 
   // ─── Canvas view variant ─────────────────────────────────────────────────
@@ -478,14 +478,14 @@ export default function FaithWorkflowsPage({ clients = [], currentUser, sharedOp
 
   const handleExport = useCallback(() => {
     if (!selectedClientData || !selectedClientId) return;
-    const html = renderCareSummaryHtml(selectedClientData, recommendations);
+    const html = renderCareSummaryHtml(selectedClientData, recommendations, locale);
     const win = window.open('', '_blank');
     if (!win) return;
     win.document.write(html);
     win.document.close();
     win.focus();
     win.print();
-  }, [selectedClientData, recommendations, selectedClientId]);
+  }, [selectedClientData, recommendations, selectedClientId, locale]);
 
   const isLoadingSelected = selectedClientId && loadingSet.has(selectedClientId);
 

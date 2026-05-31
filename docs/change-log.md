@@ -2,6 +2,26 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## May 30, 2026 — i18n createLocale service and POST /v1/i18n/locales route
+
+### feat: add createLocale service method and POST /v1/i18n/locales endpoint
+
+**Date:** 2026-05-30
+**Affected area:** `apps/api/src/lib/i18n-store.js`, `apps/api/src/index.js`, `apps/api/test/`
+
+Adds the `createLocale(locale, label)` method to the i18n store. Validates the locale against `SUPPORTED_LOCALES`, returns `{ created: false, existed: true }` if the locale file already exists (idempotent), and writes a minimal scaffold file otherwise. Updates the `POST /v1/i18n/locales` route handler to call `createLocale` instead of `ensureLocale`, returning `{ created, existed, locale, label }` with 400 for unsupported locale codes. Adds 5 unit tests covering RBAC (counselor/client 403), validation (missing locale, unsupported code), and the happy path (practice_admin 200).
+
+**Modified files:**
+
+- `apps/api/src/lib/i18n-store.js` — added `createLocale` method to the store object
+- `apps/api/src/index.js` — updated `handleLocales` POST to call `createLocale`, surface unsupported_locale as 400
+
+**New files:**
+
+- `apps/api/test/i18n-locale-create.test.mjs` — 5 unit tests for POST /v1/i18n/locales
+
+---
+
 ## May 30, 2026 — Subscription Tracker + Solo UI Persona frontend
 
 ### feat: add Subscription tab, PersonaUpgradeModal, and solo/practice persona filtering

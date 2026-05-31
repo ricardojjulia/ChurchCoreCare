@@ -14,20 +14,16 @@ function calculateAge(dob) {
   return age;
 }
 
-function formatDate(ds) {
-  if (!ds) return null;
-  const d = new Date(ds);
-  return isNaN(d.getTime()) ? ds : d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-}
-
 export default function ClientDetailHeader({ client, onBack, onScheduleClient, onOpenClientDocuments }) {
-  const { t } = useI18n();
+  const { t, formatDate } = useI18n();
   const displayName = client.preferredName
     ? `${client.preferredName} (${client.firstName} ${client.lastName})`
     : `${client.firstName}${client.middleName ? ' ' + client.middleName : ''} ${client.lastName}`;
 
   const age = calculateAge(client.dateOfBirth);
-  const dob = formatDate(client.dateOfBirth);
+  const dob = client.dateOfBirth
+    ? (() => { const d = new Date(client.dateOfBirth); return isNaN(d.getTime()) ? client.dateOfBirth : formatDate(d, 'long'); })()
+    : null;
 
   return (
     <Paper radius={0} withBorder style={{ borderLeft: 0, borderRight: 0, borderTop: 0 }} p="md">

@@ -1,8 +1,8 @@
 # ChurchCore Care — Competitive Evaluation & MVP Assessment
 
-**Date:** May 28, 2026 (v3 — runtime validation pass)
+**Date:** May 30, 2026 (v4 — post-sprint update)
 **Author:** Engineering and product review
-**Version:** v7.0.0 (post-runtime-fix)
+**Version:** v7.1.0 (post-faith-platform-sprint)
 **Purpose:** Determine MVP readiness, competitive position, and priority gaps for SaaS launch
 
 ---
@@ -18,7 +18,18 @@ Two critical runtime bugs were discovered and fixed during that session:
 
 Both are fixed. The app now loads, authenticates, and serves data correctly. The competitive position and feature inventory are unchanged from v2.
 
-**Revised verdict on MVP:** Yes — and confirmed working. Not theoretical.
+**Revised verdict on MVP:** Yes — confirmed working and materially expanded since v3.
+
+**v4 additions (May 30, 2026):**
+
+- Client self-scheduling — 3-layer counselor-gated real-time slot booking
+- Practice faith profile — denomination vocabulary driving template language substitution
+- Onboarding wizard — 4-step guided setup for solo pastor-counselors
+- AACC CE tracking — BCPCC/NCCA credential renewal with print-ready HTML report
+- Church/ministry plan — ministry_admin role, scholarship billing, church identity fields
+- Subscription tracker + plan limits — 3-counselor/100-client cap for personal plan, 14-day grace, Workspace Studio usage tab
+- Solo UI persona — simplified nav and studio for personal-plan tenants; progressive unlock when team grows
+- i18n system completion — BCP 47, plural rules, formatCurrency/formatDate, es-MX complete, fr-FR/pt-BR ready (need GOOGLE_TRANSLATE_API_KEY)
 
 **What stands between the code and a first paying customer:**
 
@@ -26,6 +37,7 @@ Both are fixed. The app now loads, authenticates, and serves data correctly. The
 2. Stripe Dashboard setup (admin task — create products/prices)
 3. HIPAA BAA signed with GCP and vendors (legal task)
 4. Load demo dataset for sales demos (`node ops/demo-dataset/apply.mjs`)
+5. Set `GOOGLE_TRANSLATE_API_KEY` to activate fr-FR and pt-BR (optional for English-only launch)
 
 ---
 
@@ -129,7 +141,7 @@ The session INSERT did not include `revoked` (defaults to `FALSE`), so login suc
 | Stripe product/price setup | 🔴 LAUNCH GATE | Admin task — API keys and price IDs need to be set in env vars |
 | HIPAA BAA signed | 🔴 LAUNCH GATE | Legal task — must be signed with GCP and Stedi before PHI touches production |
 | Native iOS/Android apps | 🟡 MEDIUM | PWA delivered; native apps are TherapyNotes' 2026 push. SimplePractice has full native. Not a faith-niche blocker. |
-| Client self-scheduling | 🟡 MEDIUM | Portal has appointment requests; direct real-time booking slot selection is not yet implemented |
+| fr-FR / pt-BR translations | 🟡 MEDIUM | Both locales registered and ready; require GOOGLE_TRANSLATE_API_KEY to populate. es-MX is complete. |
 
 ---
 

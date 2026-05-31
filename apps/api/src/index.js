@@ -15575,13 +15575,21 @@ async function handleLocales(request, response, session) {
     if (requirePracticeAdmin(request, response, session)) return;
     const payload = await readJsonBody(request);
     const locale = (payload.locale ?? '').trim();
-    const label = (payload.label ?? '').trim();
+    const label = (payload.label ?? '').trim() || undefined;
     if (!locale) {
       writeJson(response, 400, { error: 'locale is required' });
       return;
     }
-    const catalog = await i18nStore.ensureLocale(locale, label);
-    writeJson(response, 201, catalog);
+    try {
+      const result = await i18nStore.createLocale(locale, label);
+      writeJson(response, 200, result);
+    } catch (err) {
+      if (err.code === 'unsupported_locale') {
+        writeJson(response, 400, { error: err.message });
+        return;
+      }
+      throw err;
+    }
     return;
   }
 

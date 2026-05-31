@@ -28,7 +28,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
 const I18N_DIR = path.join(ROOT, 'apps/api/data/i18n');
 const STATUS_DIR = path.join(ROOT, 'docs/i18n');
-const API_BASE = process.env.API_BASE_URL || 'http://127.0.0.1:3001';
+const API_PORT = process.env.API_PORT || 3101;
+const API_BASE = process.env.API_BASE_URL || `http://127.0.0.1:${API_PORT}`;
 
 const HEADERS = {
   'Content-Type': 'application/json',

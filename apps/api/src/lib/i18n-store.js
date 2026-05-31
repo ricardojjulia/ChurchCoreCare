@@ -107,6 +107,42 @@ export async function createI18nStore() {
       });
     },
 
+    async createLocale(locale, label) {
+      // 1. Validate locale is in SUPPORTED_LOCALES registry
+      const localeEntry = SUPPORTED_LOCALES.find((l) => l.code === locale);
+      if (!localeEntry) {
+        const err = new Error(`Locale '${locale}' is not in the supported locale registry`);
+        err.code = 'unsupported_locale';
+        throw err;
+      }
+
+      // 2. Check if locale file already exists — idempotent
+      const localePath = path.join(localeDir, `${locale}.json`);
+      try {
+        await readFile(localePath, 'utf8');
+        return { created: false, existed: true, locale, label: label || localeEntry.label };
+      } catch {
+        // File does not exist — proceed to create it
+      }
+
+      // 3. Create the locale file with minimal scaffold content
+      const content = {
+        __label: label || localeEntry.label,
+        __meta: {
+          machineTranslated: {},
+          humanReviewed: {},
+          lastTranslatedAt: null,
+        },
+      };
+      await writeFile(localePath, JSON.stringify(content, null, 2), 'utf8');
+
+      // Seed the in-memory overrides so subsequent listLocales() calls reflect it
+      overridesByLocale[locale] = content;
+
+      // 4. Return creation result
+      return { created: true, existed: false, locale, label: label || localeEntry.label };
+    },
+
     async ensureLocale(locale, label) {
       const code = resolveLocaleCode(locale);
       if (!overridesByLocale[code]) {
