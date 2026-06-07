@@ -43,6 +43,10 @@ import { buildIntakePreview } from './lib/intake-preview.js';
 import { HttpError, readJsonBody, writeJson, assertShape } from './lib/http.js';
 import { logError, logInfo, logWarn, serializeError } from './lib/log.js';
 import { translateMessages } from './lib/translate.js';
+import {
+  createChurchCoreLocalizationGovernance,
+  mapGovernanceError,
+} from './lib/localization-governance.js';
 import { handleCors, checkRateLimit, enforceRbac, enforceTenantScope, callerIdentity } from './lib/security.js';
 import { searchDsm5TrDiagnoses } from './lib/dsm5-tr-reference.js';
 import {
@@ -2258,12 +2262,63 @@ export async function handleApiRequest(request, response) {
       return;
     }
 
+    if (requestUrl.pathname === '/v1/i18n/governance/status') {
+      await handleLocalizationGovernanceStatus(request, response, requestUrl, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/i18n/governance/validate') {
+      await handleLocalizationGovernanceValidate(request, response, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/i18n/governance/reviews') {
+      await handleLocalizationGovernanceReview(request, response, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/i18n/governance/approve') {
+      await handleLocalizationGovernanceApprove(request, response, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/i18n/governance/activate') {
+      await handleLocalizationGovernanceActivate(request, response, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/i18n/governance/rollback') {
+      await handleLocalizationGovernanceRollback(request, response, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/i18n/governance/reviewer-assignments') {
+      await handleLocalizationReviewerAssignments(request, response, requestUrl, session);
+      return;
+    }
+
     if (requestUrl.pathname === '/v1/i18n/catalog') {
       if (request.method !== 'GET') {
         writeJson(response, 405, { error: 'Method not allowed' });
         return;
       }
-      writeJson(response, 200, i18nStore.getCatalog(requestUrl.searchParams.get('locale') ?? 'en-US'));
+      const locale = requestUrl.searchParams.get('locale') ?? 'en-US';
+      if (process.env.DB_NAME) {
+        try {
+          const governance = createLocalizationGovernance(request, session);
+          const governed = await governance.getRuntimeCatalog(locale);
+          writeJson(response, 200, {
+            ...i18nStore.getCatalog(locale),
+            messages: governed.messages,
+            governanceState: governed.governanceState,
+          });
+        } catch (error) {
+          const mapped = mapGovernanceError(error);
+          writeJson(response, mapped.statusCode, mapped.body);
+        }
+        return;
+      }
+      writeJson(response, 200, i18nStore.getCatalog(locale));
       return;
     }
 
@@ -2273,17 +2328,17 @@ export async function handleApiRequest(request, response) {
     }
 
     if (requestUrl.pathname.startsWith('/v1/i18n/catalog/')) {
-      await handleCatalogByLocale(request, response, requestUrl);
+      await handleCatalogByLocale(request, response, requestUrl, session);
       return;
     }
 
     if (requestUrl.pathname.startsWith('/v1/i18n/settings/')) {
-      await handleTranslationSettingsByLocale(request, response, requestUrl);
+      await handleTranslationSettingsByLocale(request, response, requestUrl, session);
       return;
     }
 
     if (requestUrl.pathname === '/v1/i18n/translate') {
-      await handleAutoTranslate(request, response);
+      await handleAutoTranslate(request, response, session);
       return;
     }
 
@@ -14426,12 +14481,36 @@ async function handleStaffFaithProfile(request, response, requestUrl, session) {
 
 async function handleLocales(request, response, session) {
   if (request.method === 'GET') {
+    if (process.env.DB_NAME) {
+      try {
+        const governance = createLocalizationGovernance(request, session);
+        const active = await governance.listRuntimeLocales();
+        const legacy = new Map(i18nStore.listLocales().map((item) => [item.code, item]));
+        writeJson(response, 200, {
+          items: active.map((item) => ({
+            ...(legacy.get(item.code) ?? { code: item.code, locale: item.code }),
+            governanceState: item.governanceState,
+          })),
+        });
+      } catch (error) {
+        const mapped = mapGovernanceError(error);
+        writeJson(response, mapped.statusCode, mapped.body);
+      }
+      return;
+    }
     writeJson(response, 200, { items: i18nStore.listLocales() });
     return;
   }
 
   if (request.method === 'POST') {
     if (requirePracticeAdmin(request, response, session)) return;
+    if (process.env.DB_NAME) {
+      writeJson(response, 409, {
+        error: 'Use the governed localization workflow for database locales.',
+        code: 'governance_required',
+      });
+      return;
+    }
     const payload = await readJsonBody(request);
     const locale = (payload.locale ?? '').trim();
     const label = (payload.label ?? '').trim();
@@ -14449,6 +14528,238 @@ async function handleLocales(request, response, session) {
   writeJson(response, 405, { error: 'Method not allowed' });
 }
 
+function localizationActor(request, session) {
+  return {
+    id: session?.staff_account_id
+      ?? session?.client_id
+      ?? sanitizeStr(request.headers['x-actor-id'] || '', 64)
+      ?? 'anonymous',
+    role: callerRole(request, session),
+  };
+}
+
+function createLocalizationGovernance(request, session) {
+  return createChurchCoreLocalizationGovernance({
+    tenantId: callerTenant(request, session),
+    client: pool,
+  });
+}
+
+async function executeLocalizationMutation({
+  request,
+  response,
+  session,
+  action,
+  targetType,
+  targetId,
+  operation,
+  successStatus = 200,
+}) {
+  try {
+    const result = await operation();
+    await emitAudit(request, action, targetType, targetId, session, {
+      result: 'success',
+      reasonCode: 'ok',
+    });
+    writeJson(response, successStatus, result);
+  } catch (error) {
+    const mapped = mapGovernanceError(error);
+    await emitAudit(request, action, targetType, targetId, session, {
+      result: mapped.auditResult,
+      reasonCode: mapped.reasonCode,
+    });
+    writeJson(response, mapped.statusCode, mapped.body);
+  }
+}
+
+async function handleLocalizationGovernanceStatus(request, response, requestUrl, session) {
+  if (request.method !== 'GET') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+  if (requirePracticeAdmin(request, response, session)) return;
+  if (!process.env.DB_NAME) {
+    writeJson(response, 503, { error: 'Database not configured' });
+    return;
+  }
+  const governance = createLocalizationGovernance(request, session);
+  try {
+    const locale = sanitizeStr(requestUrl.searchParams.get('locale') ?? '', 35);
+    if (locale) {
+      writeJson(response, 200, await governance.getStatus(locale));
+      return;
+    }
+    const locales = await governance.storage.listLocales();
+    writeJson(response, 200, {
+      items: await Promise.all(locales.map((item) => governance.getStatus(item.code))),
+    });
+  } catch (error) {
+    const mapped = mapGovernanceError(error);
+    writeJson(response, mapped.statusCode, mapped.body);
+  }
+}
+
+async function handleLocalizationGovernanceValidate(request, response, session) {
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+  const payload = await readJsonBody(request);
+  const versionId = sanitizeStr(payload.versionId, 64) ?? 'unknown';
+  await executeLocalizationMutation({
+    request,
+    response,
+    session,
+    action: 'localization.catalog.validate',
+    targetType: 'localization_catalog_version',
+    targetId: versionId,
+    operation: async () => {
+      const governance = createLocalizationGovernance(request, session);
+      return governance.validateVersion({
+        versionId,
+        glossary: payload.glossary ?? {},
+        untranslatedAllowlist: Array.isArray(payload.untranslatedAllowlist)
+          ? payload.untranslatedAllowlist
+          : [],
+        actor: localizationActor(request, session),
+      });
+    },
+  });
+}
+
+async function handleLocalizationGovernanceReview(request, response, session) {
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+  const payload = await readJsonBody(request);
+  const versionId = sanitizeStr(payload.versionId, 64) ?? 'unknown';
+  await executeLocalizationMutation({
+    request,
+    response,
+    session,
+    action: 'localization.review.submit',
+    targetType: 'localization_catalog_version',
+    targetId: versionId,
+    operation: async () => {
+      const governance = createLocalizationGovernance(request, session);
+      return governance.submitReview({
+        versionId,
+        reviewerRole: sanitizeStr(payload.reviewerRole, 32),
+        decision: sanitizeStr(payload.decision, 32),
+        comment: sanitizeStr(payload.comment, 1000) ?? '',
+        actor: localizationActor(request, session),
+      });
+    },
+  });
+}
+
+async function handleLocalizationGovernanceApprove(request, response, session) {
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+  const payload = await readJsonBody(request);
+  const versionId = sanitizeStr(payload.versionId, 64) ?? 'unknown';
+  await executeLocalizationMutation({
+    request,
+    response,
+    session,
+    action: 'localization.catalog.approve',
+    targetType: 'localization_catalog_version',
+    targetId: versionId,
+    operation: () => createLocalizationGovernance(request, session).approveVersion({
+      versionId,
+      actor: localizationActor(request, session),
+    }),
+  });
+}
+
+async function handleLocalizationGovernanceActivate(request, response, session) {
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+  const payload = await readJsonBody(request);
+  const versionId = sanitizeStr(payload.versionId, 64) ?? 'unknown';
+  await executeLocalizationMutation({
+    request,
+    response,
+    session,
+    action: 'localization.locale.activate',
+    targetType: 'localization_catalog_version',
+    targetId: versionId,
+    operation: () => createLocalizationGovernance(request, session).activateVersion({
+      versionId,
+      actor: localizationActor(request, session),
+    }),
+  });
+}
+
+async function handleLocalizationGovernanceRollback(request, response, session) {
+  if (request.method !== 'POST') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+  const payload = await readJsonBody(request);
+  const locale = sanitizeStr(payload.locale, 35) ?? 'unknown';
+  await executeLocalizationMutation({
+    request,
+    response,
+    session,
+    action: 'localization.locale.rollback',
+    targetType: 'localization_locale',
+    targetId: locale,
+    operation: () => createLocalizationGovernance(request, session).rollbackLocale({
+      locale,
+      toVersionId: sanitizeStr(payload.toVersionId, 64),
+      actor: localizationActor(request, session),
+    }),
+  });
+}
+
+async function handleLocalizationReviewerAssignments(request, response, requestUrl, session) {
+  const locale = request.method === 'GET'
+    ? sanitizeStr(requestUrl.searchParams.get('locale') ?? '', 35)
+    : null;
+  if (request.method === 'GET') {
+    if (requirePracticeAdmin(request, response, session)) return;
+    if (!locale) {
+      writeJson(response, 400, { error: 'locale is required' });
+      return;
+    }
+    try {
+      const items = await createLocalizationGovernance(request, session)
+        .listReviewerAssignments({ locale, actor: localizationActor(request, session) });
+      writeJson(response, 200, { items });
+    } catch (error) {
+      const mapped = mapGovernanceError(error);
+      writeJson(response, mapped.statusCode, mapped.body);
+    }
+    return;
+  }
+  if (request.method !== 'PUT') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+  const payload = await readJsonBody(request);
+  const targetLocale = sanitizeStr(payload.locale, 35) ?? 'unknown';
+  await executeLocalizationMutation({
+    request,
+    response,
+    session,
+    action: 'localization.reviewer_assignment.upsert',
+    targetType: 'localization_locale',
+    targetId: targetLocale,
+    operation: () => createLocalizationGovernance(request, session).assignReviewer({
+      locale: targetLocale,
+      reviewerId: sanitizeStr(payload.reviewerId, 64),
+      reviewerRole: sanitizeStr(payload.reviewerRole, 32),
+      actor: localizationActor(request, session),
+    }),
+  });
+}
+
 async function handleI18nStatus(request, response, session) {
   if (request.method !== 'GET') {
     writeJson(response, 405, { error: 'Method not allowed' });
@@ -14464,6 +14775,13 @@ async function handleDeleteLocale(request, response, requestUrl, session) {
     return;
   }
   if (requirePracticeAdmin(request, response, session)) return;
+  if (process.env.DB_NAME) {
+    writeJson(response, 409, {
+      error: 'Use the governed localization workflow for database locales.',
+      code: 'governance_required',
+    });
+    return;
+  }
   const locale = requestUrl.pathname.replace('/v1/i18n/locales/', '').trim();
   if (!locale) {
     writeJson(response, 400, { error: 'locale is required' });
@@ -14477,9 +14795,17 @@ async function handleDeleteLocale(request, response, requestUrl, session) {
   }
 }
 
-async function handleCatalogByLocale(request, response, requestUrl) {
+async function handleCatalogByLocale(request, response, requestUrl, session) {
   if (request.method !== 'PATCH') {
     writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+  if (requirePracticeAdmin(request, response, session)) return;
+  if (process.env.DB_NAME) {
+    writeJson(response, 409, {
+      error: 'Direct catalog editing is disabled for governed database locales.',
+      code: 'governance_required',
+    });
     return;
   }
 
@@ -14489,9 +14815,17 @@ async function handleCatalogByLocale(request, response, requestUrl) {
   writeJson(response, 200, catalog);
 }
 
-async function handleAutoTranslate(request, response) {
+async function handleAutoTranslate(request, response, session) {
   if (request.method !== 'POST') {
     writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+  if (requirePracticeAdmin(request, response, session)) return;
+  if (process.env.DB_NAME) {
+    writeJson(response, 409, {
+      error: 'Use the governed localization workflow for database locales.',
+      code: 'governance_required',
+    });
     return;
   }
 
@@ -14507,7 +14841,7 @@ async function handleAutoTranslate(request, response) {
   writeJson(response, 200, catalog);
 }
 
-async function handleTranslationSettingsByLocale(request, response, requestUrl) {
+async function handleTranslationSettingsByLocale(request, response, requestUrl, session) {
   const locale = requestUrl.pathname.replace('/v1/i18n/settings/', '').trim();
   if (!locale) {
     writeJson(response, 400, { error: 'locale is required' });
@@ -14526,6 +14860,7 @@ async function handleTranslationSettingsByLocale(request, response, requestUrl) 
     writeJson(response, 405, { error: 'Method not allowed' });
     return;
   }
+  if (requirePracticeAdmin(request, response, session)) return;
 
   const payload = await readJsonBody(request);
   const settings = await i18nStore.saveSettings(locale, payload.settings ?? {});
@@ -14790,7 +15125,7 @@ function inferAuditWorkflowFromAction(action) {
   return `${domain}.${resource}`;
 }
 
-function deriveAuditMetadata(request, action, session = null) {
+function deriveAuditMetadata(request, action, session = null, overrides = {}) {
   const tenantId = session?.tenant_id ?? (request.headers['x-tenant-id'] || 'system').trim();
   const actorRole = session?.role ?? (request.headers['x-staff-role'] || 'unknown').trim();
   const actorId = session?.staff_account_id ?? (request.headers['x-actor-id'] || 'anonymous').trim();
@@ -14801,8 +15136,8 @@ function deriveAuditMetadata(request, action, session = null) {
     actorId,
     actorType: inferAuditActorType(actorRole, actorId),
     requestId: requestId || undefined,
-    result: inferAuditResultFromAction(action),
-    reasonCode: inferAuditReasonCodeFromAction(action),
+    result: overrides.result ?? inferAuditResultFromAction(action),
+    reasonCode: overrides.reasonCode ?? inferAuditReasonCodeFromAction(action),
     sourceSurface: request.route ?? 'api',
     sourceWorkflow: inferAuditWorkflowFromAction(action),
     systemComponent: 'churchcore-api',
@@ -17343,6 +17678,7 @@ function resolveRoute(pathname) {
   if (pathname.startsWith('/v1/staff/')) return '/v1/staff/:id';
   if (pathname.startsWith('/v1/i18n/catalog/')) return '/v1/i18n/catalog/:locale';
   if (pathname.startsWith('/v1/i18n/settings/')) return '/v1/i18n/settings/:locale';
+  if (pathname.startsWith('/v1/i18n/governance/')) return pathname;
   return pathname;
 }
 
@@ -17453,9 +17789,9 @@ function roundMetric(value) {
  * Falls back to request headers for dev/test environments.
  * Never include PHI field values — only IDs and action names.
  */
-async function emitAudit(request, action, targetType, targetId, session = null) {
+async function emitAudit(request, action, targetType, targetId, session = null, overrides = {}) {
   try {
-    const metadata = deriveAuditMetadata(request, action, session);
+    const metadata = deriveAuditMetadata(request, action, session, overrides);
 
     const event = createAuditEvent({
       tenantId: metadata.tenantId,

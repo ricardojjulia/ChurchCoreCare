@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 
 import { createGovernanceService } from '@localization-governance/core';
 import { createFilesystemStorage } from '@localization-governance/storage-filesystem';
+import { createPostgresStorage } from '@localization-governance/storage-postgres';
 
 const storage = await createFilesystemStorage({ directory: './data' });
 let sequence = 0;
@@ -37,4 +38,15 @@ await service.activateVersion({ versionId: version.id, actor });
 const reopened = await createFilesystemStorage({ directory: './data' });
 const persisted = await reopened.getLocale('es-MX');
 assert.equal(persisted.activeVersionId, version.id);
-console.log(JSON.stringify({ passed: true, activeVersionId: version.id }));
+
+const portablePostgres = createPostgresStorage({
+  client: { async query() { return { rows: [] }; } },
+  tenantId: 'sample-tenant',
+});
+assert.equal(portablePostgres.tenantId, 'sample-tenant');
+
+console.log(JSON.stringify({
+  passed: true,
+  activeVersionId: version.id,
+  portablePostgres: true,
+}));

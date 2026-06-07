@@ -21,6 +21,7 @@
     "i18n:status": "node --env-file=.env ops/i18n-status.mjs",
     "i18n:translate": "node --env-file=.env ops/translate-locale.mjs",
     "localization:test": "pnpm --filter '@localization-governance/*' test && node --test ops/localization-governance/test/*.test.mjs",
+    "localization:test:postgres": "node ops/localization-governance/test-postgres.mjs",
     "localization:migrate": "node ops/localization-governance/migrate-churchcore.mjs",
     "localization:verify-pack": "node ops/localization-governance/verify-packed-consumer.mjs",
     "lint": "pnpm -r lint",

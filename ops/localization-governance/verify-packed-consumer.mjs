@@ -10,6 +10,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const PACKAGE_DIRS = [
   'packages/localization-governance-core',
   'packages/localization-governance-storage-filesystem',
+  'packages/localization-governance-storage-postgres',
   'packages/localization-governance-provider-google',
   'packages/localization-governance-cli',
 ];
@@ -46,6 +47,7 @@ try {
   packageJson.dependencies = {
     '@localization-governance/core': `file:${path.join(packs, tarballs.find((file) => file.includes('core-0.1.0')))}`,
     '@localization-governance/storage-filesystem': `file:${path.join(packs, tarballs.find((file) => file.includes('storage-filesystem-0.1.0')))}`,
+    '@localization-governance/storage-postgres': `file:${path.join(packs, tarballs.find((file) => file.includes('storage-postgres-0.1.0')))}`,
     '@localization-governance/provider-google': `file:${path.join(packs, tarballs.find((file) => file.includes('provider-google-0.1.0')))}`,
     '@localization-governance/cli': `file:${path.join(packs, tarballs.find((file) => file.includes('cli-0.1.0')))}`,
   };

@@ -186,7 +186,7 @@ The v2.0.0 spec covers all 150+ implemented endpoints across every surface of th
 - **Platform Administration** — tenant provisioning, impersonation sessions, data exports, and retention policies *(platform_admin only)*
 - **Reference** — DSM-5-TR diagnosis code search
 - **Internationalization** — locales, translation catalogs, settings, and auto-translate
-- **Localization governance design** — approved framework-neutral lifecycle and private npm packaging plan for validation, human review, approval, activation, rollback, CI enforcement, and reusable storage/provider adapters
+- **Localization governance lifecycle** — reusable private npm packages plus tenant-scoped PostgreSQL persistence, governed validation/review/approval/activation/rollback APIs, migration tooling, and CI verification
 - **Monitoring** — database health and local runtime visibility
 - **System** — health probes and bootstrap metadata
 
@@ -536,13 +536,15 @@ compatibility adapter.
 
 - Design: `docs/superpowers/specs/2026-06-07-localization-governance-toolkit-design.md`
 - Slice 1 implementation plan: `docs/superpowers/plans/2026-06-07-localization-governance-slice-1.md`
+- Slice 2 technical brief: `docs/superpowers/specs/2026-06-07-localization-governance-slice-2-technical-brief.md`
 
-Slice 1 packages:
+Portable packages:
 
 ```bash
 pnpm add \
   @localization-governance/core \
   @localization-governance/storage-filesystem \
+  @localization-governance/storage-postgres \
   @localization-governance/cli
 
 pnpm add @localization-governance/provider-google
@@ -579,12 +581,31 @@ pnpm localization:migrate
 pnpm localization:migrate -- --write
 ```
 
+To migrate an existing tenant into the durable PostgreSQL lifecycle after the
+database schema migration has run:
+
+```bash
+pnpm localization:migrate -- --postgres --tenant <tenant-id> --write
+```
+
+The migration is idempotent. English is activated as the source catalog,
+existing Spanish is activated as `legacy_unverified` with its evidence
+preserved, and French and Portuguese remain inactive drafts until governed
+review and activation complete.
+
+In database-backed mode, ChurchCore runtime reads continue using the existing
+i18n response shape. Governed operations are available under
+`/v1/i18n/governance/*`; legacy direct catalog mutations are rejected.
+Administrators manage lifecycle transitions, while review submission requires
+a matching tenant reviewer assignment.
+
 Portable package verification packs every package and installs the tarballs
 into a temporary workspace outside the monorepo:
 
 ```bash
 pnpm localization:test
 pnpm localization:verify-pack
+pnpm localization:test:postgres
 ```
 
 ### Local monitoring
@@ -681,6 +702,7 @@ The change log summarizes completed work across releases and documents the detai
 - Locale status docs: `docs/i18n/` — generated per-locale translation coverage and review readiness snapshots
 - Localization governance toolkit design: `docs/superpowers/specs/2026-06-07-localization-governance-toolkit-design.md`
 - Localization governance Slice 1 plan: `docs/superpowers/plans/2026-06-07-localization-governance-slice-1.md`
+- Localization governance Slice 2 technical brief: `docs/superpowers/specs/2026-06-07-localization-governance-slice-2-technical-brief.md`
 - Product and planning overview: `docs/PRODUCT-PLANS-OVERVIEW.md`
 - Domain model: `docs/domain-model.md`
 - Faithful Workflows visual upgrade (v5.5.2): `docs/v5.5.2-RELEASE-SUMMARY.md`
