@@ -30,6 +30,7 @@ class ResponseRecorder extends EventEmitter {
 }
 
 test('Vercel adapter strips the public API prefix and preserves query strings', async () => {
+  process.env.DEMO_ENVIRONMENT = 'true';
   const { default: handler } = await import('../../../api/index.js');
   const request = new EventEmitter();
   request.url = '/api/health?source=vercel';
@@ -41,7 +42,16 @@ test('Vercel adapter strips the public API prefix and preserves query strings', 
 
   assert.equal(request.url, '/health?source=vercel');
   assert.equal(response.statusCode, 200);
-  assert.equal(JSON.parse(response.body).status, 'ok');
+  assert.deepEqual(
+    {
+      status: JSON.parse(response.body).status,
+      demoEnvironment: JSON.parse(response.body).demoEnvironment,
+    },
+    {
+      status: 'ok',
+      demoEnvironment: true,
+    },
+  );
 });
 
 test('Vercel adapter uses the default tenant when host routing is disabled', async () => {

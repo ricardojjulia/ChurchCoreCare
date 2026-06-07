@@ -414,6 +414,9 @@ runtime databases are not supported. Keep `SEED_DEV_PORTAL_DATA=false`; use the
 guarded demo deployment command when the synthetic dataset must be refreshed.
 Secret fields in `.env.example` are intentionally blank so examples cannot be
 mistaken for usable credentials or trigger secret-scanning alerts.
+When `DEMO_ENVIRONMENT=true`, the same synthetic-data warning is shown in the
+React workspace and every standalone web surface through the public health
+flag; no secret or database detail is exposed.
 
 ### 3. Start the full app stack
 

@@ -17688,6 +17688,7 @@ function buildLiveHealthResponse() {
     status: 'ok',
     service: 'api',
     mode: 'live',
+    demoEnvironment: process.env.DEMO_ENVIRONMENT === 'true',
     timestamp,
   };
 }
