@@ -30,6 +30,16 @@ SSL modules so Supabase TLS and timeout controls are evaluated accurately.
 Secret fields in `.env.example` are intentionally blank and documented with
 generation guidance so CI secret scanning does not treat placeholders as keys.
 
+### fix: show the demo warning on standalone web surfaces
+
+**Date:** 2026-06-07
+**Affected area:** public health metadata, About, Join, Monitoring, Operations,
+and Portal standalone pages
+
+Added a bounded `demoEnvironment` boolean to the public live-health response
+and a shared same-origin script that renders the synthetic-data warning on
+every standalone HTML surface only when the deployment is marked as a demo.
+
 ## June 7, 2026 — Durable localization governance integration
 
 ### feat: add tenant-scoped localization governance lifecycle

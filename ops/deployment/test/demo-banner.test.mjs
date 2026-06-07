@@ -13,3 +13,20 @@ test('the web app renders a visible synthetic-data banner when the demo flag is 
   assert.match(component, /Synthetic demonstration data only/);
   assert.match(app, /DemoEnvironmentBanner/);
 });
+
+test('standalone HTML surfaces load the environment-controlled demo banner', async () => {
+  const script = await readFile(
+    new URL('../../../apps/web/public/demo-environment.js', import.meta.url),
+    'utf8',
+  );
+  assert.match(script, /\/api\/health/);
+  assert.match(script, /Synthetic demonstration data only/);
+
+  for (const page of ['about', 'join', 'monitor', 'operations', 'portal']) {
+    const html = await readFile(
+      new URL(`../../../apps/web/public/${page}.html`, import.meta.url),
+      'utf8',
+    );
+    assert.match(html, /\/demo-environment\.js/);
+  }
+});
