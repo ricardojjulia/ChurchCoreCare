@@ -19,7 +19,8 @@ PostgreSQL services are allowed only in CI with
 Store these values in protected local `.env` files and Vercel Production
 environment variables:
 
-- `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`
+- `DB_HOST`, `DB_PORT=6543`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`
+- `DB_POOL_MAX=1` for Vercel serverless functions
 - `DB_SSL=true`
 - `DB_SSL_REJECT_UNAUTHORIZED=false` for the current Supabase session pooler
 - `DB_ENCRYPTION_KEY`, `DB_ENCRYPTION_HMAC_KEY`, `SESSION_SECRET`

@@ -44,5 +44,24 @@ test('database config returns the configured online Supabase values without defa
     password: 'secret',
     ssl: 'true',
     sslRejectUnauthorized: undefined,
+    connectionLimit: 10,
   });
+});
+
+test('Vercel database config defaults to one client per serverless instance', () => {
+  assert.equal(
+    databaseConfigFromEnv({ ...validEnv, VERCEL: '1' }).connectionLimit,
+    1,
+  );
+});
+
+test('database config accepts an explicit bounded pool size', () => {
+  assert.equal(
+    databaseConfigFromEnv({ ...validEnv, DB_POOL_MAX: '3' }).connectionLimit,
+    3,
+  );
+  assert.throws(
+    () => databaseConfigFromEnv({ ...validEnv, DB_POOL_MAX: '0' }),
+    /DB_POOL_MAX/,
+  );
 });

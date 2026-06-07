@@ -8,3 +8,14 @@ test('canonical startup no longer starts or depends on a local database containe
   assert.doesNotMatch(source, /Docker Desktop/);
   assert.match(source, /requireDatabaseEnv/);
 });
+
+test('Vercel cold starts do not reserve a database session before a request needs one', async () => {
+  const source = await readFile(
+    new URL('../../../apps/api/src/index.js', import.meta.url),
+    'utf8',
+  );
+  assert.match(
+    source,
+    /if \(process\.env\.DB_NAME && process\.env\.VERCEL !== '1'\)/,
+  );
+});
