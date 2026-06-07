@@ -2,6 +2,20 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## June 7, 2026 — CI database bootstrap and CodeQL configuration
+
+### fix: restore auth smoke migrations and remove duplicate CodeQL setup
+
+**Date:** 2026-06-07
+**Affected area:** `.github/workflows/ci.yml`, `.github/workflows/codeql.yml`
+
+The auth smoke job now initializes its fresh PostgreSQL service from the
+canonical Supabase initial schema before running incremental API migrations,
+and uses the documented staff-only seed mode for the auth-focused smoke test.
+Removed the repository's advanced CodeQL workflow because GitHub CodeQL default
+setup is already configured and rejects SARIF uploads from a simultaneous
+advanced configuration.
+
 ## June 7, 2026 — Localization governance toolkit design
 
 ### feat: implement localization governance portable foundation

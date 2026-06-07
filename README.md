@@ -114,6 +114,10 @@ The repository runs automated nightly AppSec and DB Security scans at **23:00 UT
 | Dry run | `node ops/nightly-security-runner.mjs --dry-run` | Run scans without writing files or opening PRs |
 
 GitHub Actions uses the root `packageManager` declaration (`pnpm@10.33.2`) as the single pnpm version source for CI, deploy, tenant-policy, and nightly security workflows.
+The auth smoke job initializes a fresh PostgreSQL service from the canonical
+Supabase schema before applying incremental API migrations. Code scanning uses
+GitHub CodeQL default setup; do not add a parallel advanced CodeQL workflow
+unless default setup is disabled first.
 
 Reports are stored in [`docs/SecurityChecks/`](./docs/SecurityChecks/) as timestamped Markdown summaries and JSON raw data.
 
