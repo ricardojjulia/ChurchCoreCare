@@ -2,6 +2,18 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## June 7, 2026 — Google provider entity decoding
+
+### fix: prevent double-unescaping translated provider output
+
+**Date:** 2026-06-07
+**Affected area:** `packages/localization-governance-provider-google/`
+
+Changed supported HTML entity decoding from sequential replacements to a
+single-pass decoder. Nested entity text such as `&amp;lt;` now decodes once to
+`&lt;` rather than being decoded again to `<`. Added regression coverage for
+the CodeQL double-unescaping finding.
+
 ## June 7, 2026 — CI database bootstrap and CodeQL configuration
 
 ### fix: restore auth smoke migrations and remove duplicate CodeQL setup

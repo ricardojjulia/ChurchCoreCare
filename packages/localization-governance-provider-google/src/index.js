@@ -4,13 +4,16 @@ function primaryLanguage(locale) {
   return normalizeLocale(locale).split('-')[0];
 }
 
+const HTML_ENTITIES = Object.freeze({
+  '&amp;': '&',
+  '&quot;': '"',
+  '&#39;': "'",
+  '&lt;': '<',
+  '&gt;': '>',
+});
+
 function decodeEntities(value) {
-  return String(value)
-    .replaceAll('&amp;', '&')
-    .replaceAll('&quot;', '"')
-    .replaceAll('&#39;', "'")
-    .replaceAll('&lt;', '<')
-    .replaceAll('&gt;', '>');
+  return String(value).replace(/&(?:amp|quot|#39|lt|gt);/g, (entity) => HTML_ENTITIES[entity]);
 }
 
 export function createGoogleTranslationProvider(options = {}) {

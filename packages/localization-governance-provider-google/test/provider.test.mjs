@@ -68,6 +68,32 @@ test('preserves keys, forwards abort signal, and decodes translated HTML entitie
   assert.equal(request.url.includes('secret'), true);
 });
 
+test('decodes HTML entities exactly once', async () => {
+  const provider = createGoogleTranslationProvider({
+    apiKey: 'test',
+    fetch: async () => ({
+      ok: true,
+      async json() {
+        return {
+          data: {
+            translations: [
+              { translatedText: '&amp;lt;script&amp;gt; &quot;seguro&quot; &#39;texto&#39;' },
+            ],
+          },
+        };
+      },
+    }),
+  });
+
+  const result = await provider.translate({
+    sourceLocale: 'en-US',
+    targetLocale: 'es-MX',
+    messages: { content: 'Safe text' },
+  });
+
+  assert.equal(result.messages.content, '&lt;script&gt; "seguro" \'texto\'');
+});
+
 test('maps provider HTTP and payload failures to provider_failure', async () => {
   const httpProvider = createGoogleTranslationProvider({
     apiKey: 'test',

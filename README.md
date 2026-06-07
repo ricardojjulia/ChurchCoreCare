@@ -118,6 +118,8 @@ The auth smoke job initializes a fresh PostgreSQL service from the canonical
 Supabase schema before applying incremental API migrations. Code scanning uses
 GitHub CodeQL default setup; do not add a parallel advanced CodeQL workflow
 unless default setup is disabled first.
+The Google translation provider decodes its bounded supported HTML entity set
+exactly once so nested entity text remains encoded for the consuming renderer.
 
 Reports are stored in [`docs/SecurityChecks/`](./docs/SecurityChecks/) as timestamped Markdown summaries and JSON raw data.
 
