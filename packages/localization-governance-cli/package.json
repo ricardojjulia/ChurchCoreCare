@@ -1,0 +1,35 @@
+{
+  "name": "@localization-governance/cli",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "description": "CLI and CI enforcement for localization governance.",
+  "engines": {
+    "node": ">=22"
+  },
+  "main": "./src/run.js",
+  "exports": {
+    ".": "./src/run.js"
+  },
+  "bin": {
+    "localization-governance": "./bin/locgov.js",
+    "locgov": "./bin/locgov.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "restricted"
+  },
+  "dependencies": {
+    "@localization-governance/core": "workspace:*"
+  },
+  "scripts": {
+    "lint": "node --check src/run.js && node --check bin/locgov.js",
+    "test": "node --test test/*.test.mjs"
+  },
+  "license": "UNLICENSED"
+}

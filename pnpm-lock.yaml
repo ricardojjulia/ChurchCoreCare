@@ -198,6 +198,26 @@ importers:
 
   packages/i18n: {}
 
+  packages/localization-governance-cli:
+    dependencies:
+      '@localization-governance/core':
+        specifier: workspace:*
+        version: link:../localization-governance-core
+
+  packages/localization-governance-core: {}
+
+  packages/localization-governance-provider-google:
+    dependencies:
+      '@localization-governance/core':
+        specifier: workspace:*
+        version: link:../localization-governance-core
+
+  packages/localization-governance-storage-filesystem:
+    dependencies:
+      '@localization-governance/core':
+        specifier: workspace:*
+        version: link:../localization-governance-core
+
 packages:
 
   '@alloc/quick-lru@5.2.0':

@@ -4,6 +4,26 @@
 
 ## June 7, 2026 — Localization governance toolkit design
 
+### feat: implement localization governance portable foundation
+
+**Date:** 2026-06-07
+**Affected area:** `packages/localization-governance-*`,
+`ops/localization-governance/`, `.github/workflows/ci.yml`
+
+Implemented Slice 1 of the reusable private localization governance toolkit.
+The new packages provide deterministic catalog validation, enforced lifecycle
+transitions, configurable reviewer roles and separation of duties, explicit
+approval, atomic activation and rollback, source-change staleness, filesystem
+persistence, Google Translation integration, lifecycle and CI commands, and
+metadata-only diagnostics.
+
+Added non-destructive ChurchCore migration tooling that preserves existing
+Spanish machine/human review evidence, creates a `legacy_unverified`
+compatibility activation, and leaves French and Portuguese inactive. Added a
+packed-tarball verifier that installs all four packages into a clean temporary
+workspace, runs the Spanish lifecycle, reopens persistence, and invokes the
+packed CLI.
+
 ### feat: add portable foundation implementation plan
 
 **Date:** 2026-06-07

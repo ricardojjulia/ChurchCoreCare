@@ -531,6 +531,56 @@ compatibility adapter.
 - Design: `docs/superpowers/specs/2026-06-07-localization-governance-toolkit-design.md`
 - Slice 1 implementation plan: `docs/superpowers/plans/2026-06-07-localization-governance-slice-1.md`
 
+Slice 1 packages:
+
+```bash
+pnpm add \
+  @localization-governance/core \
+  @localization-governance/storage-filesystem \
+  @localization-governance/cli
+
+pnpm add @localization-governance/provider-google
+```
+
+The packages are configured for restricted npm publication. Before publishing,
+authenticate the target npm organization and registry for the
+`@localization-governance` scope.
+
+Framework-neutral setup:
+
+```js
+import { createGovernanceService } from '@localization-governance/core';
+import { createFilesystemStorage } from '@localization-governance/storage-filesystem';
+
+const storage = await createFilesystemStorage({
+  directory: './localization',
+});
+
+export const localization = createGovernanceService({
+  storage,
+  policy: {
+    requiredReviews: ['linguistic'],
+    separationOfDuties: true,
+    requireFreshValidation: true,
+  },
+});
+```
+
+ChurchCore migration is dry-run by default:
+
+```bash
+pnpm localization:migrate
+pnpm localization:migrate -- --write
+```
+
+Portable package verification packs every package and installs the tarballs
+into a temporary workspace outside the monorepo:
+
+```bash
+pnpm localization:test
+pnpm localization:verify-pack
+```
+
 ### Local monitoring
 
 Monitoring stays inside the application. Standard development and deployment do not require OTEL, OTLP, Jaeger, Prometheus, or browser telemetry ingestion.

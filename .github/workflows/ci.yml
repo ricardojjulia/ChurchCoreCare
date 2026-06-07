@@ -34,6 +34,12 @@ jobs:
       - name: Test
         run: pnpm test
 
+      - name: Localization governance packages
+        run: pnpm localization:test
+
+      - name: Verify packed localization consumer
+        run: pnpm localization:verify-pack
+
       - name: Tenant policy guard
         run: pnpm policy:tenant
 

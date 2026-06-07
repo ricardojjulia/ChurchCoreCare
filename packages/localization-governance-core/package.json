@@ -1,0 +1,27 @@
+{
+  "name": "@localization-governance/core",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "description": "Framework-neutral localization governance lifecycle and validation.",
+  "engines": {
+    "node": ">=22"
+  },
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "restricted"
+  },
+  "scripts": {
+    "lint": "node --check src/index.js",
+    "test": "node --test test/*.test.mjs"
+  },
+  "license": "UNLICENSED"
+}
