@@ -14,17 +14,20 @@
 
 import crypto from 'node:crypto';
 import pg from 'pg';
+import { databaseConfigFromEnv } from '../db/config.js';
+import { buildDatabaseSslConfig } from '../db/ssl.js';
 
 const { Pool } = pg;
 
 function buildTenantPool(tenantId) {
+  const dbConfig = databaseConfigFromEnv();
   return new Pool({
-    host:     process.env.DB_HOST     ?? '127.0.0.1',
-    port:     Number(process.env.DB_PORT ?? 57322),
+    host:     dbConfig.host,
+    port:     dbConfig.port,
     database: `churchcore_${tenantId}`,
-    user:     process.env.DB_USER     ?? 'postgres',
-    password: process.env.DB_PASSWORD ?? 'postgres',
-    ssl:      String(process.env.DB_SSL).toLowerCase() === 'true' ? { rejectUnauthorized: true } : false,
+    user:     dbConfig.user,
+    password: dbConfig.password,
+    ssl:      buildDatabaseSslConfig(),
     max: 2,
     connectionTimeoutMillis: 10_000,
   });

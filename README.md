@@ -8,7 +8,9 @@ From the moment a new client submits a care request to the session note signed a
 
 📖 **New to the platform?** Start with the [User Manual →](docs/User%20Manual/README.md)
 
-Want a fully loaded local tour instead of a blank shell? The repo now includes a SQL-backed demo dataset workflow, so the product you start locally can feel much closer to the product shown below.
+The hosted demo uses a guarded SQL-backed synthetic dataset in the online
+Supabase project. Application processes may run locally for development, but
+they still connect only to the configured online Supabase database.
 
 ## Faith-Based Christian Practice Focus
 
@@ -123,7 +125,9 @@ exactly once so nested entity text remains encoded for the consuming renderer.
 
 Reports are stored in [`docs/SecurityChecks/`](./docs/SecurityChecks/) as timestamped Markdown summaries and JSON raw data.
 
-**Current status:** AppSec `MEDIUM` (12 medium — `Math.random()` in UI key generation, deferred), DB Security `CLEAN` (0 critical/high/medium/low, PHI coverage 100%).
+**Current status:** AppSec `MEDIUM` (non-security-sensitive `Math.random()`
+usage deferred), DB Security `CLEAN` (0 critical/high/medium/low, PHI coverage
+100%).
 
 ## Manual Security Review — 2026-04-06
 
@@ -349,7 +353,7 @@ flowchart TB
 
 ## Tech Stack
 
-- Runtime: Node.js 20+
+- Runtime: Node.js 22+
 - Package manager: pnpm 10
 - Frontend: React 19, Mantine UI v9, Tailwind CSS v4, shadcn/ui configuration, Lucide React, Vite
 - Backend: Node.js (ESM), PostgreSQL, pg
@@ -367,11 +371,10 @@ pnpm start
 `pnpm start` is the canonical local startup command. It now performs environment and database preflight automatically:
 
 - loads `.env` via `node --env-file=.env`
-- uses the configured `DB_HOST` and `DB_PORT` first when a database listener is already available
-- ensures Docker is running (launches Docker Desktop when needed)
-- starts the local compose database only when the configured listener is unavailable
-- waits for database readiness
-- runs API migration when DB is configured
+- requires an explicit online Supabase PostgreSQL configuration
+- rejects localhost, loopback, Unix-socket, and implicit database defaults
+- verifies the configured Supabase listener is reachable
+- runs API migrations against Supabase
 - starts API, web, and worker services
 - restarts existing repo-managed API, web, and worker processes on ports `3001`, `3002`, and `9465` so local changes are not served from stale long-running processes
 
@@ -387,9 +390,9 @@ Faithful Workflows now defaults to real client data only. Demo/mock workflow cli
 
 ## Prerequisites
 
-- Node.js >= 20
+- Node.js >= 22
 - pnpm >= 10
-- Docker Desktop (required for local MySQL preflight)
+- Access to the ChurchCore Care Supabase project
 - Git
 
 ## Local Setup
@@ -406,9 +409,11 @@ pnpm install
 cp .env.example .env
 ```
 
-Update `.env` values as needed for your local environment.
-
-Set `SEED_DEV_PORTAL_DATA=false` when you want a staff-only local database and do not want startup migration to recreate the seeded portal client/resource.
+Configure `.env` with the online Supabase pooler values. Local application
+runtime databases are not supported. Keep `SEED_DEV_PORTAL_DATA=false`; use the
+guarded demo deployment command when the synthetic dataset must be refreshed.
+Secret fields in `.env.example` are intentionally blank so examples cannot be
+mistaken for usable credentials or trigger secret-scanning alerts.
 
 ### 3. Start the full app stack
 
@@ -437,12 +442,13 @@ pnpm start:api:standalone
 
 ## Cloud Setup Guidance
 
-This repository is deployment-ready, but it does not currently include opinionated production IaC templates (`infra/` is a placeholder). Use the checklist below for your target cloud environment.
+The canonical hosted environment is Vercel plus Supabase. See
+[`docs/runbooks/vercel-supabase-demo.md`](docs/runbooks/vercel-supabase-demo.md).
 
 ### Production checklist
 
-1. Provision managed MySQL and set production DB credentials in environment variables.
-2. Set `DB_SSL=true` for encrypted database transport.
+1. Provision or select the Supabase project and session-pooler connection.
+2. Set `DB_SSL=true`; document any managed-pooler certificate exception.
 3. Provide strong secrets for:
    - `DB_ENCRYPTION_KEY`
    - `SESSION_SECRET`
@@ -450,7 +456,7 @@ This repository is deployment-ready, but it does not currently include opinionat
 5. Set `NODE_ENV=production`.
 6. Place web/API behind TLS termination (HTTPS only).
 7. Confirm monitoring and health surfaces are reachable in the deployed environment.
-8. Run migrations before app startup in each environment.
+8. Run `pnpm deploy:supabase` explicitly before application deployment.
 
 ### Service start commands (container or VM)
 
@@ -652,7 +658,10 @@ A full 13-section end-user practice manual is now live under `docs/User Manual/`
 
 ### Demo Dataset SQL Workflow (April 5, 2026)
 
-The canonical demo dataset can now be generated as concrete SQL artifacts and loaded directly into MySQL. This gives the repo a fast, repeatable way to reset into a polished demo state with predictable records and validation.
+The canonical synthetic demo dataset can be generated as concrete PostgreSQL
+artifacts and loaded only into an explicitly configured online Supabase demo
+project. Every apply/finalize command requires `DEMO_ENVIRONMENT=true`; the
+legacy standalone generators with embedded fallback secrets were removed.
 
 - Commands: `pnpm demo:sql:generate`, `pnpm demo:sql:apply`, `pnpm demo:sql:refresh`
 - Artifacts: `ops/demo-dataset/generated/`

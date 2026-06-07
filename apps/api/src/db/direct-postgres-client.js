@@ -1,12 +1,16 @@
 import pg from 'pg';
 
+import { databaseConfigFromEnv } from './config.js';
+import { buildDatabaseSslConfig } from './ssl.js';
+
 export function createDirectPostgresClient(env = process.env) {
+  const dbConfig = databaseConfigFromEnv(env);
   return new pg.Client({
-    host: env.DB_HOST || '127.0.0.1',
-    port: Number(env.DB_PORT || 57322),
-    database: env.DB_NAME || 'postgres',
-    user: env.DB_USER || 'postgres',
-    password: env.DB_PASSWORD || 'postgres',
-    ssl: env.DB_SSL === 'true' ? { rejectUnauthorized: true } : false,
+    host: dbConfig.host,
+    port: dbConfig.port,
+    database: dbConfig.database,
+    user: dbConfig.user,
+    password: dbConfig.password,
+    ssl: buildDatabaseSslConfig(env),
   });
 }

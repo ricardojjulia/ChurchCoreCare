@@ -15,6 +15,8 @@ import path from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
+import { databaseConfigFromEnv } from './config.js';
+import { buildDatabaseSslConfig } from './ssl.js';
 
 // Load .env if present (for local dev convenience)
 try {
@@ -25,13 +27,14 @@ try {
 }
 
 // Create a one-off connection (not the pool) for running migrations.
+const dbConfig = databaseConfigFromEnv();
 const connection = new pg.Client({
-  host:     process.env.DB_HOST     || '127.0.0.1',
-  port:     Number(process.env.DB_PORT || 57322),
-  database: process.env.DB_NAME     || 'postgres',
-  user:     process.env.DB_USER     || 'postgres',
-  password: process.env.DB_PASSWORD || 'postgres',
-  ssl:      process.env.DB_SSL === 'true' ? { rejectUnauthorized: true } : false,
+  host:     dbConfig.host,
+  port:     dbConfig.port,
+  database: dbConfig.database,
+  user:     dbConfig.user,
+  password: dbConfig.password,
+  ssl:      buildDatabaseSslConfig(),
 });
 await connection.connect();
 
@@ -50,12 +53,15 @@ try {
   await recordMigration(connection, 'core_schema_initial');
   await recordMigration(connection, 'column_migrations_batch_1');
 
-  // Seed a default tenant + system practice for local dev
-  await seedDevData(connection);
-  if (shouldSeedDevPortalData()) {
-    await ensureDevPortalClient(connection);
+  if (shouldSeedDevelopmentData()) {
+    await seedDevData(connection);
+    if (shouldSeedDevPortalData()) {
+      await ensureDevPortalClient(connection);
+    } else {
+      console.log('Skipping dev portal client/resource seed (SEED_DEV_PORTAL_DATA=false).');
+    }
   } else {
-    console.log('Skipping dev portal client/resource seed (SEED_DEV_PORTAL_DATA=false).');
+    console.log('Skipping all development seed data outside development runtime.');
   }
 } finally {
   await connection.end();
@@ -74,6 +80,10 @@ async function applyLocalizationGovernanceSchema(conn) {
 
 function shouldSeedDevPortalData() {
   return process.env.NODE_ENV !== 'production' && process.env.SEED_DEV_PORTAL_DATA !== 'false';
+}
+
+function shouldSeedDevelopmentData() {
+  return process.env.NODE_ENV !== 'production';
 }
 
 async function hasMigration(conn, name) {
@@ -252,7 +262,7 @@ async function applyColumnMigrations(conn) {
   await addColumnIfMissing('portal_registration_requests', 'request_type', "VARCHAR(64) NOT NULL DEFAULT 'care_request'");
   await addColumnIfMissing('portal_registration_requests', 'preferred_contact_method', 'VARCHAR(64) NULL');
   await addColumnIfMissing('portal_registration_requests', 'preferred_contact_window', 'VARCHAR(128) NULL');
-  await addColumnIfMissing('portal_registration_requests', 'onboarding_details_enc', 'MEDIUMTEXT NULL');
+  await addColumnIfMissing('portal_registration_requests', 'onboarding_details_enc', 'TEXT NULL');
   await addColumnIfMissing('portal_registration_requests', 'converted_client_id', 'VARCHAR(64) NULL');
   await addColumnIfMissing('portal_settings', 'financial_mode', "VARCHAR(64) NOT NULL DEFAULT 'offerings'");
   await addColumnIfMissing('portal_settings', 'suggested_offering_cents', 'INT NOT NULL DEFAULT 0');
@@ -301,7 +311,7 @@ async function applyColumnMigrations(conn) {
   await addIndexIfMissing('progress_notes', 'idx_note_appointment', '(appointment_id)');
 
   // Superbills: encrypt PHI diagnosis codes
-  await addColumnIfMissing('superbills', 'diagnosis_codes_enc', 'MEDIUMTEXT NULL');
+  await addColumnIfMissing('superbills', 'diagnosis_codes_enc', 'TEXT NULL');
   const superbillResult = await conn.query(
     'SELECT id, tenant_id, diagnosis_codes FROM superbills WHERE diagnosis_codes IS NOT NULL AND diagnosis_codes_enc IS NULL',
   );

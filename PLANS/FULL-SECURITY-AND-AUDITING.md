@@ -162,6 +162,19 @@ Disallowed log content:
 - Names, emails, phone numbers, addresses, notes, messages, document text, or other free-text content.
 - Authorization headers, cookies, session secrets, bearer tokens, or password material.
 
+Database transport requirements:
+
+- ChurchCore Care is Supabase-only for application runtime and operator
+  workflows. Localhost, loopback, Unix-socket, and implicit database defaults
+  are prohibited outside isolated automated test fixtures.
+- Runtime startup must fail closed when any required Supabase database
+  connection value is absent.
+- Hosted PostgreSQL connections must set `DB_SSL=true`.
+- Certificate verification remains enabled by default.
+- A managed pooler whose certificate chain is unavailable to the runtime may set
+  `DB_SSL_REJECT_UNAUTHORIZED=false`; this preserves encrypted transport but must
+  be documented as an environment-specific exception.
+
 Usability requirements:
 
 - Server failures must produce a dedicated structured error line in addition to the HTTP response.

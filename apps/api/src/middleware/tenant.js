@@ -8,6 +8,7 @@ function normalizeHost(rawHost) {
 }
 
 function tenantSlugFromHost(host) {
+  if (!isTenantHostRoutingEnabled()) return 'system';
   if (LOCAL_HOSTS.has(host)) return 'system';
   const parts = host.split('.').filter(Boolean);
   if (parts.length < 3) return 'system';
@@ -29,7 +30,9 @@ export function isNonLocalRuntime() {
 export function resolveTenantContext(rawHost) {
   const host = normalizeHost(rawHost);
   const tenantId = tenantSlugFromHost(host);
-  const isExplicitTenantHost = !LOCAL_HOSTS.has(host) && host.split('.').filter(Boolean).length >= 3;
+  const isExplicitTenantHost = isTenantHostRoutingEnabled()
+    && !LOCAL_HOSTS.has(host)
+    && host.split('.').filter(Boolean).length >= 3;
 
   return {
     host,

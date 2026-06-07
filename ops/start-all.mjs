@@ -1,6 +1,7 @@
 import { spawn, execSync } from 'node:child_process';
 import net from 'node:net';
 import process from 'node:process';
+import { requireDatabaseEnv } from '../apps/api/src/db/config.js';
 
 const node = process.execPath;
 const cwd = process.cwd();
@@ -86,10 +87,6 @@ process.on('SIGINT', () => shutdown(0));
 process.on('SIGTERM', () => shutdown(0));
 
 
-function dockerExec(cmd) {
-  try { execSync(cmd, { stdio: 'pipe' }); return true; } catch { return false; }
-}
-
 function canConnectTcp(host, port, timeoutMs = 1200) {
   return new Promise((resolve) => {
     const socket = net.createConnection({ host, port });
@@ -160,57 +157,15 @@ async function restartRepoManagedProcessIfNeeded(name, port, scriptFragment) {
 }
 
 async function ensureDatabase() {
-  if (!process.env.DB_NAME) {
-    console.log('[start-all] No DB_NAME configured — skipping database preflight.');
-    return;
-  }
-
-  const dbHost = process.env.DB_HOST || '127.0.0.1';
-  const dbPort = Number(process.env.DB_PORT || 57322);
+  requireDatabaseEnv();
+  const dbHost = process.env.DB_HOST;
+  const dbPort = Number(process.env.DB_PORT);
 
   if (await canConnectTcp(dbHost, dbPort)) {
-    console.log(`[start-all] Database listener ready at ${dbHost}:${dbPort}.`);
+    console.log(`[start-all] Online Supabase database listener ready at ${dbHost}:${dbPort}.`);
     return;
   }
-
-  // Ensure Docker daemon is running
-  if (!dockerExec('docker info')) {
-    console.log('[start-all] Docker not running — launching Docker Desktop...');
-    dockerExec('open -a Docker');
-    process.stdout.write('[start-all] Waiting for Docker to start');
-    for (let i = 0; i < 30; i++) {
-      await new Promise(r => setTimeout(r, 2000));
-      if (dockerExec('docker info')) break;
-      process.stdout.write('.');
-    }
-    process.stdout.write('\n');
-    if (!dockerExec('docker info')) {
-      console.error('[start-all] Docker did not start. Please launch Docker Desktop manually and retry.');
-      process.exit(1);
-    }
-  }
-
-  // Ensure the local compose database container is up when no configured DB listener is available.
-  const isUp = dockerExec('docker compose ps --status running mysql 2>/dev/null | grep -q churchcore-postgres');
-  if (!isUp) {
-    console.log('[start-all] Starting local compose database container...');
-    dockerExec('docker compose up -d mysql');
-  }
-
-  // Wait until the configured database port is accepting connections.
-  const user = process.env.DB_USER || 'churchcore_app';
-  const pass = process.env.DB_PASSWORD || '';
-  process.stdout.write('[start-all] Waiting for configured database');
-  for (let i = 0; i < 30; i++) {
-    const ok = await canConnectTcp(dbHost, dbPort)
-      || dockerExec(`docker compose exec mysql mysqladmin ping -h 127.0.0.1 -u${user} -p${pass} --silent 2>/dev/null`);
-    if (ok) { console.log(' ready.'); return; }
-    await new Promise(r => setTimeout(r, 2000));
-    process.stdout.write('.');
-  }
-  process.stdout.write('\n');
-  console.error('[start-all] Database did not become healthy in time. Check Docker logs or DB_HOST/DB_PORT.');
-  process.exit(1);
+  throw new Error(`Online Supabase database is unreachable at ${dbHost}:${dbPort}`);
 }
 
 async function main() {
@@ -225,10 +180,8 @@ async function main() {
   if (apiAlreadyRunning) {
     console.log(`[start-all] API already running on http://127.0.0.1:${apiPort} (reusing existing process).`);
   } else {
-    if (process.env.DB_NAME) {
-      console.log('[start-all] Running API migration...');
-      await runStep('api migrate', node, ['--env-file=.env', 'apps/api/src/db/migrate.js']);
-    }
+    console.log('[start-all] Running API migration against Supabase...');
+    await runStep('api migrate', node, ['--env-file=.env', 'apps/api/src/db/migrate.js']);
     console.log(`[start-all] Starting API on http://127.0.0.1:${apiPort}`);
     spawnService('api', ['apps/api/src/index.js'], { PORT: String(apiPort) });
   }

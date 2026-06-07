@@ -2,6 +2,34 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## June 7, 2026 — Vercel and Supabase SaaS foundation
+
+### feat: make Supabase the exclusive application database
+
+**Date:** 2026-06-07
+**Affected area:** Vercel adapter/configuration, API and worker database
+configuration, startup, demo deployment tooling, monitoring/security plans,
+CI, and deployment documentation
+
+Added the Vercel Node Function adapter and Vite routing configuration, a
+visible synthetic-data warning, guarded Supabase migration/seed/verification
+commands, and PostgreSQL-compatible demo upserts and boolean values.
+
+Application runtime now fails closed unless an explicit TLS-enabled online
+database is configured. Localhost, loopback, Unix-socket, Docker database
+startup, and implicit connection defaults are prohibited outside an explicitly
+marked disposable CI database fixture. Production migrations no longer create
+development seed accounts. Production Vercel variables are scoped to
+Production, while Preview deployments receive no database credentials.
+Restored the AppSec and database-security scanners by removing duplicated
+malformed control-flow blocks that previously prevented both required gates
+from parsing. Removed obsolete standalone demo generators that embedded local
+fallback secrets and printed synthetic PHI-like values or credentials. Updated
+the database scanner to inspect the shared PostgreSQL pool, configuration, and
+SSL modules so Supabase TLS and timeout controls are evaluated accurately.
+Secret fields in `.env.example` are intentionally blank and documented with
+generation guidance so CI secret scanning does not treat placeholders as keys.
+
 ## June 7, 2026 — Durable localization governance integration
 
 ### feat: add tenant-scoped localization governance lifecycle

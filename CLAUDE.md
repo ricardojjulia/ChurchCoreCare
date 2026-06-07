@@ -56,6 +56,9 @@ pnpm run test:security  # security regression tests
 
 - **Business logic lives in services or domain modules.** Route handlers stay thin.
 - **Tenant isolation is enforced at the service layer**, not the route. Never skip it.
+- **Supabase is the only application database.** Runtime must reject local,
+  loopback, Unix-socket, and implicit database configurations. Disposable CI
+  PostgreSQL fixtures require `CHURCHCORE_ALLOW_TEST_DATABASE=true`.
 - **Worker handles all background jobs.** Do not add cron elsewhere.
 - **Use the existing email/notify system** (`apps/worker/src/notify.js`). Do not add new ones.
 - **Local monitoring must work without OTEL exporters.** Never add telemetry beacons or OTLP collectors.

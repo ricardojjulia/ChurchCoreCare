@@ -6,7 +6,6 @@ import { buildDemoDataset } from './manifest.mjs';
 
 const requireFromApiWorkspace = createRequire(new URL('../../apps/api/package.json', import.meta.url));
 const argon2 = requireFromApiWorkspace('argon2');
-const mysql2 = requireFromApiWorkspace('mysql2');
 
 const TENANT_SCOPED_PURGE_ORDER = Object.freeze([
   'sessions',
@@ -71,6 +70,18 @@ export function hasDbEnv() {
   return Boolean(process.env.DB_NAME && process.env.DB_USER && process.env.DB_PASSWORD && process.env.DB_ENCRYPTION_KEY);
 }
 
+export function toBoundedDemoResult(result) {
+  if (result?.skipped) return { skipped: true, reason: result.reason };
+  return {
+    skipped: false,
+    tenantId: result?.tenantId,
+    referenceDate: result?.referenceDate,
+    applied: result?.applied,
+    invariantCount: result?.verification?.invariants?.length ?? 0,
+    passed: Boolean(result?.verification?.passed),
+  };
+}
+
 export function toSqlTimestamp(value) {
   if (!value) return null;
   const date = value instanceof Date ? value : new Date(value);
@@ -102,8 +113,21 @@ function placeholders(values) {
   return values.map(() => '?').join(',');
 }
 
+function sqlLiteral(value) {
+  if (value === null || value === undefined) return 'NULL';
+  if (typeof value === 'number') return Number.isFinite(value) ? String(value) : 'NULL';
+  if (typeof value === 'bigint') return String(value);
+  if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
+  if (value instanceof Date) return `'${toSqlTimestamp(value).replace(/'/g, "''")}'`;
+  return `'${String(value).replace(/'/g, "''")}'`;
+}
+
 function formatSqlStatement(sql, params = []) {
-  return `${mysql2.format(sql, params).trim().replace(/;$/, '')};`;
+  let index = 0;
+  const formatted = sql
+    .replace(/`/g, '"')
+    .replace(/\?/g, () => sqlLiteral(params[index++]));
+  return `${formatted.trim().replace(/;$/, '')};`;
 }
 
 function createSqlRecorder() {
@@ -264,17 +288,19 @@ async function insertTenantAndPractice(connection, dataset) {
   await connection.query(
     `INSERT INTO tenants (id, name, plan_type)
      VALUES (?, ?, ?)
-     ON DUPLICATE KEY UPDATE name = VALUES(name), plan_type = VALUES(plan_type)`,
+     ON CONFLICT (id) DO UPDATE
+       SET name = EXCLUDED.name,
+           plan_type = EXCLUDED.plan_type`,
     [dataset.tenantId, dataset.tenantName, 'standard'],
   );
 
   await connection.query(
     `INSERT INTO practices (id, tenant_id, name, practice_type, timezone)
      VALUES (?, ?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE
-       name = VALUES(name),
-       practice_type = VALUES(practice_type),
-       timezone = VALUES(timezone)`,
+     ON CONFLICT (id) DO UPDATE
+       SET name = EXCLUDED.name,
+           practice_type = EXCLUDED.practice_type,
+           timezone = EXCLUDED.timezone`,
     [
       dataset.practiceId,
       dataset.tenantId,
@@ -287,12 +313,12 @@ async function insertTenantAndPractice(connection, dataset) {
   await connection.query(
     `INSERT INTO locations (id, tenant_id, practice_id, name, address_enc, capacity, remote_enabled)
      VALUES (?, ?, ?, ?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE
-       practice_id = VALUES(practice_id),
-       name = VALUES(name),
-       address_enc = VALUES(address_enc),
-       capacity = VALUES(capacity),
-       remote_enabled = VALUES(remote_enabled)`,
+     ON CONFLICT (id) DO UPDATE
+       SET practice_id = EXCLUDED.practice_id,
+           name = EXCLUDED.name,
+           address_enc = EXCLUDED.address_enc,
+           capacity = EXCLUDED.capacity,
+           remote_enabled = EXCLUDED.remote_enabled`,
     [
       dataset.locationId,
       dataset.tenantId,
@@ -300,7 +326,7 @@ async function insertTenantAndPractice(connection, dataset) {
       dataset.locationName,
       encrypt('742 Shepherd Lane, Lakeland, FL 33813'),
       4,
-      1,
+      true,
     ],
   );
 }
@@ -326,8 +352,8 @@ async function insertStaff(connection, dataset, hashes) {
 
     await connection.query(
       `INSERT INTO staff_accounts
-         (id, staff_member_id, tenant_id, email, email_enc, email_lookup_hash, password_hash, failed_attempts, locked_until, mfa_enabled)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 0, NULL, 0)`,
+       (id, staff_member_id, tenant_id, email, email_enc, email_lookup_hash, password_hash, failed_attempts, locked_until, mfa_enabled)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 0, NULL, FALSE)`,
       [
         staff.accountId,
         staff.id,
@@ -343,8 +369,8 @@ async function insertStaff(connection, dataset, hashes) {
 
     await connection.query(
       `INSERT INTO staff_licenses
-         (id, staff_id, tenant_id, license_type, license_number_enc, issuing_state, issuing_body, issue_date, expiry_date, status, is_primary)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 1)`,
+       (id, staff_id, tenant_id, license_type, license_number_enc, issuing_state, issuing_body, issue_date, expiry_date, status, is_primary)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', TRUE)`,
       [
         `lic-${staff.id}`,
         staff.id,
@@ -372,7 +398,7 @@ async function insertStaff(connection, dataset, hashes) {
         '2027-03-01',
         encrypt(`${staff.id.toUpperCase()}-CERT`),
         12,
-        1,
+        true,
         encrypt('Maintained for demo counselor profiles.'),
       ],
     );
@@ -422,11 +448,11 @@ async function insertStaff(connection, dataset, hashes) {
         dataset.tenantId,
         staff.faithTradition,
         encrypt(staff.theologicalApproach),
-        1,
+        true,
         staff.ordainingBody,
-        1,
-        0,
-        1,
+        true,
+        false,
+        true,
         encrypt('Faith-based counseling credentialed for demo dataset.'),
         staff.prayerIntegration,
         staff.scriptureIntegration,
@@ -457,14 +483,14 @@ async function insertFormCatalog(connection, dataset) {
     await connection.query(
       `INSERT INTO form_catalog
          (id, tenant_id, form_key, title, category, is_standard_on_signup, is_active, version_number)
-       VALUES (?, ?, ?, ?, ?, ?, 1, 1)`,
+       VALUES (?, ?, ?, ?, ?, ?, TRUE, 1)`,
       [
         item.id,
         dataset.tenantId,
         item.formKey,
         item.title,
         item.category,
-        item.isStandardOnSignup ? 1 : 0,
+        Boolean(item.isStandardOnSignup),
       ],
     );
   }
@@ -489,10 +515,10 @@ async function insertPortalSettingsAndResources(connection, dataset) {
       'Use the portal to review forms, upcoming care tasks, and offerings history.',
       encrypt('support@churchcorecare.local'),
       'review_required',
-      1,
-      1,
-      1,
-      1,
+      true,
+      true,
+      true,
+      true,
       'offerings',
       5000,
       'Your gift helps sustain this counseling ministry and expand care for others.',
@@ -565,7 +591,7 @@ async function insertClientBundle(connection, dataset, client, hashes) {
       encrypt(client.firstName),
       encrypt(client.lastName),
       client.faithBackground,
-      client.highTouchpoint ? 1 : 0,
+      Boolean(client.highTouchpoint),
       client.counselorId,
     ],
   );
@@ -594,7 +620,7 @@ async function insertClientBundle(connection, dataset, client, hashes) {
   await connection.query(
     `INSERT INTO client_addresses
        (id, tenant_id, client_id, addr_type, line1_enc, line2_enc, city_enc, state, postal_enc, country, is_preferred)
-     VALUES (?, ?, ?, 'primary', ?, NULL, ?, ?, ?, 'US', 1)`,
+     VALUES (?, ?, ?, 'primary', ?, NULL, ?, ?, ?, 'US', TRUE)`,
     [
       `addr-${client.id}`,
       dataset.tenantId,
@@ -609,7 +635,7 @@ async function insertClientBundle(connection, dataset, client, hashes) {
   await connection.query(
     `INSERT INTO client_phones
        (id, tenant_id, client_id, phone_type, number_enc, extension, is_preferred, ok_to_text, ok_to_leave_msg)
-     VALUES (?, ?, ?, 'cell', ?, NULL, 1, 1, 1)`,
+     VALUES (?, ?, ?, 'cell', ?, NULL, TRUE, TRUE, TRUE)`,
     [
       `phone-${client.id}`,
       dataset.tenantId,
@@ -621,7 +647,7 @@ async function insertClientBundle(connection, dataset, client, hashes) {
   await connection.query(
     `INSERT INTO client_contacts
        (id, tenant_id, client_id, contact_type, name_enc, relationship, phone_enc, email_enc, is_primary, has_legal_auth, notes_enc)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, TRUE, ?, ?)`,
     [
       client.contacts[0].id,
       dataset.tenantId,
@@ -631,7 +657,7 @@ async function insertClientBundle(connection, dataset, client, hashes) {
       client.contacts[0].relationship,
       encrypt(client.contacts[0].phone),
       encrypt(client.contacts[0].email),
-      client.isMinor ? 1 : 0,
+      Boolean(client.isMinor),
       encrypt('Canonical contact for the human-testing dataset.'),
     ],
   );
@@ -641,7 +667,7 @@ async function insertClientBundle(connection, dataset, client, hashes) {
        (id, tenant_id, client_id, coverage_order, carrier_name_enc, plan_name, member_id_enc, group_number_enc,
         subscriber_name_enc, subscriber_dob_enc, subscriber_rel, auth_number_enc, auth_visits_approved, auth_expires_on,
         referral_number_enc, copay_cents, effective_from, effective_to, is_active, verified_on, verified_by)
-     VALUES (?, ?, ?, 'primary', ?, ?, ?, ?, ?, ?, 'self', ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+     VALUES (?, ?, ?, 'primary', ?, ?, ?, ?, ?, ?, 'self', ?, ?, ?, ?, ?, ?, ?, TRUE, ?, ?)`,
     [
       `ins-${client.id}`,
       dataset.tenantId,
@@ -692,7 +718,7 @@ async function insertClientBundle(connection, dataset, client, hashes) {
   await connection.query(
     `INSERT INTO client_diagnoses
        (id, tenant_id, client_id, code_system, code, description_enc, onset_date, status, is_primary, notes_enc, diagnosed_by)
-     VALUES (?, ?, ?, 'DSM-5', ?, ?, ?, 'active', 1, ?, ?)`,
+     VALUES (?, ?, ?, 'DSM-5', ?, ?, ?, 'active', TRUE, ?, ?)`,
     [
       `diag-${client.id}`,
       dataset.tenantId,
@@ -708,7 +734,7 @@ async function insertClientBundle(connection, dataset, client, hashes) {
   await connection.query(
     `INSERT INTO client_medications
        (id, tenant_id, client_id, med_name_enc, dose_enc, frequency_enc, route, prescriber_enc, start_date, end_date, is_active, reason_enc, notes_enc)
-     VALUES (?, ?, ?, ?, ?, ?, 'oral', ?, ?, NULL, 1, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, 'oral', ?, ?, NULL, TRUE, ?, ?)`,
     [
       `med-${client.id}`,
       dataset.tenantId,
@@ -726,7 +752,7 @@ async function insertClientBundle(connection, dataset, client, hashes) {
   await connection.query(
     `INSERT INTO client_allergies
        (id, tenant_id, client_id, substance_enc, reaction_enc, severity, allergy_type, onset_date, is_active)
-     VALUES (?, ?, ?, ?, ?, 'moderate', 'drug', ?, 1)`,
+     VALUES (?, ?, ?, ?, ?, 'moderate', 'drug', ?, TRUE)`,
     [
       `allergy-${client.id}`,
       dataset.tenantId,
@@ -744,7 +770,7 @@ async function insertClientBundle(connection, dataset, client, hashes) {
         substance_use_screen_enc, mh_prior_treatment, mh_prior_treatment_enc, mh_prior_hospitalizations,
         mh_hospitalizations_enc, mh_prior_diagnoses_enc, si_current, si_history, si_plan, si_means_access,
         si_intent, hi_current, hi_history, self_harm_history, risk_notes_enc, last_risk_assessment_at, risk_assessed_by)
-     VALUES (?, ?, ?, 0, NULL, 0, NULL, ?, ?, ?, ?, ?, ?, 1, ?, 0, NULL, ?, 0, 0, 0, 0, 0, 0, 0, 0, ?, ?, ?)`,
+     VALUES (?, ?, ?, FALSE, NULL, FALSE, NULL, ?, ?, ?, ?, ?, ?, TRUE, ?, FALSE, NULL, ?, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, ?, ?, ?)`,
     [
       `hist-${client.id}`,
       dataset.tenantId,
@@ -812,7 +838,7 @@ async function insertClientBundle(connection, dataset, client, hashes) {
         postal: client.postalCode,
         country: 'US',
       } : null),
-      client.isMinor ? 1 : 0,
+      Boolean(client.isMinor),
       encrypt(client.isMinor ? `COURT-${client.id.toUpperCase()}` : null),
       encryptJson(client.isMinor ? { contact: 'School support team', phone: '555-999-1100' } : null),
       client.isMinor ? '2026-12-31' : null,
@@ -877,7 +903,7 @@ async function insertClientBundle(connection, dataset, client, hashes) {
   await connection.query(
     `INSERT INTO portal_accounts
        (id, tenant_id, client_id, email_enc, email_lookup_hash, password_hash, failed_attempts, locked_until, status, mfa_enabled)
-     VALUES (?, ?, ?, ?, ?, ?, 0, NULL, 'active', 0)`,
+     VALUES (?, ?, ?, ?, ?, ?, 0, NULL, 'active', FALSE)`,
     [
       `portal-${client.id}`,
       dataset.tenantId,
@@ -913,7 +939,7 @@ async function insertClientBundle(connection, dataset, client, hashes) {
   await connection.query(
     `INSERT INTO faith_church_referrals
        (id, tenant_id, client_id, church_name, contact_name, contact_method, status, consent_to_coordinate, notes)
-     VALUES (?, ?, ?, ?, ?, ?, 'active', 1, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, 'active', TRUE, ?)`,
     [
       `church-${client.id}`,
       dataset.tenantId,
@@ -946,7 +972,7 @@ async function insertClientBundle(connection, dataset, client, hashes) {
         dataset.locationId,
         dataset.locationName,
         dataset.practiceTimezone,
-        appointment.id.endsWith('-note') ? 1 : 0,
+        appointment.id.endsWith('-note'),
       ],
     );
   }
@@ -954,7 +980,7 @@ async function insertClientBundle(connection, dataset, client, hashes) {
   await connection.query(
     `INSERT INTO progress_notes
        (id, tenant_id, client_id, appointment_id, note_type, summary_enc, interventions_enc, locked, signed_by, signed_at)
-     VALUES (?, ?, ?, ?, 'progress_note', ?, ?, 1, ?, ?)`,
+     VALUES (?, ?, ?, ?, 'progress_note', ?, ?, TRUE, ?, ?)`,
     [
       `note-${client.id}`,
       dataset.tenantId,
