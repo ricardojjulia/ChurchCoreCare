@@ -7,6 +7,8 @@ import { processDunning } from './subscription-billing.js';
 import { pollClaimStatuses } from './edi-status-poller.js';
 import { sendAppointmentPushReminders } from './push-notifications.js';
 import { processEraReconciliation } from './era-reconciler.js';
+import { databaseConfigFromEnv, requireDatabaseEnv } from '../../api/src/db/config.js';
+import { buildDatabaseSslConfig } from '../../api/src/db/ssl.js';
 
 const workerName = 'reminder-worker';
 const { Pool } = pg;
@@ -31,14 +33,27 @@ function adaptResult(result) {
 }
 
 function getPool(tenantId, config) {
+  requireDatabaseEnv({
+    DB_HOST: config.host,
+    DB_PORT: String(config.port ?? ''),
+    DB_NAME: config.database,
+    DB_USER: config.user,
+    DB_PASSWORD: config.password,
+    DB_SSL: config.ssl,
+    DB_SSL_REJECT_UNAUTHORIZED: config.sslRejectUnauthorized,
+    CHURCHCORE_ALLOW_TEST_DATABASE: process.env.CHURCHCORE_ALLOW_TEST_DATABASE,
+  });
   if (tenantPools.has(tenantId)) return tenantPools.get(tenantId);
   const pgPool = new Pool({
-    host: config.host || '127.0.0.1',
-    port: Number(config.port || 57322),
+    host: config.host,
+    port: Number(config.port),
     database: config.database,
     user: config.user,
     password: config.password,
-    ssl: String(config.ssl).toLowerCase() === 'true' ? { rejectUnauthorized: true } : false,
+    ssl: buildDatabaseSslConfig({
+      DB_SSL: config.ssl,
+      DB_SSL_REJECT_UNAUTHORIZED: config.sslRejectUnauthorized,
+    }),
     max: 3,
     connectionTimeoutMillis: 10_000,
     idleTimeoutMillis: 30_000,
@@ -57,14 +72,7 @@ function getPool(tenantId, config) {
 }
 
 function defaultDbConfigFromEnv() {
-  return {
-    host: process.env.DB_HOST ?? '127.0.0.1',
-    port: process.env.DB_PORT ?? 57322,
-    database: process.env.DB_NAME,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    ssl: process.env.DB_SSL ?? 'false',
-  };
+  return databaseConfigFromEnv();
 }
 
 function normalizeTenantConfig(tenantId, config) {
@@ -108,11 +116,7 @@ function resolveTenantConfigs() {
     }
   }
 
-  if (process.env.DB_NAME) {
-    return [normalizeTenantConfig('system', defaultDbConfigFromEnv())];
-  }
-
-  return [];
+  return [normalizeTenantConfig('system', defaultDbConfigFromEnv())];
 }
 
 // ---------------------------------------------------------------------------

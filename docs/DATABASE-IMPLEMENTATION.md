@@ -1,6 +1,15 @@
 # Database Implementation Guide
 
-MySQL persistence layer for the ChurchCore Care API — covering schema, encryption, authentication, and how to activate DB mode.
+> **Superseded runtime notice (June 7, 2026):** ChurchCore Care is now
+> Supabase PostgreSQL-only for application runtime. Local MySQL/PostgreSQL,
+> in-memory application operation, and implicit database defaults are not
+> supported deployment modes. The historical material below remains for
+> migration context only. Use
+> [`runbooks/vercel-supabase-demo.md`](runbooks/vercel-supabase-demo.md) for the
+> current setup.
+
+Historical persistence implementation notes covering schema, encryption, and
+authentication.
 
 ## Overview
 

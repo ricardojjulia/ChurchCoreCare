@@ -2,6 +2,7 @@
   "name": "churchcore-care",
   "version": "7.0.0",
   "private": true,
+  "type": "module",
   "packageManager": "pnpm@10.33.2",
   "engines": {
     "node": ">=22"
@@ -46,6 +47,9 @@
     "demo:sql:generate": "node --env-file=.env ops/demo-dataset/generate-sql.mjs",
     "demo:sql:apply": "node --env-file=.env ops/demo-dataset/apply-sql.mjs",
     "demo:sql:refresh": "pnpm demo:sql:generate && pnpm demo:sql:apply",
+    "deploy:build": "pnpm --filter @churchcore/web build",
+    "deploy:supabase": "node --env-file=.env ops/deployment/apply-supabase.mjs",
+    "deploy:verify": "node --env-file=.env ops/deployment/verify-supabase.mjs",
     "test:smoke": "node ops/smoke-auth.mjs",
     "agent:translation:build": "docker compose --profile agent build translation-guardian",
     "agent:translation:run": "docker compose --profile agent up translation-guardian",

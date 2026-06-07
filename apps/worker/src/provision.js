@@ -24,6 +24,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import { bootstrapTenantSchema } from '../../api/src/lib/tenant-setup.js';
+import { databaseConfigFromEnv } from '../../api/src/db/config.js';
+import { buildDatabaseSslConfig } from '../../api/src/db/ssl.js';
 
 const { Pool } = pg;
 
@@ -31,13 +33,14 @@ const WORKER_INTERVAL_MS = 15_000;
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 
 function buildPlatformPool() {
+  const dbConfig = databaseConfigFromEnv();
   return new Pool({
-    host:     process.env.DB_HOST     ?? '127.0.0.1',
-    port:     Number(process.env.DB_PORT ?? 57322),
-    database: process.env.DB_NAME     ?? 'postgres',
-    user:     process.env.DB_USER     ?? 'postgres',
-    password: process.env.DB_PASSWORD ?? 'postgres',
-    ssl:      String(process.env.DB_SSL).toLowerCase() === 'true' ? { rejectUnauthorized: true } : false,
+    host:     dbConfig.host,
+    port:     dbConfig.port,
+    database: dbConfig.database,
+    user:     dbConfig.user,
+    password: dbConfig.password,
+    ssl:      buildDatabaseSslConfig(),
     max: 3,
   });
 }

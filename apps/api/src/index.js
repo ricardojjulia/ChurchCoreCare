@@ -2375,32 +2375,32 @@ export async function handleApiRequest(request, response) {
   }
 }
 
-export const server = http.createServer((request, response) => {
+export async function handleTenantAwareRequest(request, response) {
   const tenantContext = resolveTenantContext(request.headers.host);
   request.tenantId = tenantContext.tenantId;
   request.tenantHost = tenantContext.host;
-  getKnownTenantSlugs()
-    .then((knownTenantSlugs) => {
-      if (denyUnknownTenantHost(response, tenantContext, knownTenantSlugs)) {
-        return;
-      }
+  try {
+    const knownTenantSlugs = await getKnownTenantSlugs();
+    if (denyUnknownTenantHost(response, tenantContext, knownTenantSlugs)) return;
+    await runWithTenantContext(tenantContext, () => handleApiRequest(request, response));
+  } catch (error) {
+    logError('request.tenant_context_failure', {
+      requestId: request.requestId,
+      tenantId: tenantContext.tenantId,
+      tenantHost: tenantContext.host,
+      error,
+    });
+    if (!response.headersSent) {
+      writeJson(response, 500, { error: 'Unexpected server error' });
+    }
+  }
+}
 
-      runWithTenantContext(tenantContext, () => handleApiRequest(request, response)).catch((error) => {
-        logError('request.tenant_context_failure', {
-          requestId: request.requestId,
-          tenantId: tenantContext.tenantId,
-          tenantHost: tenantContext.host,
-          error,
-        });
-        if (!response.headersSent) {
-          writeJson(response, 500, { error: 'Unexpected server error' });
-        }
-      });
-    })
-    .catch((error) => {
-      logError('request.tenant_lookup_failure', {
+export const server = http.createServer((request, response) => {
+  handleTenantAwareRequest(request, response).catch((error) => {
+    logError('request.tenant_lookup_failure', {
         requestId: request.requestId,
-        tenantHost: tenantContext.host,
+        tenantHost: request.tenantHost,
         error,
       });
       if (!response.headersSent) {
@@ -2427,7 +2427,7 @@ server.on('error', (error) => {
   process.exit(1);
 });
 
-if (process.env.FAITH_API_DISABLE_LISTEN !== '1') {
+if (process.env.FAITH_API_DISABLE_LISTEN !== '1' && process.env.VERCEL !== '1') {
   server.listen(port, () => {
     logInfo('server.listening', {
       port,
@@ -11455,13 +11455,13 @@ async function handleWorkflowRecommendationState(request, response, requestUrl, 
       `INSERT INTO workflow_recommendation_states
          (id, tenant_id, practice_id, client_id, counselor_id, rule_id, status, deferred_until, notes_enc, expires_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE
-         counselor_id   = VALUES(counselor_id),
-         status         = VALUES(status),
-         deferred_until = VALUES(deferred_until),
-         notes_enc      = VALUES(notes_enc),
+       ON CONFLICT (tenant_id, client_id, rule_id) DO UPDATE
+         SET counselor_id   = EXCLUDED.counselor_id,
+         status         = EXCLUDED.status,
+         deferred_until = EXCLUDED.deferred_until,
+         notes_enc      = EXCLUDED.notes_enc,
          actioned_at    = NOW(),
-         expires_at     = VALUES(expires_at)`,
+         expires_at     = EXCLUDED.expires_at`,
       [stateId, tenantId, practiceId, client.id, counselorId, ruleId, status, deferredUntil, notesEnc, expiresAt],
     );
 

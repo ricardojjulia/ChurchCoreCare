@@ -4,6 +4,7 @@ import { MantineProvider, localStorageColorSchemeManager } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
 import { DatesProvider } from '@mantine/dates';
 import App from './App';
+import DemoEnvironmentBanner from './components/DemoEnvironmentBanner.jsx';
 import { theme } from './theme';
 import { I18nProvider, useI18n } from './lib/i18nContext.jsx';
 import '@mantine/core/styles.css';
@@ -19,6 +20,7 @@ function AppRuntime() {
   return (
     <>
       <Notifications position="top-right" />
+      <DemoEnvironmentBanner />
       <DatesProvider settings={{ firstDayOfWeek: 0, locale }}>
         <App />
       </DatesProvider>

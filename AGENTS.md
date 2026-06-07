@@ -57,7 +57,9 @@ Startup policy for all humans and agents:
 
 - Use `pnpm start` from the repo root as the canonical local startup command.
 - Do not use `node start-servers.js` for standard development runs.
-- `pnpm start` is responsible for env loading, Docker or MySQL preflight, DB readiness checks, migrations, and starting API+web.
+- `pnpm start` is responsible for env loading, online Supabase readiness checks, migrations, and starting API+web.
+- Application runtime is Supabase-only. Do not start or fall back to a local database.
+- Local and loopback database hosts are permitted only in disposable automated test fixtures with `CHURCHCORE_ALLOW_TEST_DATABASE=true`.
 
 A shared pre-push hook exists at `.githooks/pre-push`. Enable it in your clone:
 

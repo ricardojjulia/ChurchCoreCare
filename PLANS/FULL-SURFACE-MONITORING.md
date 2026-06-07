@@ -25,6 +25,7 @@ Monitoring is local-first. OpenTelemetry / OTEL exporters, OTLP collectors, Jaeg
 - External observability export: not supported
 - Browser-side telemetry beacons: not supported
 - Telemetry privacy rule: no PHI and no high-cardinality labels
+- Demo indicator: `VITE_DEMO_ENVIRONMENT=true` adds a shared, visible synthetic-data notice across all existing surfaces without creating a separate monitored surface
 
 ## Scope
 

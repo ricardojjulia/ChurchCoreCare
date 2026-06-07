@@ -58,12 +58,13 @@ function parseTenantDbMap() {
 async function migrateOne(tenantId, config) {
   const env = {
     ...process.env,
-    DB_HOST:     String(config.host     ?? '127.0.0.1'),
-    DB_PORT:     String(config.port     ?? 3306),
+    DB_HOST:     String(config.host     ?? ''),
+    DB_PORT:     String(config.port     ?? ''),
     DB_NAME:     String(config.database ?? config.db ?? ''),
     DB_USER:     String(config.user     ?? ''),
     DB_PASSWORD: String(config.password ?? ''),
-    DB_SSL:      String(config.ssl      ?? 'false'),
+    DB_SSL:      String(config.ssl      ?? 'true'),
+    DB_SSL_REJECT_UNAUTHORIZED: String(config.sslRejectUnauthorized ?? config.ssl_reject_unauthorized ?? process.env.DB_SSL_REJECT_UNAUTHORIZED ?? ''),
     NODE_ENV:              'production',
     SEED_DEV_PORTAL_DATA:  'false',
   };

@@ -6,6 +6,7 @@ apps/web/public/assets/
 coverage/
 .env
 .env.*
+!.env.example
 .DS_Store
 # .firebaserc intentionally tracked (project ID + hosting targets, no secrets)
 .vscode/
@@ -20,3 +21,4 @@ __pycache__/
 *.pyo
 .venv/
 .venv311/
+.vercel

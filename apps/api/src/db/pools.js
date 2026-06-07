@@ -9,6 +9,8 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import pg from 'pg';
 import { isProvisionedTenantStatus } from '../lib/tenant-provisioning.js';
+import { databaseConfigFromEnv, requireDatabaseEnv } from './config.js';
+import { buildDatabaseSslConfig } from './ssl.js';
 
 const { Pool } = pg;
 
@@ -63,19 +65,27 @@ class PgPoolAdapter {
   }
 }
 
-function parseSslEnabled(value) {
-  if (typeof value === 'boolean') return value;
-  return String(value).toLowerCase() === 'true';
-}
-
 function buildPoolConfig(config) {
+  requireDatabaseEnv({
+    DB_HOST: config.host,
+    DB_PORT: String(config.port ?? ''),
+    DB_NAME: config.database,
+    DB_USER: config.user,
+    DB_PASSWORD: config.password,
+    DB_SSL: config.ssl,
+    DB_SSL_REJECT_UNAUTHORIZED: config.sslRejectUnauthorized,
+    CHURCHCORE_ALLOW_TEST_DATABASE: process.env.CHURCHCORE_ALLOW_TEST_DATABASE,
+  });
   return {
-    host:             config.host     || '127.0.0.1',
-    port:             Number(config.port || 57322),
-    database:         config.database || 'postgres',
-    user:             config.user     || 'postgres',
-    password:         config.password || 'postgres',
-    ssl:              parseSslEnabled(config.ssl) ? { rejectUnauthorized: true } : false,
+    host:             config.host,
+    port:             Number(config.port),
+    database:         config.database,
+    user:             config.user,
+    password:         config.password,
+    ssl:              buildDatabaseSslConfig({
+      DB_SSL: config.ssl,
+      DB_SSL_REJECT_UNAUTHORIZED: config.sslRejectUnauthorized,
+    }),
     max:              Number(config.connectionLimit || 10),
     connectionTimeoutMillis: 10_000,
     idleTimeoutMillis:       30_000,
@@ -83,14 +93,7 @@ function buildPoolConfig(config) {
 }
 
 function defaultDbConfigFromEnv() {
-  return {
-    host:     process.env.DB_HOST     || '127.0.0.1',
-    port:     Number(process.env.DB_PORT || 57322),
-    database: process.env.DB_NAME     || 'postgres',
-    user:     process.env.DB_USER     || 'postgres',
-    password: process.env.DB_PASSWORD || 'postgres',
-    ssl:      process.env.DB_SSL,
-  };
+  return databaseConfigFromEnv();
 }
 
 function parseTenantDbMap() {
@@ -134,7 +137,6 @@ export function getPoolForTenant(tenantId = 'system') {
 }
 
 async function listProvisionedTenantSlugsFromDb() {
-  if (!process.env.DB_NAME) return new Set(['system']);
   const defaultPool = getPoolForTenant('system');
   const [rows] = await defaultPool.query(
     `SELECT requested_tenant_id, status, completed_at

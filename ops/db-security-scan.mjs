@@ -553,13 +553,22 @@ function checkDbConnectionSecurity() {
   const issues = [];
 
   const poolFile = join(ROOT, 'apps/api/src/db/pool.js');
+  const connectionFiles = [
+    poolFile,
+    join(ROOT, 'apps/api/src/db/pools.js'),
+    join(ROOT, 'apps/api/src/db/config.js'),
+    join(ROOT, 'apps/api/src/db/ssl.js'),
+  ];
   if (!existsSync(poolFile)) {
     issues.push(makeIssue('pool-file-missing', 'medium',
       'Database pool file apps/api/src/db/pool.js not found'));
     return { check: 'db-connection-security', issues };
   }
 
-  const poolSource = readSource(poolFile);
+  const poolSource = connectionFiles
+    .filter(existsSync)
+    .map(readSource)
+    .join('\n');
 
   // Check SSL configuration
   if (!poolSource.includes('ssl') && !poolSource.includes('SSL')) {
@@ -576,7 +585,7 @@ function checkDbConnectionSecurity() {
   }
 
   // Check for connection timeout
-  if (!poolSource.includes('connectTimeout') && !poolSource.includes('timeout')) {
+  if (!/timeout/i.test(poolSource)) {
     issues.push(makeIssue('db-timeout-missing', 'low',
       'Database connection pool may not have timeout configured',
       'apps/api/src/db/pool.js',
@@ -661,15 +670,11 @@ function checkPortalPublicSecurity(tables) {
   // to determine storage (tenant must be forced server-side)
   const publicReqTable = tables.find(t => t.name === 'portal_registration_requests' ||
                                           t.name === 'portal_public_requests' ||
-  // portal_public_requests is special: must NOT allow caller-supplied tenant_id
-  // to determine storage (tenant must be forced server-side)
-  const publicReqTable = tables.find(t => t.name === 'portal_public_requests' ||
                                           t.name === 'public_requests');
   if (!publicReqTable) {
     // This may be stored elsewhere — check if it's documented
     issues.push(makeIssue('portal-public-requests-not-found', 'low',
       'portal_registration_requests table not found in schema — verify public intake is stored securely',
-      'portal_public_requests table not found in schema — verify public intake is stored securely',
       null,
       'Ensure public intake requests cannot specify their own tenant_id.'));
   } else {
@@ -677,7 +682,6 @@ function checkPortalPublicSecurity(tables) {
     if (hasTenant) {
       issues.push(makeIssue('portal-public-requests-tenant', 'info',
         `${publicReqTable.name} table includes tenant_id — ensure server enforces tenant assignment`));
-        'portal_public_requests table includes tenant_id — ensure server enforces tenant assignment'));
     }
   }
 
