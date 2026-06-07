@@ -180,6 +180,7 @@ The v2.0.0 spec covers all 150+ implemented endpoints across every surface of th
 - **Platform Administration** — tenant provisioning, impersonation sessions, data exports, and retention policies *(platform_admin only)*
 - **Reference** — DSM-5-TR diagnosis code search
 - **Internationalization** — locales, translation catalogs, settings, and auto-translate
+- **Localization governance design** — approved framework-neutral lifecycle and private npm packaging plan for validation, human review, approval, activation, rollback, CI enforcement, and reusable storage/provider adapters
 - **Monitoring** — database health and local runtime visibility
 - **System** — health probes and bootstrap metadata
 
@@ -521,6 +522,14 @@ pnpm agent:translation:build
 pnpm agent:translation:run
 ```
 
+Translation governance is being standardized as reusable private packages under
+`@localization-governance/*`. The approved design separates the framework-neutral
+lifecycle engine from filesystem and PostgreSQL storage, translation providers,
+CLI automation, optional React administration components, and the ChurchCore
+compatibility adapter.
+
+- Design: `docs/superpowers/specs/2026-06-07-localization-governance-toolkit-design.md`
+
 ### Local monitoring
 
 Monitoring stays inside the application. Standard development and deployment do not require OTEL, OTLP, Jaeger, Prometheus, or browser telemetry ingestion.
@@ -613,6 +622,7 @@ The change log summarizes completed work across releases and documents the detai
 - **API Documentation:** `docs/api/openapi.yaml` — OpenAPI 3.1 spec (v2.0.0), 150+ endpoints; interactive via `http://localhost:3002/api/docs`
 - **User Manual:** `docs/User Manual/README.md` — full end-user guide covering all roles and platform surfaces
 - Locale status docs: `docs/i18n/` — generated per-locale translation coverage and review readiness snapshots
+- Localization governance toolkit design: `docs/superpowers/specs/2026-06-07-localization-governance-toolkit-design.md`
 - Product and planning overview: `docs/PRODUCT-PLANS-OVERVIEW.md`
 - Domain model: `docs/domain-model.md`
 - Faithful Workflows visual upgrade (v5.5.2): `docs/v5.5.2-RELEASE-SUMMARY.md`

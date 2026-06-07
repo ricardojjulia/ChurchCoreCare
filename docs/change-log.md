@@ -2,6 +2,24 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## June 7, 2026 — Localization governance toolkit design
+
+### feat: define reusable localization governance lifecycle and package architecture
+
+**Date:** 2026-06-07
+**Affected area:** `docs/superpowers/specs/`, `README.md`
+
+Added the approved design contract for a framework-neutral localization
+governance toolkit distributed privately under `@localization-governance/*`.
+The design defines enforced lifecycle states, deterministic validation,
+configurable linguistic/domain/compliance approvals, immutable catalog
+versions, atomic activation and rollback, filesystem and PostgreSQL adapters,
+translation-provider interfaces, CLI and CI contracts, optional React
+administration components, ChurchCore audit and monitoring boundaries, and a
+non-destructive migration path for the existing locales.
+
+---
+
 ## May 28, 2026 — Platform Admin App complete (apps/platform/)
 
 ### feat: platform admin web app — impersonation, data exports, retention policies
