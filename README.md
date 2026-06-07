@@ -412,6 +412,9 @@ cp .env.example .env
 Configure `.env` with the online Supabase pooler values. Local application
 runtime databases are not supported. Keep `SEED_DEV_PORTAL_DATA=false`; use the
 guarded demo deployment command when the synthetic dataset must be refreshed.
+Vercel uses the Supabase transaction pooler on port `6543` with
+`DB_POOL_MAX=1` so concurrent serverless cold starts do not exhaust database
+sessions.
 Secret fields in `.env.example` are intentionally blank so examples cannot be
 mistaken for usable credentials or trigger secret-scanning alerts.
 When `DEMO_ENVIRONMENT=true`, the same synthetic-data warning is shown in the

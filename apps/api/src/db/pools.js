@@ -86,7 +86,7 @@ function buildPoolConfig(config) {
       DB_SSL: config.ssl,
       DB_SSL_REJECT_UNAUTHORIZED: config.sslRejectUnauthorized,
     }),
-    max:              Number(config.connectionLimit || 10),
+    max:              config.connectionLimit,
     connectionTimeoutMillis: 10_000,
     idleTimeoutMillis:       30_000,
   };

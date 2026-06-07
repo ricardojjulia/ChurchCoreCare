@@ -40,6 +40,16 @@ Added a bounded `demoEnvironment` boolean to the public live-health response
 and a shared same-origin script that renders the synthetic-data warning on
 every standalone HTML surface only when the deployment is marked as a demo.
 
+### fix: prevent Vercel from exhausting Supabase pooler sessions
+
+**Date:** 2026-06-07
+**Affected area:** PostgreSQL pool configuration, Vercel cold starts, Supabase
+connection settings
+
+Changed the Vercel runtime to Supabase transaction mode on port `6543`, limited
+each serverless function instance to one PostgreSQL client by default, and
+skipped the eager database connection check during Vercel cold starts.
+
 ## June 7, 2026 — Durable localization governance integration
 
 ### feat: add tenant-scoped localization governance lifecycle

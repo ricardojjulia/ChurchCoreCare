@@ -30,6 +30,11 @@ export function requireDatabaseEnv(env = process.env) {
 
 export function databaseConfigFromEnv(env = process.env) {
   requireDatabaseEnv(env);
+  const defaultConnectionLimit = env.VERCEL === '1' ? 1 : 10;
+  const connectionLimit = Number(env.DB_POOL_MAX ?? defaultConnectionLimit);
+  if (!Number.isInteger(connectionLimit) || connectionLimit < 1 || connectionLimit > 20) {
+    throw new Error('DB_POOL_MAX must be an integer between 1 and 20');
+  }
   return {
     host: env.DB_HOST,
     port: Number(env.DB_PORT),
@@ -38,5 +43,6 @@ export function databaseConfigFromEnv(env = process.env) {
     password: env.DB_PASSWORD,
     ssl: env.DB_SSL,
     sslRejectUnauthorized: env.DB_SSL_REJECT_UNAUTHORIZED,
+    connectionLimit,
   };
 }

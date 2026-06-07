@@ -262,7 +262,7 @@ const i18nStore = await createI18nStore();
 
 // Verify DB connectivity at startup when DB_NAME is configured.
 // Skipped if DB_NAME is unset (allows running without a DB in dev/CI).
-if (process.env.DB_NAME) {
+if (process.env.DB_NAME && process.env.VERCEL !== '1') {
   try {
     await verifyConnection();
     logInfo('startup.db_connection_verified', {
