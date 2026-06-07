@@ -2,6 +2,80 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## June 7, 2026 — Google provider entity decoding
+
+### fix: prevent double-unescaping translated provider output
+
+**Date:** 2026-06-07
+**Affected area:** `packages/localization-governance-provider-google/`
+
+Changed supported HTML entity decoding from sequential replacements to a
+single-pass decoder. Nested entity text such as `&amp;lt;` now decodes once to
+`&lt;` rather than being decoded again to `<`. Added regression coverage for
+the CodeQL double-unescaping finding.
+
+## June 7, 2026 — CI database bootstrap and CodeQL configuration
+
+### fix: restore auth smoke migrations and remove duplicate CodeQL setup
+
+**Date:** 2026-06-07
+**Affected area:** `.github/workflows/ci.yml`, `.github/workflows/codeql.yml`
+
+The auth smoke job now initializes its fresh PostgreSQL service from the
+canonical Supabase initial schema before running incremental API migrations,
+and uses the documented staff-only seed mode for the auth-focused smoke test.
+Removed the repository's advanced CodeQL workflow because GitHub CodeQL default
+setup is already configured and rejects SARIF uploads from a simultaneous
+advanced configuration.
+
+## June 7, 2026 — Localization governance toolkit design
+
+### feat: implement localization governance portable foundation
+
+**Date:** 2026-06-07
+**Affected area:** `packages/localization-governance-*`,
+`ops/localization-governance/`, `.github/workflows/ci.yml`
+
+Implemented Slice 1 of the reusable private localization governance toolkit.
+The new packages provide deterministic catalog validation, enforced lifecycle
+transitions, configurable reviewer roles and separation of duties, explicit
+approval, atomic activation and rollback, source-change staleness, filesystem
+persistence, Google Translation integration, lifecycle and CI commands, and
+metadata-only diagnostics.
+
+Added non-destructive ChurchCore migration tooling that preserves existing
+Spanish machine/human review evidence, creates a `legacy_unverified`
+compatibility activation, and leaves French and Portuguese inactive. Added a
+packed-tarball verifier that installs all four packages into a clean temporary
+workspace, runs the Spanish lifecycle, reopens persistence, and invokes the
+packed CLI.
+
+### feat: add portable foundation implementation plan
+
+**Date:** 2026-06-07
+**Affected area:** `docs/superpowers/plans/`, `README.md`
+
+Added the executable TDD plan for Slice 1 of the reusable localization
+governance toolkit: portable core, filesystem storage, Google provider, CLI,
+migration tooling, CI checks, package tarballs, and an external sample
+workspace installation test.
+
+### feat: define reusable localization governance lifecycle and package architecture
+
+**Date:** 2026-06-07
+**Affected area:** `docs/superpowers/specs/`, `README.md`
+
+Added the approved design contract for a framework-neutral localization
+governance toolkit distributed privately under `@localization-governance/*`.
+The design defines enforced lifecycle states, deterministic validation,
+configurable linguistic/domain/compliance approvals, immutable catalog
+versions, atomic activation and rollback, filesystem and PostgreSQL adapters,
+translation-provider interfaces, CLI and CI contracts, optional React
+administration components, ChurchCore audit and monitoring boundaries, and a
+non-destructive migration path for the existing locales.
+
+---
+
 ## May 28, 2026 — Platform Admin App complete (apps/platform/)
 
 ### feat: platform admin web app — impersonation, data exports, retention policies
