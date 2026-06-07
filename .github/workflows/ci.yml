@@ -106,6 +106,9 @@ jobs:
       - name: Migrate and seed database
         run: node apps/api/src/db/migrate.js
 
+      - name: Localization PostgreSQL integration
+        run: pnpm localization:test:postgres
+
       - name: Start API server
         run: node apps/api/src/index.js &
 

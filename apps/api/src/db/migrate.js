@@ -12,6 +12,8 @@
  */
 
 import path from 'node:path';
+import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 
 // Load .env if present (for local dev convenience)
@@ -36,6 +38,8 @@ await connection.connect();
 try {
   console.log('Running incremental migrations…');
 
+  await applyLocalizationGovernanceSchema(connection);
+
   // Column migrations — add new columns to existing tables when the schema
   // has already been created. Each check is idempotent via INFORMATION_SCHEMA.
   await applyColumnMigrations(connection);
@@ -55,6 +59,17 @@ try {
   }
 } finally {
   await connection.end();
+}
+
+async function applyLocalizationGovernanceSchema(conn) {
+  const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
+  const migrationFile = path.resolve(
+    moduleDirectory,
+    '../../../../supabase/migrations/20260607000000_localization_governance.sql',
+  );
+  const sql = await readFile(migrationFile, 'utf8');
+  await conn.query(sql);
+  console.log('Localization governance schema ready.');
 }
 
 function shouldSeedDevPortalData() {

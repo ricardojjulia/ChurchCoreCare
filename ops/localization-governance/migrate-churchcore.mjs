@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { hashCatalog } from '../../packages/localization-governance-core/src/index.js';
 import { createFilesystemStorage } from '../../packages/localization-governance-storage-filesystem/src/index.js';
+import { createPostgresStorage } from '../../packages/localization-governance-storage-postgres/src/index.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const DEFAULT_LOCALES = ['es-MX', 'fr-FR', 'pt-BR'];
@@ -123,6 +124,9 @@ async function readJson(file) {
 
 async function main() {
   const write = process.argv.includes('--write');
+  const usePostgres = process.argv.includes('--postgres');
+  const tenantFlag = process.argv.indexOf('--tenant');
+  const tenantId = tenantFlag >= 0 ? process.argv[tenantFlag + 1]?.trim() : '';
   const { baseMessages } = await import('../../packages/i18n/src/index.js');
   const catalogs = Object.fromEntries(
     await Promise.all(DEFAULT_LOCALES.map(async (code) => [
@@ -130,18 +134,34 @@ async function main() {
       await readJson(path.join(ROOT, 'apps/api/data/i18n', `${code}.json`)),
     ])),
   );
-  const directoryFlag = process.argv.indexOf('--directory');
-  const directory = directoryFlag >= 0
-    ? path.resolve(process.argv[directoryFlag + 1])
-    : path.join(ROOT, '.localization-governance');
-  const storage = await createFilesystemStorage({ directory });
-  const result = await runChurchCoreMigration({
-    storage,
-    sourceMessages: baseMessages,
-    catalogs,
-    write,
-  });
-  console.log(JSON.stringify(result, null, 2));
+  let storage;
+  let client;
+  if (usePostgres && write) {
+    if (!tenantId) throw new Error('--tenant is required with --postgres --write');
+    const { createDirectPostgresClient } = await import(
+      '../../apps/api/src/db/direct-postgres-client.js'
+    );
+    client = createDirectPostgresClient();
+    await client.connect();
+    storage = createPostgresStorage({ client, tenantId });
+  } else {
+    const directoryFlag = process.argv.indexOf('--directory');
+    const directory = directoryFlag >= 0
+      ? path.resolve(process.argv[directoryFlag + 1])
+      : path.join(ROOT, '.localization-governance');
+    storage = await createFilesystemStorage({ directory });
+  }
+  try {
+    const result = await runChurchCoreMigration({
+      storage,
+      sourceMessages: baseMessages,
+      catalogs,
+      write,
+    });
+    console.log(JSON.stringify(result, null, 2));
+  } finally {
+    await client?.end();
+  }
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {

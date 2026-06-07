@@ -28,6 +28,15 @@ importers:
       '@churchcore/i18n':
         specifier: workspace:*
         version: link:../../packages/i18n
+      '@localization-governance/core':
+        specifier: workspace:*
+        version: link:../../packages/localization-governance-core
+      '@localization-governance/provider-google':
+        specifier: workspace:*
+        version: link:../../packages/localization-governance-provider-google
+      '@localization-governance/storage-postgres':
+        specifier: workspace:*
+        version: link:../../packages/localization-governance-storage-postgres
       argon2:
         specifier: ^0.44.0
         version: 0.44.0
@@ -213,6 +222,12 @@ importers:
         version: link:../localization-governance-core
 
   packages/localization-governance-storage-filesystem:
+    dependencies:
+      '@localization-governance/core':
+        specifier: workspace:*
+        version: link:../localization-governance-core
+
+  packages/localization-governance-storage-postgres:
     dependencies:
       '@localization-governance/core':
         specifier: workspace:*

@@ -84,3 +84,27 @@ test('dry-run does not write and write mode is idempotent', async () => {
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test('migration write preserves compatibility evidence without approving Spanish', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'locgov-migrate-evidence-'));
+  try {
+    const storage = await createFilesystemStorage({ directory });
+    await runChurchCoreMigration({
+      storage,
+      sourceMessages,
+      catalogs,
+      write: true,
+    });
+    const spanish = await storage.getLocale('es-MX');
+    const version = (await storage.listVersions(spanish.id))[0];
+    const history = await storage.listActivationHistory(spanish.id);
+
+    assert.equal(version.state, 'legacy_unverified');
+    assert.equal(version.approvedBy, undefined);
+    assert.equal(version.provenance.machineTranslatedCount, 1);
+    assert.equal(version.provenance.humanReviewedCount, 1);
+    assert.equal(history[0].action, 'legacy_compatibility');
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

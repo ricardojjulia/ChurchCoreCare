@@ -2,6 +2,32 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## June 7, 2026 — Durable localization governance integration
+
+### feat: add tenant-scoped localization governance lifecycle
+
+**Date:** 2026-06-07
+**Affected area:** `packages/localization-governance-storage-postgres/`,
+`apps/api/`, `ops/localization-governance/`, `supabase/migrations/`,
+`.github/workflows/ci.yml`
+
+Implemented Slice 2 of the localization governance toolkit. Added a portable
+PostgreSQL storage package with explicit tenant binding, transactional
+activation and rollback, row locking, validation/review/history persistence,
+and cross-tenant isolation.
+
+Integrated governed ChurchCore API workflows for status, validation, reviewer
+assignment, review submission, approval, activation, and rollback. Lifecycle
+administration is restricted to platform or practice administrators; review
+submission requires a matching reviewer assignment, and assignments can only
+target staff accounts in the current tenant. Governed mutations emit bounded
+canonical audit results without catalog text or PHI.
+
+Added the additive six-table PostgreSQL schema, idempotent explicit-tenant
+migration mode, Spanish `legacy_unverified` compatibility import, inactive
+French and Portuguese drafts, real PostgreSQL concurrency/isolation checks,
+and packed-tarball verification for all five portable packages.
+
 ## June 7, 2026 — Google provider entity decoding
 
 ### fix: prevent double-unescaping translated provider output

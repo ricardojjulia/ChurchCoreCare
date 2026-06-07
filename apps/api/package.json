@@ -7,6 +7,9 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.98.0",
     "@churchcore/i18n": "workspace:*",
+    "@localization-governance/core": "workspace:*",
+    "@localization-governance/provider-google": "workspace:*",
+    "@localization-governance/storage-postgres": "workspace:*",
     "argon2": "^0.44.0",
     "pg": "^8.20.0",
     "stripe": "^22.1.1"
