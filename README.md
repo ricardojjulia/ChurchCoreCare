@@ -529,6 +529,7 @@ CLI automation, optional React administration components, and the ChurchCore
 compatibility adapter.
 
 - Design: `docs/superpowers/specs/2026-06-07-localization-governance-toolkit-design.md`
+- Slice 1 implementation plan: `docs/superpowers/plans/2026-06-07-localization-governance-slice-1.md`
 
 ### Local monitoring
 
@@ -623,6 +624,7 @@ The change log summarizes completed work across releases and documents the detai
 - **User Manual:** `docs/User Manual/README.md` — full end-user guide covering all roles and platform surfaces
 - Locale status docs: `docs/i18n/` — generated per-locale translation coverage and review readiness snapshots
 - Localization governance toolkit design: `docs/superpowers/specs/2026-06-07-localization-governance-toolkit-design.md`
+- Localization governance Slice 1 plan: `docs/superpowers/plans/2026-06-07-localization-governance-slice-1.md`
 - Product and planning overview: `docs/PRODUCT-PLANS-OVERVIEW.md`
 - Domain model: `docs/domain-model.md`
 - Faithful Workflows visual upgrade (v5.5.2): `docs/v5.5.2-RELEASE-SUMMARY.md`

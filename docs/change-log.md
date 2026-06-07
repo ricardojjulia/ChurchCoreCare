@@ -4,6 +4,16 @@
 
 ## June 7, 2026 — Localization governance toolkit design
 
+### feat: add portable foundation implementation plan
+
+**Date:** 2026-06-07
+**Affected area:** `docs/superpowers/plans/`, `README.md`
+
+Added the executable TDD plan for Slice 1 of the reusable localization
+governance toolkit: portable core, filesystem storage, Google provider, CLI,
+migration tooling, CI checks, package tarballs, and an external sample
+workspace installation test.
+
 ### feat: define reusable localization governance lifecycle and package architecture
 
 **Date:** 2026-06-07
