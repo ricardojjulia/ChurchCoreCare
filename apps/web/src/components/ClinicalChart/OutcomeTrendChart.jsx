@@ -1,13 +1,4 @@
-import { Paper, Text, Skeleton, Stack } from '@mantine/core';
-import { LineChart } from '@mantine/charts';
-
-// PHQ-9 severity thresholds: 0-4 minimal, 5-9 mild, 10-14 moderate, 15-19 mod-severe, 20+ severe
-const PHQ9_BANDS = [
-  { value: 5,  color: 'rgba(250,204,21,0.15)', label: 'Mild' },
-  { value: 10, color: 'rgba(249,115,22,0.15)', label: 'Moderate' },
-  { value: 15, color: 'rgba(239,68,68,0.15)',  label: 'Mod-Severe' },
-  { value: 20, color: 'rgba(185,28,28,0.15)',  label: 'Severe' },
-];
+import { Box, Group, Paper, Text, Skeleton, Stack } from '@mantine/core';
 
 export default function OutcomeTrendChart({ data, loading, title = 'PHQ-9 Outcome Trend' }) {
   if (loading) return <Skeleton height={240} radius="lg" />;
@@ -24,21 +15,29 @@ export default function OutcomeTrendChart({ data, loading, title = 'PHQ-9 Outcom
       {points.length === 0 ? (
         <Text c="dimmed" fz="sm" ta="center" py="xl">No outcome data for this period.</Text>
       ) : (
-        <LineChart
-          h={200}
-          data={points}
-          dataKey="date"
-          series={[{ name: 'score', label: 'PHQ-9 Score', color: 'indigo.6' }]}
-          curveType="monotone"
-          withDots
-          yAxisProps={{ domain: [0, 27] }}
-          referenceLines={PHQ9_BANDS.map((b) => ({
-            y: b.value,
-            color: 'gray.4',
-            label: b.label,
-            labelPosition: 'insideTopRight',
-          }))}
-        />
+        <Stack gap="xs" role="list" aria-label={title}>
+          {points.map((point) => {
+            const score = Math.max(0, Math.min(27, Number(point.score) || 0));
+            return (
+              <Group key={`${point.date}-${score}`} gap="sm" wrap="nowrap" role="listitem">
+                <Text fz="xs" c="dimmed" w={78}>
+                  {new Date(point.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                </Text>
+                <Box
+                  aria-label={`PHQ-9 score ${score}`}
+                  style={{
+                    background: 'var(--mantine-color-indigo-6)',
+                    borderRadius: 999,
+                    height: 10,
+                    minWidth: score > 0 ? 8 : 0,
+                    width: `${(score / 27) * 100}%`,
+                  }}
+                />
+                <Text fz="xs" fw={700} w={24} ta="right">{score}</Text>
+              </Group>
+            );
+          })}
+        </Stack>
       )}
 
       <Stack gap={4} mt="sm" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>

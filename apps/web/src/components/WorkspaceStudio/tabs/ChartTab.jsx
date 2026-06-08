@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import {
-  Stack, Text, Badge, Switch, Divider,
+  Stack, Text, Badge, Switch, Divider, Group,
   Table, ActionIcon, Tooltip, TextInput, Select,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';

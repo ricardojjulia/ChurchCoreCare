@@ -51,13 +51,13 @@ export async function getRevenueStats({ tenantId, from, to }) {
 
   const [rows] = await pool.query(
     `SELECT
-       COALESCE(SUM(amount), 0)                                      AS billed,
-       COALESCE(SUM(CASE WHEN status = 'paid' THEN amount END), 0)   AS collected,
-       COALESCE(SUM(CASE WHEN status IN ('submitted','accepted','pending') THEN amount END), 0) AS outstanding
-     FROM claims
+       COALESCE(SUM(total), 0)       AS billed,
+       COALESCE(SUM(amount_paid), 0) AS collected,
+       COALESCE(SUM(balance), 0)     AS outstanding
+     FROM invoices
      WHERE tenant_id = ?
-       AND service_date >= ?
-       AND service_date < ?`,
+       AND COALESCE(issued_at, created_at) >= ?
+       AND COALESCE(issued_at, created_at) < ?`,
     [tenantId, from, to],
   );
 
@@ -108,10 +108,10 @@ export async function getOutcomeTrends({ tenantId, clientId = null, formKey, fro
   if (to)       { conditions.push('submitted_at < ?'); args.push(to); }
 
   const [rows] = await pool.query(
-    `SELECT DATE(submitted_at) AS day, score_total AS score
+    `SELECT DATE(submitted_at) AS day, score_value AS score
      FROM form_submissions
      WHERE ${conditions.join(' AND ')}
-       AND score_total IS NOT NULL
+       AND score_value IS NOT NULL
      ORDER BY submitted_at ASC`,
     args,
   );
@@ -130,33 +130,33 @@ export async function getCounselorProductivity({ tenantId, from, to }) {
 
   const [rows] = await pool.query(
     `SELECT
-       a.counselor_id                                          AS counselorId,
-       COUNT(*)                                               AS totalSessions,
-       COUNT(CASE WHEN a.status = 'no_show' THEN 1 END)      AS noShows,
-       COUNT(CASE WHEN a.status = 'completed' THEN 1 END)    AS completed,
+       a.counselor_id                                        AS counselor_id,
+       COUNT(*)                                             AS total_sessions,
+       COUNT(CASE WHEN a.status = 'no_show' THEN 1 END)    AS no_shows,
+       COUNT(CASE WHEN a.status = 'completed' THEN 1 END)  AS completed,
        ROUND(AVG(
          CASE WHEN a.status = 'completed'
            THEN EXTRACT(EPOCH FROM (a.ends_at::TIMESTAMPTZ - a.starts_at::TIMESTAMPTZ)) / 60
          END
-       ))                                                     AS avgDurationMinutes
+       ))                                                   AS avg_duration_minutes
      FROM appointments a
      WHERE a.tenant_id = ?
        AND a.starts_at >= ?
-       AND a.starts_at < ?
+     AND a.starts_at < ?
      GROUP BY a.counselor_id
-     ORDER BY totalSessions DESC`,
+     ORDER BY total_sessions DESC`,
     [tenantId, from, to],
   );
 
   return {
     counselors: rows.map((r) => ({
-      counselorId:       r.counselorId,
-      totalSessions:     Number(r.totalSessions),
-      noShows:           Number(r.noShows),
+      counselorId:       r.counselor_id,
+      totalSessions:     Number(r.total_sessions),
+      noShows:           Number(r.no_shows),
       completed:         Number(r.completed),
-      avgDurationMinutes: r.avgDurationMinutes ? Number(r.avgDurationMinutes) : null,
-      noShowRate:        r.totalSessions > 0
-        ? Math.round((Number(r.noShows) / Number(r.totalSessions)) * 100)
+      avgDurationMinutes: r.avg_duration_minutes ? Number(r.avg_duration_minutes) : null,
+      noShowRate:        Number(r.total_sessions) > 0
+        ? Math.round((Number(r.no_shows) / Number(r.total_sessions)) * 100)
         : 0,
     })),
   };

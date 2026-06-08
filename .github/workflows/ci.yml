@@ -74,6 +74,7 @@ jobs:
       DB_SSL: "false"
       CHURCHCORE_ALLOW_TEST_DATABASE: "true"
       PORT: 3101
+      SMOKE_API_URL: http://127.0.0.1:3101
       SESSION_SECRET: ci-smoke-session-secret-not-for-production
       DB_ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000001"
       NODE_ENV: test

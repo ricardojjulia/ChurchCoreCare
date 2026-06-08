@@ -59,6 +59,8 @@ pnpm run test:security  # security regression tests
 - **Supabase is the only application database.** Runtime must reject local,
   loopback, Unix-socket, and implicit database configurations. Disposable CI
   PostgreSQL fixtures require `CHURCHCORE_ALLOW_TEST_DATABASE=true`.
+- **Use `/Users/rjulia/ChurchCoreCare` for current SaaS runtime work.** Follow
+  `docs/runbooks/saas-runtime.md` for startup, checkout, verification, and recovery.
 - **Worker handles all background jobs.** Do not add cron elsewhere.
 - **Use the existing email/notify system** (`apps/worker/src/notify.js`). Do not add new ones.
 - **Local monitoring must work without OTEL exporters.** Never add telemetry beacons or OTLP collectors.

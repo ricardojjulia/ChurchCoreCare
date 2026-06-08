@@ -2,6 +2,58 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## June 8, 2026 — SaaS runtime workspace recovery
+
+### fix: make the Supabase-only SaaS runtime easy to start and verify
+
+**Date:** 2026-06-08
+**Affected area:** local startup guidance, smoke tests, browser scan defaults,
+load-test defaults, analytics, authenticated billing status, README, AGENTS,
+CLAUDE, and SaaS runbooks
+
+Restored the expected `/Users/rjulia/ChurchCoreCare` workspace as the current
+SaaS runtime checkout without disturbing the older dirty feature checkout at
+`/Users/rjulia/ChurchCore Care`. Added the canonical SaaS runtime runbook and
+linked it from the main repository instructions so agents and humans use the
+same Vercel + online Supabase operating model.
+
+Aligned local verification defaults with the current runtime: auth smoke tests
+now target API port `3001`, browser and load-test defaults use the canonical
+synthetic portal client, and a regression test guards those values.
+
+Corrected the PostgreSQL analytics queries to use the deployed invoice and
+outcome columns and explicit snake-case aliases. Replaced the chart dependency
+that crashed the Analytics surface with bounded native Mantine visualizations,
+and added an authenticated browser regression test for that page.
+
+Consolidated trial-status loading to one request after an eligible billing
+administrator is authenticated. Signed-out and client sessions no longer emit
+expected authorization failures from background billing probes.
+
+Updated the live security regression runner to authenticate as the canonical
+synthetic Elena portal client for self-service and cross-client boundary checks
+instead of relying on development-only identity headers.
+
+Replaced the remaining MySQL `SHOW STATUS` monitoring queries with bounded
+PostgreSQL statistics so authenticated local database diagnostics work against
+online Supabase without exposing application rows or audit records.
+
+Fixed Workspace Studio's Chart tab by restoring its missing Mantine `Group`
+import, made first-load form catalog seeding idempotent under concurrent
+PostgreSQL requests, and aligned billing subscription lookup with the canonical
+session tenant field.
+
+Made in-memory demo appointment timestamps use the configured practice day
+instead of the host machine's local day, with regression coverage for UTC
+midnight crossover and daylight-saving offsets. Added a narrowly scoped
+Gitleaks allowlist for the static `children_6_12` UI identifier so generated
+web assets no longer fail secret scanning while real credentials remain
+covered by the default ruleset. Generated web assets are also excluded from
+source-oriented whitespace diagnostics.
+
+Aligned the CI auth-smoke endpoint with its isolated API port (`3101`) through
+`SMOKE_API_URL`, while retaining port `3001` as the canonical local default.
+
 ## June 7, 2026 — Vercel and Supabase SaaS foundation
 
 ### feat: make Supabase the exclusive application database

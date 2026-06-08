@@ -6,6 +6,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 
 import {
   getSessionVolume,
@@ -73,6 +74,57 @@ test('getCounselorProductivity: in-memory mode returns empty counselors', async 
   } finally {
     if (saved !== undefined) process.env.DB_NAME = saved;
   }
+});
+
+test('analytics SQL matches the PostgreSQL Supabase schema', async () => {
+  const source = await readFile(new URL('../src/lib/analytics.js', import.meta.url), 'utf8');
+
+  assert.match(source, /FROM invoices/);
+  assert.match(source, /SUM\(total\)/);
+  assert.match(source, /SUM\(amount_paid\)/);
+  assert.match(source, /SUM\(balance\)/);
+  assert.doesNotMatch(source, /SUM\(amount\)/);
+  assert.match(source, /score_value AS score/);
+  assert.doesNotMatch(source, /score_total/);
+});
+
+test('counselor productivity uses PostgreSQL-safe aliases', async () => {
+  const source = await readFile(new URL('../src/lib/analytics.js', import.meta.url), 'utf8');
+
+  assert.match(source, /AS counselor_id/);
+  assert.match(source, /AS total_sessions/);
+  assert.match(source, /AS no_shows/);
+  assert.match(source, /AS avg_duration_minutes/);
+  assert.match(source, /r\.counselor_id/);
+  assert.match(source, /r\.total_sessions/);
+});
+
+test('SaaS billing and form catalog paths use canonical tenant and idempotent PostgreSQL semantics', async () => {
+  const apiSource = await readFile(new URL('../src/index.js', import.meta.url), 'utf8');
+  const formSource = await readFile(
+    new URL('../src/db/queries/formWorkflows.js', import.meta.url),
+    'utf8',
+  );
+
+  assert.doesNotMatch(
+    apiSource,
+    /request\.headers\['x-tenant-id'\] \?\? session\?\.tenantId/,
+  );
+  assert.ok(
+    apiSource.match(/const tenantId = callerTenant\(request, session\);/g)?.length >= 2,
+  );
+  assert.doesNotMatch(apiSource, /tenant_subscriptions WHERE tenant_id = \$1/);
+  assert.match(apiSource, /tenant_subscriptions WHERE tenant_id = \?/);
+  assert.match(
+    apiSource,
+    /const \[rows\] = await pool\.query\(\s*'SELECT \* FROM tenant_subscriptions WHERE tenant_id = \?'/,
+  );
+  assert.doesNotMatch(formSource, /is_active = 1/);
+  assert.match(formSource, /is_active = TRUE/);
+  assert.match(formSource, /ON CONFLICT \(tenant_id, form_key\) DO NOTHING/);
+  assert.doesNotMatch(apiSource, /SHOW GLOBAL STATUS|SHOW GLOBAL VARIABLES/);
+  assert.match(apiSource, /FROM pg_stat_database/);
+  assert.match(apiSource, /FROM pg_stat_user_tables/);
 });
 
 // ─── CSV builders ─────────────────────────────────────────────────────────────

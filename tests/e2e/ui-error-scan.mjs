@@ -16,7 +16,7 @@ const ACCOUNTS = {
     password: process.env.TEST_ADMIN_PASSWORD || 'ChangeMe!Dev2024#',
   },
   client: {
-    email: process.env.TEST_CLIENT_EMAIL || 'sarah.kim@example.test',
+    email: process.env.TEST_CLIENT_EMAIL || 'elena.martinez@example.test',
     password: process.env.TEST_CLIENT_PASSWORD || 'ChangeMe!Client2026#',
   },
 };

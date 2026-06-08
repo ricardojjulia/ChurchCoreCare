@@ -12,6 +12,31 @@ The hosted demo uses a guarded SQL-backed synthetic dataset in the online
 Supabase project. Application processes may run locally for development, but
 they still connect only to the configured online Supabase database.
 
+## SaaS Runtime Policy
+
+ChurchCore Care is now operated as a Vercel + online Supabase SaaS application.
+The official local workspace path for current SaaS work is
+`/Users/rjulia/ChurchCoreCare`.
+
+- Use `pnpm start` as the only standard startup command.
+- The app must connect only to the configured online Supabase pooler.
+- Local, loopback, Unix-socket, Docker, and implicit database runtime fallbacks
+  are rejected outside explicit disposable CI fixtures.
+- Vercel uses Supabase transaction pooling on port `6543` with `DB_POOL_MAX=1`.
+- Demo schedule fixtures are generated in the practice timezone so local and CI
+  behavior remains consistent across UTC date boundaries.
+- Auth smoke tests use port `3001` locally and an explicit `SMOKE_API_URL` when
+  a CI or isolated runtime selects another API port.
+- The hosted demo is synthetic data only. Do not enter real PHI.
+
+See [`docs/runbooks/saas-runtime.md`](docs/runbooks/saas-runtime.md) for the
+full startup, checkout, verification, and recovery workflow.
+
+The local verification flow exercises authenticated analytics against the
+online PostgreSQL schema and limits billing-status checks to eligible
+authenticated administrators. Security regression checks use the canonical
+synthetic Elena portal account for client self-service boundaries.
+
 ## Faith-Based Christian Practice Focus
 
 - designed for faith-based Christian counseling organizations and ministries
@@ -363,6 +388,7 @@ flowchart TB
 ## Quick Start
 
 ```bash
+cd /Users/rjulia/ChurchCoreCare
 pnpm install
 cp .env.example .env
 pnpm start

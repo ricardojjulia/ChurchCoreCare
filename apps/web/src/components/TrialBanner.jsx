@@ -1,30 +1,12 @@
-import { useState, useEffect } from 'react';
-import { Alert, Group, Text, Button, Anchor } from '@mantine/core';
+import { useState } from 'react';
+import { Alert, Group, Text, Button } from '@mantine/core';
 import { Zap } from 'lucide-react';
 
-function daysUntil(dateStr) {
-  if (!dateStr) return null;
-  const diff = new Date(dateStr).getTime() - Date.now();
-  return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
-}
-
-export default function TrialBanner() {
-  const [subscription, setSubscription] = useState(null);
+export default function TrialBanner({ trialStatus }) {
   const [portalLoading, setPortalLoading] = useState(false);
 
-  useEffect(() => {
-    fetch('/api/v1/billing/subscription', { credentials: 'include' })
-      .then((r) => r.ok ? r.json() : null)
-      .then((data) => {
-        if (data?.subscription) setSubscription(data.subscription);
-      })
-      .catch(() => {});
-  }, []);
-
-  if (!subscription) return null;
-  if (subscription.status !== 'trial') return null;
-
-  const daysLeft = daysUntil(subscription.trialEndsAt);
+  if (!trialStatus?.isTrial) return null;
+  const daysLeft = trialStatus.daysLeft;
   if (daysLeft === null || daysLeft > 14) return null;
 
   const urgent = daysLeft <= 3;

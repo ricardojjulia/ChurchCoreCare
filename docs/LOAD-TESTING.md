@@ -212,10 +212,10 @@ Environment variables recognized by `config.js`:
 
 | Variable         | Default                          | Purpose                        |
 |------------------|----------------------------------|--------------------------------|
-| `BASE_URL`       | `http://127.0.0.1:3101`          | API base URL                   |
+| `BASE_URL`       | `http://127.0.0.1:3001`          | API base URL                   |
 | `ADMIN_EMAIL`    | `admin@churchcorecare.local`    | Staff admin login              |
 | `ADMIN_PASSWORD` | `ChangeMe!Dev2024#`              | Staff admin password           |
-| `CLIENT_EMAIL`   | `sarah.kim@example.test`         | Portal client login            |
+| `CLIENT_EMAIL`   | `elena.martinez@example.test`    | Portal client login            |
 | `CLIENT_PASSWORD`| `ChangeMe!Client2026#`           | Portal client password         |
 
 ---

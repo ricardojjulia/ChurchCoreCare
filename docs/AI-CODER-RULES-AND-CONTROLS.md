@@ -3,7 +3,7 @@
 **Version:** 1.1  
 **Date:** April 17, 2026  
 **Audience:** Any AI coding agent or human contributor working in this repository.  
-**Stack:** Node.js API · React/Vite web · MySQL · pnpm monorepo
+**Stack:** Node.js API · React/Vite web · online Supabase PostgreSQL · pnpm monorepo
 
 This document is the single reference for every rule, control, check, and gate that must be followed before, during, and after any code change.
 
@@ -18,8 +18,15 @@ This document is the single reference for every rule, control, check, and gate t
 | Monorepo layout | `apps/api`, `apps/web`, `apps/worker`, `packages/*` |
 | Protected branch | `main` |
 | Canonical startup command | `pnpm start` |
+| SaaS runtime workspace | `/Users/rjulia/ChurchCoreCare` |
 
-**Never use** `node start-servers.js` for development. Only `pnpm start` handles env loading, Docker/MySQL preflight, DB readiness, migrations, and app startup.
+**Never use** `node start-servers.js` for development. Only `pnpm start`
+handles env loading, online Supabase readiness, migrations, and app startup.
+Application runtime is Supabase-only; do not start or fall back to a local
+database outside explicit disposable CI fixtures.
+
+Canonical SaaS runtime guide:
+[`docs/runbooks/saas-runtime.md`](runbooks/saas-runtime.md).
 
 ---
 

@@ -14,7 +14,7 @@ import { csrfHeaders } from './lib/csrf.js';
 import { fetchClients, fetchOperationsSummaryScoped, fetchAppointments } from './lib/clientApi.js';
 import { useI18n } from './lib/i18nContext.jsx';
 import { buildCounselorWorkspaceData } from './lib/counselorWorkspace.js';
-import { isClientRole, isCounselorRole } from './lib/roles.js';
+import { isAdminRole, isClientRole, isCounselorRole } from './lib/roles.js';
 import { useIdleTimeout } from './lib/useIdleTimeout.js';
 import './App.css';
 
@@ -136,7 +136,6 @@ function summarizeAppointmentMetrics(items) {
 
 export default function App() {
   const { t } = useI18n();
-  const trialStatus = useTrialStatus();
   const [navOpened, { toggle: toggleNav, close: closeNav }] = useDisclosure(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
@@ -171,6 +170,7 @@ export default function App() {
     initialPortalRequest: null,
   });
   const userRole = currentUser?.role ?? null;
+  const trialStatus = useTrialStatus(isAuthenticated && isAdminRole(userRole));
   const selectedClientId = selectedClientRequest?.clientId ?? null;
   const counselorWorkspaceData = buildCounselorWorkspaceData(operationsSummaryData.summary, clientsData.items, currentUser);
   const surfaceLoadingFallback = (
@@ -523,7 +523,7 @@ export default function App() {
     >
       <AppShell.Header>
         <Stack gap={0}>
-          <TrialBanner />
+          <TrialBanner trialStatus={trialStatus} />
           <TopBar
             opened={navOpened}
             onMenuToggle={toggleNav}

@@ -8,7 +8,7 @@
  *   node ops/smoke-auth.mjs
  *
  * Env vars (all optional — defaults match the dev seed):
- *   SMOKE_API_URL   Base URL of the API process  (default: http://127.0.0.1:3101)
+ *   SMOKE_API_URL   Base URL of the API process  (default: http://127.0.0.1:3001)
  *   SMOKE_EMAIL     Staff account email           (default: admin@churchcorecare.local)
  *   SMOKE_PASSWORD  Staff account password        (default: ChangeMe!Dev2024#)
  *
@@ -16,7 +16,7 @@
  * Exit 1 = one or more checks failed.
  */
 
-const BASE  = (process.env.SMOKE_API_URL  || 'http://127.0.0.1:3101').replace(/\/$/, '');
+const BASE  = (process.env.SMOKE_API_URL  || 'http://127.0.0.1:3001').replace(/\/$/, '');
 const EMAIL = process.env.SMOKE_EMAIL     || 'admin@churchcorecare.local';
 const PASS  = process.env.SMOKE_PASSWORD  || 'ChangeMe!Dev2024#';
 
