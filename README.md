@@ -38,6 +38,11 @@ The official local workspace path for current SaaS work is
 See [`docs/runbooks/saas-runtime.md`](docs/runbooks/saas-runtime.md) for the
 full startup, checkout, verification, and recovery workflow.
 
+The approved implementation design for prominent demo documentation, portable
+ChurchCore installation guidance, and the governed Puerto Rican Spanish
+catalog is in
+[`docs/superpowers/specs/2026-06-08-demo-docs-es-pr-translation-design.md`](docs/superpowers/specs/2026-06-08-demo-docs-es-pr-translation-design.md).
+
 The local verification flow exercises authenticated analytics against the
 online PostgreSQL schema and limits billing-status checks to eligible
 authenticated administrators. Security regression checks use the canonical

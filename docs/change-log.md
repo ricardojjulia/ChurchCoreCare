@@ -4,6 +4,18 @@
 
 ## June 8, 2026 — SaaS runtime workspace recovery
 
+### feat: approve demo documentation and es-PR translation design
+
+**Date:** 2026-06-08
+**Affected area:** demo operations documentation, portable localization
+adoption guidance, and Puerto Rican Spanish governance planning
+
+Approved the design and implementation plan for placing the demo environment
+information prominently in the README, creating a paste-ready ChurchCore
+localization governance installation prompt, and generating a complete
+`es-PR` catalog that passes automated validation without fabricating human
+review or activation evidence.
+
 ### fix: make the historical GCP deployment manual-only
 
 **Date:** 2026-06-08
