@@ -4,6 +4,19 @@
 
 ## June 8, 2026 — SaaS runtime workspace recovery
 
+### fix: make the historical GCP deployment manual-only
+
+**Date:** 2026-06-08
+**Affected area:** GitHub Actions, Vercel delivery policy, GCP compatibility
+workflow, deployment documentation, and regression tests
+
+Removed the automatic `main` push trigger from the historical GCP/Cloud Run
+workflow. The workflow remains available through an explicit manual dispatch
+for staging or production compatibility work, while the GitHub-linked Vercel
+project remains the sole automatic application deployment path. Added a policy
+test that prevents the GCP workflow from silently resuming automatic
+deployments.
+
 ### fix: isolate local web builds from tracked deployment assets
 
 **Date:** 2026-06-08

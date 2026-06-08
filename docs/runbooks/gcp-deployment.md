@@ -1,5 +1,10 @@
 # GCP Deployment — ChurchCore Care
 
+> **Historical alternate deployment:** ChurchCore Care's canonical hosted
+> runtime is Vercel plus online Supabase. This GCP/Cloud Run path is retained
+> for manual compatibility work only and is not triggered by pushes to
+> `main`.
+
 **Last updated:** May 26, 2026
 **Audience:** Ricardo Julia (platform operator)
 **Scope:** Single-tenant pilot deploy → first customer → path to multi-tenant
@@ -405,10 +410,12 @@ bash ops/deploy-api.sh
 
 ## 6. GitHub Actions CI/CD
 
-The workflow at `.github/workflows/deploy.yml` runs on every push to `main`:
+The workflow at `.github/workflows/deploy.yml` runs only when manually
+dispatched from GitHub Actions. Choose `staging` or `production` explicitly.
+Normal pushes and merges to `main` deploy through Vercel instead.
 
 ```
-push to main
+manual workflow dispatch
     │
     ├── pnpm lint
     ├── pnpm test (95 tests)
@@ -423,7 +430,8 @@ push to main
     ├── Deploy web → Firebase Hosting (staging channel)
     ├── Smoke test staging
     │
-    └── Deploy API → production Cloud Run
+    └── If production was selected:
+        Deploy API → production Cloud Run
         Deploy Worker → production Cloud Run
         Deploy web → Firebase Hosting (live channel)
         Smoke test production

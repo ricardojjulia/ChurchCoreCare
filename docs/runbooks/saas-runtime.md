@@ -12,6 +12,11 @@ ChurchCore Care is now a SaaS-only application runtime.
 This runbook is the repo-level operating guide for bringing up the app, checking
 out code, running tests, and verifying the Vercel + Supabase deployment.
 
+Merges to `main` are deployed automatically by the GitHub-linked Vercel
+project. `.github/workflows/deploy.yml` is retained only as a manually
+dispatched legacy GCP/Cloud Run path; it is not part of the normal SaaS
+delivery lifecycle.
+
 ## Official Workspace Path
 
 Use this checkout for current SaaS work:

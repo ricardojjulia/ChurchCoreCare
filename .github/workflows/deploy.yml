@@ -1,8 +1,6 @@
-name: Deploy
+name: Legacy GCP Deploy (Manual)
 
 on:
-  push:
-    branches: ["main"]
   workflow_dispatch:
     inputs:
       environment:
@@ -230,8 +228,8 @@ jobs:
     concurrency:
       group: deploy-production
       cancel-in-progress: false
-    # Only auto-promote on push to main; manual dispatch can target staging only
-    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
+    # Production is an explicit manual choice. Vercel deploys main automatically.
+    if: github.event.inputs.environment == 'production'
 
     steps:
       - uses: actions/checkout@v4
