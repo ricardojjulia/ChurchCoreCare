@@ -30,6 +30,9 @@ The official local workspace path for current SaaS work is
 - `pnpm start` builds environment-specific web assets into the ignored
   `apps/web/.runtime/` directory, so starting the app does not dirty the Git
   checkout. Vercel deployment builds continue to target `apps/web/public`.
+- Merges to `main` deploy automatically through the GitHub-linked Vercel
+  project. The historical GCP/Cloud Run workflow is manual-only and does not
+  run during normal SaaS delivery.
 - The hosted demo is synthetic data only. Do not enter real PHI.
 
 See [`docs/runbooks/saas-runtime.md`](docs/runbooks/saas-runtime.md) for the

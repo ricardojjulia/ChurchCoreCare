@@ -1,7 +1,11 @@
 # SaaS Deployment Spec — ChurchCore Care
 
 **Date:** April 24, 2026
-**Status:** Decided — Google Cloud Platform
+**Status:** Historical alternate — manual deployment only
+
+> The canonical ChurchCore Care SaaS runtime is now Vercel plus online
+> Supabase. This document preserves the earlier GCP design for compatibility
+> and evaluation; it no longer describes the automatic `main` deployment path.
 **Companion docs:**
 
 - `docs/cloud-implementation.md` — GCP architecture detail: per-tenant Cloud SQL, wildcard subdomain routing, practice provisioning flow, cost model, Cloud Armor, gap log
@@ -203,7 +207,9 @@ Cloud Run scales the API horizontally by increasing `--max-instances`. The worke
 
 ## CI/CD
 
-The deploy pipeline lives at `.github/workflows/deploy.yml`. Flow on push to `main`:
+The alternate GCP deploy pipeline lives at `.github/workflows/deploy.yml` and
+runs only through an explicit manual workflow dispatch. Automatic deployments
+from `main` are owned by the GitHub-linked Vercel project.
 
 1. Install dependencies, run API tests
 2. Build and push `api` and `worker` Docker images to GCP Artifact Registry
@@ -215,7 +221,9 @@ The deploy pipeline lives at `.github/workflows/deploy.yml`. Flow on push to `ma
 8. Deploy `apps/web` dist to Firebase Hosting (live channel)
 9. Run production health check
 
-GitHub Environments (`staging`, `production`) gate the deploy steps. Production requires a passing staging smoke test — there is no manual approval step, but the staging gate is mandatory.
+GitHub Environments (`staging`, `production`) gate the deploy steps. Production
+requires an operator to select `production` at dispatch time and still requires
+a passing staging smoke test.
 
 See `.github/workflows/deploy.yml` for the full implementation.
 
