@@ -2,6 +2,10 @@ import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 import path from 'path';
 
+const buildOutDir = process.env.CHURCHCORE_WEB_OUT_DIR
+  ? path.resolve(__dirname, process.env.CHURCHCORE_WEB_OUT_DIR)
+  : path.resolve(__dirname, 'public');
+
 export default defineConfig({
   plugins: [react()],
   publicDir: false,
@@ -11,7 +15,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: path.resolve(__dirname, 'public'),
+    outDir: buildOutDir,
     emptyOutDir: false,
     rollupOptions: {
       output: {

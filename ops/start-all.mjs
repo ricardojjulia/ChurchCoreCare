@@ -9,6 +9,7 @@ const cwd = process.cwd();
 const apiPort = Number(process.env.API_PORT || process.env.PORT || 3001);
 const webPort = Number(process.env.WEB_PORT || 3002);
 const apiBaseUrl = process.env.API_BASE_URL || `http://127.0.0.1:${apiPort}`;
+const webRuntimeDir = '.runtime';
 
 const children = [];
 let shuttingDown = false;
@@ -171,7 +172,9 @@ async function ensureDatabase() {
 async function main() {
   await ensureDatabase();
   console.log('[start-all] Building web assets...');
-  await runStep('web build', node, ['apps/web/build.js']);
+  await runStep('web build', node, ['apps/web/build.js'], {
+    CHURCHCORE_WEB_OUT_DIR: webRuntimeDir,
+  });
 
   const apiHealthUrl = `http://127.0.0.1:${apiPort}/health`;
   await restartRepoManagedProcessIfNeeded('API', apiPort, 'apps/api/src/index.js');
@@ -197,6 +200,7 @@ async function main() {
     spawnService('web', ['apps/web/server.js'], {
       PORT: String(webPort),
       API_BASE_URL: apiBaseUrl,
+      WEB_BUILD_DIR: webRuntimeDir,
     });
   }
 

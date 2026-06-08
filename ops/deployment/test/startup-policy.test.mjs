@@ -9,6 +9,25 @@ test('canonical startup no longer starts or depends on a local database containe
   assert.match(source, /requireDatabaseEnv/);
 });
 
+test('canonical startup isolates environment-specific web builds from tracked assets', async () => {
+  const startupSource = await readFile(new URL('../../start-all.mjs', import.meta.url), 'utf8');
+  const viteSource = await readFile(
+    new URL('../../../apps/web/vite.config.js', import.meta.url),
+    'utf8',
+  );
+  const serverSource = await readFile(
+    new URL('../../../apps/web/server.js', import.meta.url),
+    'utf8',
+  );
+  const gitignore = await readFile(new URL('../../../.gitignore', import.meta.url), 'utf8');
+
+  assert.match(startupSource, /CHURCHCORE_WEB_OUT_DIR/);
+  assert.match(startupSource, /WEB_BUILD_DIR/);
+  assert.match(viteSource, /process\.env\.CHURCHCORE_WEB_OUT_DIR/);
+  assert.match(serverSource, /process\.env\.WEB_BUILD_DIR/);
+  assert.match(gitignore, /apps\/web\/\.runtime\//);
+});
+
 test('Vercel cold starts do not reserve a database session before a request needs one', async () => {
   const source = await readFile(
     new URL('../../../apps/api/src/index.js', import.meta.url),

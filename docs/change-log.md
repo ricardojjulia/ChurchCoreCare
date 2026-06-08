@@ -4,6 +4,19 @@
 
 ## June 8, 2026 — SaaS runtime workspace recovery
 
+### fix: isolate local web builds from tracked deployment assets
+
+**Date:** 2026-06-08
+**Affected area:** canonical startup, Vite output, local web serving, Git
+workspace hygiene, README, and SaaS runtime runbook
+
+Changed `pnpm start` to build environment-specific React assets into the
+ignored `apps/web/.runtime/` directory. The local web server serves that
+runtime build first and falls back to tracked standalone pages in
+`apps/web/public`, while Vercel deployment builds continue using the tracked
+public output path. Starting or restarting the application no longer changes
+tracked bundle references.
+
 ### fix: make the Supabase-only SaaS runtime easy to start and verify
 
 **Date:** 2026-06-08

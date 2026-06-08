@@ -10,6 +10,9 @@ const __dirname = path.dirname(__filename);
 const port = Number(process.env.PORT || 3002);
 const apiBaseUrl = process.env.API_BASE_URL || 'http://127.0.0.1:3001';
 const publicDir = path.join(__dirname, 'public');
+const buildDir = process.env.WEB_BUILD_DIR
+  ? path.resolve(__dirname, process.env.WEB_BUILD_DIR)
+  : publicDir;
 
 const contentTypes = {
   '.html': 'text/html; charset=utf-8',
@@ -143,14 +146,7 @@ const server = http.createServer(async (request, response) => {
   try {
     const url = resolvePublicUrl(request.url);
     const requestedPath = path.normalize(url).replace(/^\.\.(\/|\\|$)/, '');
-    const filePath = path.join(publicDir, requestedPath);
-
-    if (!filePath.startsWith(publicDir)) {
-      writeText(response, 403, 'Forbidden');
-      return;
-    }
-
-    const file = await readFile(filePath);
+    const { file, filePath } = await readWebFile(requestedPath);
     const extension = path.extname(filePath).toLowerCase();
     const shouldDisableCache = extension === '.html' || requestedPath.includes('assets/');
     response.writeHead(200, {
@@ -161,7 +157,7 @@ const server = http.createServer(async (request, response) => {
   } catch {
     if (request.url !== '/index.html') {
       try {
-        const indexHtml = await readFile(path.join(publicDir, 'index.html'));
+        const { file: indexHtml } = await readWebFile('/index.html');
         response.writeHead(200, {
           'content-type': contentTypes['.html'],
           'cache-control': 'no-cache',
@@ -177,6 +173,20 @@ const server = http.createServer(async (request, response) => {
     writeText(response, 404, 'Not Found');
   }
 });
+
+async function readWebFile(requestedPath) {
+  const roots = buildDir === publicDir ? [publicDir] : [buildDir, publicDir];
+
+  for (const root of roots) {
+    const filePath = path.join(root, requestedPath);
+    if (!filePath.startsWith(root)) continue;
+    try {
+      return { file: await readFile(filePath), filePath };
+    } catch {}
+  }
+
+  throw new Error('Web file not found');
+}
 
 server.listen(port, () => {
   console.log(`ChurchCore Care web app listening on port ${port}`);

@@ -27,6 +27,9 @@ The official local workspace path for current SaaS work is
   behavior remains consistent across UTC date boundaries.
 - Auth smoke tests use port `3001` locally and an explicit `SMOKE_API_URL` when
   a CI or isolated runtime selects another API port.
+- `pnpm start` builds environment-specific web assets into the ignored
+  `apps/web/.runtime/` directory, so starting the app does not dirty the Git
+  checkout. Vercel deployment builds continue to target `apps/web/public`.
 - The hosted demo is synthetic data only. Do not enter real PHI.
 
 See [`docs/runbooks/saas-runtime.md`](docs/runbooks/saas-runtime.md) for the
