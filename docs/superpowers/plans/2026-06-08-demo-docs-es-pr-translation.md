@@ -16,10 +16,10 @@
 - Modify: `README.md`
 - Modify: `docs/change-log.md`
 
-- [ ] Add a `DEMO ENVIRONMENT` section immediately after the introduction.
-- [ ] Include hosted URLs, synthetic-data boundary, Vercel/Supabase architecture,
+- [x] Add a `DEMO ENVIRONMENT` section immediately after the introduction.
+- [x] Include hosted URLs, synthetic-data boundary, Vercel/Supabase architecture,
       local startup, reset/verify commands, and runbook links.
-- [ ] Verify no credentials or sensitive connection values appear.
+- [x] Verify no credentials or sensitive connection values appear.
 
 ### Task 2: ChurchCore Installation Prompt
 
@@ -27,9 +27,9 @@
 - Create: `docs/prompts/install-localization-governance-in-churchcore.md`
 - Modify: `README.md`
 
-- [ ] Write a paste-ready prompt that starts with target-repository research.
-- [ ] Require packed-tarball installation and external consumer verification.
-- [ ] Require thin product adapters, lifecycle enforcement, tests, docs, and PR
+- [x] Write a paste-ready prompt that starts with target-repository research.
+- [x] Require packed-tarball installation and external consumer verification.
+- [x] Require thin product adapters, lifecycle enforcement, tests, docs, and PR
       delivery without assuming ChurchCore Care internals.
 
 ### Task 3: es-PR Catalog Builder
@@ -40,12 +40,12 @@
 - Create: `apps/api/data/i18n/es-PR.json`
 - Modify: `package.json`
 
-- [ ] Write a failing test requiring exact canonical-key coverage, placeholder
+- [x] Write a failing test requiring exact canonical-key coverage, placeholder
       preservation, Puerto Rican metadata, and no extra catalog keys.
-- [ ] Implement deterministic catalog reconciliation using `baseMessages` and
+- [x] Implement deterministic catalog reconciliation using `baseMessages` and
       the Spanish seed catalog.
-- [ ] Add `localization:build:es-pr` and `localization:publish:es-pr` commands.
-- [ ] Generate and inspect the catalog.
+- [x] Add `localization:build:es-pr` and `localization:publish:es-pr` commands.
+- [x] Generate and inspect the catalog.
 
 ### Task 4: Governed Supabase Publication
 
@@ -53,14 +53,14 @@
 - Modify: `ops/localization-governance/build-es-pr.mjs`
 - Modify: `ops/localization-governance/test/build-es-pr.test.mjs`
 
-- [ ] Add an explicit `--postgres --tenant system --write` mode.
-- [ ] Refuse local or implicit database destinations through existing database
+- [x] Add an explicit `--postgres --tenant system --write` mode.
+- [x] Refuse local or implicit database destinations through existing database
       configuration guards.
-- [ ] Create the locale only if absent and create an immutable next version.
-- [ ] Run existing governance validation for the exact version content hash.
-- [ ] Leave the passing version at `validated`; do not submit review, approve,
+- [x] Create the locale only if absent and create an immutable next version.
+- [x] Run existing governance validation for the exact version content hash.
+- [x] Leave the passing version at `in_linguistic_review`; do not submit review, approve,
       or activate.
-- [ ] Query online Supabase and confirm the locale, version, validation report,
+- [x] Query online Supabase and confirm the locale, version, validation report,
       and inactive runtime status.
 
 ### Task 5: Repository Verification And Delivery
@@ -69,12 +69,11 @@
 - Modify: `README.md`
 - Modify: `docs/change-log.md`
 
-- [ ] Run focused Node tests.
-- [ ] Run `pnpm localization:test`.
-- [ ] Run `pnpm localization:verify-pack`.
-- [ ] Run `pnpm lint` and `pnpm test`.
-- [ ] Run `git diff --check`.
-- [ ] Run the ChurchCore Care PR validator.
+- [x] Run focused Node tests.
+- [x] Run `pnpm localization:test`.
+- [x] Run `pnpm localization:verify-pack`.
+- [x] Run `pnpm lint` and `pnpm test`.
+- [x] Run `git diff --check`.
+- [x] Run the ChurchCore Care PR validator.
 - [ ] Create a signed commit, push the feature branch, open a complete PR, wait
       for checks, merge, and verify Vercel production health.
-
