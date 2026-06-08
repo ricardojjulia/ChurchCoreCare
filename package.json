@@ -24,6 +24,8 @@
     "localization:test": "pnpm --filter '@localization-governance/*' test && node --test ops/localization-governance/test/*.test.mjs",
     "localization:test:postgres": "node ops/localization-governance/test-postgres.mjs",
     "localization:migrate": "node ops/localization-governance/migrate-churchcore.mjs",
+    "localization:build:es-pr": "node ops/localization-governance/build-es-pr.mjs",
+    "localization:publish:es-pr": "node --env-file=.env ops/localization-governance/build-es-pr.mjs --postgres --tenant system --write",
     "localization:verify-pack": "node ops/localization-governance/verify-packed-consumer.mjs",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",

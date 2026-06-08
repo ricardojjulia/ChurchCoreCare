@@ -8,9 +8,60 @@ From the moment a new client submits a care request to the session note signed a
 
 📖 **New to the platform?** Start with the [User Manual →](docs/User%20Manual/README.md)
 
-The hosted demo uses a guarded SQL-backed synthetic dataset in the online
-Supabase project. Application processes may run locally for development, but
-they still connect only to the configured online Supabase database.
+## DEMO ENVIRONMENT
+
+> **This is a synthetic demonstration environment. Never enter real PHI,
+> client information, clinical notes, credentials, or production secrets.**
+
+| Item | Demo configuration |
+| --- | --- |
+| Application | [https://churchcore-care.vercel.app](https://churchcore-care.vercel.app) |
+| Health | [https://churchcore-care.vercel.app/api/health](https://churchcore-care.vercel.app/api/health) |
+| Hosting | Vercel project `churchcore/churchcore-care`, deployed automatically from `main` |
+| Database | Online Supabase project `churchcore-care-demo`; no local application database is supported |
+| Tenant | Synthetic `system` tenant |
+| Staff account | `admin@churchcorecare.local` |
+| Portal account | `elena.martinez@example.test` |
+| Data boundary | Generated people, schedules, clinical records, billing records, and audit activity only |
+
+Passwords remain in protected `.env`-driven demo tooling and are not published
+in this README. The canonical operator workflow is:
+
+```bash
+cd /Users/rjulia/ChurchCoreCare
+pnpm install
+pnpm start
+pnpm test:smoke
+pnpm deploy:verify
+```
+
+Local application processes still use the configured **online Supabase**
+database. `pnpm start` rejects localhost, loopback, Unix-socket, Docker, and
+implicit database fallbacks. Expected local endpoints are:
+
+- app: `http://127.0.0.1:3002/index.html`
+- API: `http://127.0.0.1:3001`
+- monitoring: `http://127.0.0.1:3002/monitor.html`
+- API documentation: `http://127.0.0.1:3002/api/docs`
+
+After browser or smoke testing, restore and verify the synthetic baseline:
+
+```bash
+pnpm demo:finalize
+pnpm deploy:verify
+```
+
+Database deployment or a full synthetic reset is explicit and guarded:
+
+```bash
+pnpm deploy:supabase
+```
+
+That command requires `DEMO_ENVIRONMENT=true`. Merges to `main` deploy the
+application through Vercel but do not silently substitute a local database.
+See the [SaaS runtime runbook](docs/runbooks/saas-runtime.md) and the
+[Vercel + Supabase demo runbook](docs/runbooks/vercel-supabase-demo.md) for
+configuration, reset, verification, recovery, and credential-handling details.
 
 ## SaaS Runtime Policy
 
@@ -37,6 +88,11 @@ The official local workspace path for current SaaS work is
 
 See [`docs/runbooks/saas-runtime.md`](docs/runbooks/saas-runtime.md) for the
 full startup, checkout, verification, and recovery workflow.
+
+The approved implementation design for prominent demo documentation, portable
+ChurchCore installation guidance, and the governed Puerto Rican Spanish
+catalog is in
+[`docs/superpowers/specs/2026-06-08-demo-docs-es-pr-translation-design.md`](docs/superpowers/specs/2026-06-08-demo-docs-es-pr-translation-design.md).
 
 The local verification flow exercises authenticated analytics against the
 online PostgreSQL schema and limits billing-status checks to eligible
@@ -651,6 +707,22 @@ pnpm localization:test
 pnpm localization:verify-pack
 pnpm localization:test:postgres
 ```
+
+The paste-ready implementation prompt for installing this framework in the
+separate ChurchCore product is
+[`docs/prompts/install-localization-governance-in-churchcore.md`](docs/prompts/install-localization-governance-in-churchcore.md).
+
+Puerto Rican Spanish is maintained as the distinct governed locale `es-PR`:
+
+```bash
+pnpm localization:build:es-pr
+pnpm localization:publish:es-pr
+```
+
+The publish command writes an immutable catalog version to the online Supabase
+`system` tenant, validates all canonical keys and placeholders, and requests
+linguistic review. It does not approve or activate the locale; a genuinely
+assigned human reviewer must complete that evidence.
 
 ### Local monitoring
 

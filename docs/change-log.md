@@ -4,6 +4,38 @@
 
 ## June 8, 2026 — SaaS runtime workspace recovery
 
+### feat: document the demo and build governed Puerto Rican Spanish
+
+**Date:** 2026-06-08
+**Affected area:** README onboarding, demo operations, portable localization
+adoption, `es-PR` catalog generation, PostgreSQL governance, and tests
+
+Added an upfront demo environment guide with hosted and local URLs,
+synthetic-data boundaries, canonical demo accounts, online Supabase policy,
+reset and verification commands, deployment behavior, and runbook links.
+
+Added a paste-ready AI implementation prompt for installing the packed
+`@localization-governance/*` packages in the separate ChurchCore codebase
+without copying ChurchCore Care assumptions into the reusable core.
+
+Created a complete 1,028-key Puerto Rican Spanish catalog with exact canonical
+key coverage, placeholder preservation, regional metadata, deterministic
+generation, untranslated-value enforcement, idempotent PostgreSQL publication,
+and a lifecycle stop at linguistic review. Automated tooling does not fabricate
+human approval or activate the locale.
+
+### feat: approve demo documentation and es-PR translation design
+
+**Date:** 2026-06-08
+**Affected area:** demo operations documentation, portable localization
+adoption guidance, and Puerto Rican Spanish governance planning
+
+Approved the design and implementation plan for placing the demo environment
+information prominently in the README, creating a paste-ready ChurchCore
+localization governance installation prompt, and generating a complete
+`es-PR` catalog that passes automated validation without fabricating human
+review or activation evidence.
+
 ### fix: make the historical GCP deployment manual-only
 
 **Date:** 2026-06-08
