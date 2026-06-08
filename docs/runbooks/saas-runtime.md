@@ -83,6 +83,8 @@ Expected local endpoints:
 
 `pnpm start` performs the full preflight: environment loading, Supabase listener
 check, migrations, web build, API startup, web startup, and worker startup.
+The local React build is written to ignored `apps/web/.runtime/` assets so a
+normal start or restart does not modify tracked deployment bundle files.
 
 ## Verification Commands
 
