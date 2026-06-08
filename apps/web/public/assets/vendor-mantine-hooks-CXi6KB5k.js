@@ -1,0 +1,1 @@
+import{n as e}from"./rolldown-runtime-jpDsebLB.js";import{At as t}from"./vendor-mantine-core-B4q3JXxJ.js";var n=e(t(),1),r=e=>(e+1)%1e6;function i(){let[,e]=(0,n.useReducer)(r,0);return e}export{i as t};

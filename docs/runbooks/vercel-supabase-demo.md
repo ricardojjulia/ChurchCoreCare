@@ -14,6 +14,9 @@ and implicit database configurations are rejected by runtime policy. Disposable
 PostgreSQL services are allowed only in CI with
 `CHURCHCORE_ALLOW_TEST_DATABASE=true`.
 
+For local startup, checkout, verification, and workspace recovery, use
+[`docs/runbooks/saas-runtime.md`](saas-runtime.md).
+
 ## Required Configuration
 
 Store these values in protected local `.env` files and Vercel Production

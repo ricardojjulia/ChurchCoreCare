@@ -1,0 +1,7 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Counselor age-group identifier is static UI metadata, not a credential."
+regexTarget = "line"
+regexes = ['''children_6_12''']

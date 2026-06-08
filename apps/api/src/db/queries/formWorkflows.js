@@ -94,7 +94,7 @@ function rowToPortalRegistrationRequest(row) {
 export async function listFormCatalog(tenantId, { includeInactive = false } = {}) {
   const conditions = ['tenant_id = ?'];
   const values = [tenantId];
-  if (!includeInactive) conditions.push('is_active = 1');
+  if (!includeInactive) conditions.push('is_active = TRUE');
   const [rows] = await pool.query(
     `SELECT * FROM form_catalog WHERE ${conditions.join(' AND ')} ORDER BY category ASC, title ASC`,
     values,
@@ -115,7 +115,8 @@ export async function createFormCatalogItem({
   await pool.query(
     `INSERT INTO form_catalog
       (id, tenant_id, form_key, title, category, is_standard_on_signup, is_active, version_number)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT (tenant_id, form_key) DO NOTHING`,
     [id, tenantId, formKey, title, category, isStandardOnSignup ? 1 : 0, isActive ? 1 : 0, versionNumber],
   );
 }

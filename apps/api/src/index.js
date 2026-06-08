@@ -38,6 +38,7 @@ import {
   treatmentPlanStatuses,
 } from '../../../packages/domain/src/index.js';
 import { createI18nStore } from './lib/i18n-store.js';
+import { atTimeOnCurrentDayInTimezone } from './timezone.js';
 import { featureFlags } from './lib/feature-flags.js';
 import { buildIntakePreview } from './lib/intake-preview.js';
 import { HttpError, readJsonBody, writeJson, assertShape } from './lib/http.js';
@@ -3849,16 +3850,16 @@ async function handleBillingSubscription(request, response, requestUrl, session)
       writeJson(response, 200, { subscription: null });
       return;
     }
-    const tenantId = request.headers['x-tenant-id'] ?? session?.tenantId;
+    const tenantId = callerTenant(request, session);
     if (!tenantId) {
       writeJson(response, 400, { error: 'Tenant context required' });
       return;
     }
-    const result = await pool.query(
-      'SELECT * FROM tenant_subscriptions WHERE tenant_id = $1',
+    const [rows] = await pool.query(
+      'SELECT * FROM tenant_subscriptions WHERE tenant_id = ?',
       [tenantId],
     );
-    const row = result.rows[0] ?? null;
+    const row = rows[0] ?? null;
     writeJson(response, 200, {
       subscription: row ? {
         tenantId: row.tenant_id,
@@ -3888,7 +3889,7 @@ async function handleBillingPortal(request, response, requestUrl, session) {
     return;
   }
 
-  const tenantId = request.headers['x-tenant-id'] ?? session?.tenantId;
+  const tenantId = callerTenant(request, session);
   if (!tenantId) {
     writeJson(response, 400, { error: 'Tenant context required' });
     return;
@@ -3899,11 +3900,11 @@ async function handleBillingPortal(request, response, requestUrl, session) {
     return;
   }
 
-  const result = await pool.query(
-    'SELECT stripe_customer_id FROM tenant_subscriptions WHERE tenant_id = $1',
+  const [rows] = await pool.query(
+    'SELECT stripe_customer_id FROM tenant_subscriptions WHERE tenant_id = ?',
     [tenantId],
   );
-  const customerId = result.rows[0]?.stripe_customer_id;
+  const customerId = rows[0]?.stripe_customer_id;
   if (!customerId) {
     writeJson(response, 404, { error: 'No billing account found for this tenant' });
     return;
@@ -14871,9 +14872,7 @@ async function handleTranslationSettingsByLocale(request, response, requestUrl, 
 }
 
 function atToday(hours, minutes) {
-  const now = new Date();
-  const date = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes, 0, 0);
-  return date.toISOString();
+  return atTimeOnCurrentDayInTimezone(hours, minutes, 'America/Chicago');
 }
 
 function atTomorrow(hours, minutes) {
@@ -17012,69 +17011,77 @@ async function handleMonitoringDb(response) {
     return;
   }
 
-  const [allStatusRows] = await pool.query('SHOW GLOBAL STATUS');
-  const [allVarRows]    = await pool.query('SHOW GLOBAL VARIABLES');
-
-  const WANTED_STATUS = new Set([
-    'Uptime','Threads_connected','Threads_running','Max_used_connections',
-    'Questions','Slow_queries','Com_select','Com_insert','Com_update','Com_delete',
-    'Innodb_buffer_pool_pages_total','Innodb_buffer_pool_pages_free',
-    'Innodb_buffer_pool_read_requests','Innodb_buffer_pool_reads',
-    'Bytes_received','Bytes_sent',
-  ]);
-  const WANTED_VARS = new Set(['max_connections','innodb_buffer_pool_size']);
-
-  const statusRows = allStatusRows.filter((r) => WANTED_STATUS.has(r.Variable_name))
-    .map((r) => ({ name: r.Variable_name, value: r.Value }));
-  const varRows = allVarRows.filter((r) => WANTED_VARS.has(r.Variable_name))
-    .map((r) => ({ name: r.Variable_name, value: r.Value }));
-
-  const [tableRows] = await pool.query(
-    `SELECT table_name AS name,
-            COALESCE(table_rows, 0) AS row_count,
-            ROUND((COALESCE(data_length,0) + COALESCE(index_length,0)) / 1024, 1) AS size_kb
-     FROM information_schema.TABLES
-     WHERE table_schema = ? AND table_type = 'BASE TABLE'
-     ORDER BY (COALESCE(data_length,0) + COALESCE(index_length,0)) DESC`,
-    [process.env.DB_NAME]
+  const [databaseRows] = await pool.query(
+    `SELECT
+       EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - pg_postmaster_start_time()))::BIGINT AS uptime_seconds,
+       numbackends AS current_connections,
+       xact_commit + xact_rollback AS total_queries,
+       tup_returned AS selects,
+       tup_inserted AS inserts,
+       tup_updated AS updates,
+       tup_deleted AS deletes,
+       blks_read,
+       blks_hit,
+       temp_bytes
+     FROM pg_stat_database
+     WHERE datname = current_database()`,
+  );
+  const [activityRows] = await pool.query(
+    `SELECT COUNT(*) FILTER (WHERE state = 'active') AS running_connections
+     FROM pg_stat_activity
+     WHERE datname = current_database()`,
+  );
+  const [settingRows] = await pool.query(
+    `SELECT name, setting
+     FROM pg_settings
+     WHERE name IN ('max_connections', 'shared_buffers')`,
   );
 
-  const stat = Object.fromEntries(statusRows.map((r) => [r.name, Number(r.value)]));
-  const vars = Object.fromEntries(varRows.map((r) => [r.name, Number(r.value)]));
+  const [tableRows] = await pool.query(
+    `SELECT
+       relname AS name,
+       COALESCE(n_live_tup, 0) AS row_count,
+       ROUND(pg_total_relation_size(relid) / 1024.0, 1) AS size_kb
+     FROM pg_stat_user_tables
+     ORDER BY pg_total_relation_size(relid) DESC`,
+  );
 
-  const bpTotal = stat.Innodb_buffer_pool_pages_total || 1;
-  const bpFree  = stat.Innodb_buffer_pool_pages_free  || 0;
-  const bpReads = stat.Innodb_buffer_pool_reads        || 0;
-  const bpReqs  = stat.Innodb_buffer_pool_read_requests || 1;
+  const database = databaseRows[0] ?? {};
+  const activity = activityRows[0] ?? {};
+  const settings = Object.fromEntries(settingRows.map((row) => [row.name, Number(row.setting)]));
+  const blocksRead = Number(database.blks_read) || 0;
+  const blocksHit = Number(database.blks_hit) || 0;
+  const blockRequests = blocksRead + blocksHit;
+  const sharedBufferPages = settings.shared_buffers || 0;
 
   writeJson(response, 200, {
     collectedAt: new Date().toISOString(),
     mode: 'live',
-    uptime: { seconds: stat.Uptime || 0 },
+    uptime: { seconds: Number(database.uptime_seconds) || 0 },
     connections: {
-      current:    stat.Threads_connected    || 0,
-      running:    stat.Threads_running      || 0,
-      maxUsed:    stat.Max_used_connections || 0,
-      maxAllowed: vars.max_connections      || 0,
+      current: Number(database.current_connections) || 0,
+      running: Number(activity.running_connections) || 0,
+      maxUsed: 0,
+      maxAllowed: settings.max_connections || 0,
     },
     queries: {
-      total:   stat.Questions    || 0,
-      slow:    stat.Slow_queries || 0,
-      selects: stat.Com_select   || 0,
-      inserts: stat.Com_insert   || 0,
-      updates: stat.Com_update   || 0,
-      deletes: stat.Com_delete   || 0,
+      total: Number(database.total_queries) || 0,
+      slow: 0,
+      selects: Number(database.selects) || 0,
+      inserts: Number(database.inserts) || 0,
+      updates: Number(database.updates) || 0,
+      deletes: Number(database.deletes) || 0,
     },
     bufferPool: {
-      pagesTotal: bpTotal,
-      pagesFree:  bpFree,
-      pagesUsed:  bpTotal - bpFree,
-      hitRatio:   bpReqs > 0 ? Number(((1 - bpReads / bpReqs) * 100).toFixed(2)) : 100,
-      sizeBytes:  vars.innodb_buffer_pool_size || 0,
+      pagesTotal: sharedBufferPages,
+      pagesFree: 0,
+      pagesUsed: sharedBufferPages,
+      hitRatio: blockRequests > 0 ? Number(((blocksHit / blockRequests) * 100).toFixed(2)) : 100,
+      sizeBytes: sharedBufferPages * 8192,
     },
     throughput: {
-      bytesReceived: stat.Bytes_received || 0,
-      bytesSent:     stat.Bytes_sent     || 0,
+      bytesReceived: Number(database.temp_bytes) || 0,
+      bytesSent: 0,
     },
     tables: tableRows.map((r) => ({
       name:   r.name,

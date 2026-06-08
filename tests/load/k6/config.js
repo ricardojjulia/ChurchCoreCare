@@ -1,4 +1,4 @@
-export const BASE_URL = __ENV.BASE_URL || 'http://127.0.0.1:3101';
+export const BASE_URL = __ENV.BASE_URL || 'http://127.0.0.1:3001';
 
 export const CREDENTIALS = {
   admin: {
@@ -6,7 +6,7 @@ export const CREDENTIALS = {
     password: __ENV.ADMIN_PASSWORD || 'ChangeMe!Dev2024#',
   },
   client: {
-    email: __ENV.CLIENT_EMAIL || 'sarah.kim@example.test',
+    email: __ENV.CLIENT_EMAIL || 'elena.martinez@example.test',
     password: __ENV.CLIENT_PASSWORD || 'ChangeMe!Client2026#',
   },
 };

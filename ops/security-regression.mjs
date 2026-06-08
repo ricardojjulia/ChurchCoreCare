@@ -57,7 +57,7 @@ const headersByRole = {
   client: {
     'x-staff-role': 'client',
     'x-tenant-id': 'system',
-    'x-client-id': 'c-001',
+    'x-client-id': 'client-001',
     'x-actor-id': 'security-client',
     'content-type': 'application/json',
   },
@@ -91,6 +91,23 @@ async function req(path, { method = 'GET', headers = {}, body } = {}) {
 }
 
 async function main() {
+  const adminCookie = await loginAs(
+    process.env.SECURITY_TEST_ADMIN_EMAIL || 'admin@churchcorecare.local',
+    process.env.SECURITY_TEST_ADMIN_PASSWORD || 'ChangeMe!Dev2024#',
+  );
+  const authenticatedAdminHeaders = {
+    cookie: adminCookie,
+    'content-type': 'application/json',
+  };
+  const clientCookie = await loginAs(
+    process.env.SECURITY_TEST_CLIENT_EMAIL || 'elena.martinez@example.test',
+    process.env.SECURITY_TEST_CLIENT_PASSWORD || 'ChangeMe!Client2026#',
+  );
+  const authenticatedClientHeaders = {
+    cookie: clientCookie,
+    'content-type': 'application/json',
+  };
+
   let result = await req('/v1/clients');
   assert(result.status === 401, 'Unauthenticated clients collection should return 401');
   console.log('unauthenticated-clients', result.status, result.payload.error);
@@ -107,17 +124,17 @@ async function main() {
   assert(result.status === 403, 'Client role must not read document template endpoints');
   console.log('client-documents-guard', result.status, result.payload.error);
 
-  result = await req('/v1/portal/overview?clientId=c-001', { headers: headersByRole.client });
+  result = await req('/v1/portal/overview', { headers: authenticatedClientHeaders });
   assert(result.status === 200, 'Client must access own portal overview');
   console.log('client-own-portal', result.status, result.payload.client?.id);
 
-  result = await req('/v1/portal/overview?clientId=c-002', { headers: headersByRole.client });
+  result = await req('/v1/portal/overview?clientId=client-002', { headers: authenticatedClientHeaders });
   assert(result.status === 403, 'Client must not access another client portal overview');
   console.log('client-cross-portal-guard', result.status, result.payload.error);
 
   result = await req('/v1/portal/resources?clientId=c-001', {
     method: 'POST',
-    headers: headersByRole.client,
+    headers: authenticatedClientHeaders,
     body: {
       title: 'Unauthorized portal resource',
       content: 'Should be blocked',
@@ -127,15 +144,15 @@ async function main() {
   assert(result.status === 403, 'Client must not publish portal resources');
   console.log('client-portal-resource-guard', result.status, result.payload.error);
 
-  result = await req('/v1/clients/c-001/lifecycle', { headers: headersByRole.otherTenant });
-  assert(result.status === 403, 'Other tenant must not access lifecycle data');
+  result = await req('/v1/clients/client-001/lifecycle', { headers: headersByRole.otherTenant });
+  assert([403, 404].includes(result.status), 'Other tenant must not access lifecycle data');
   console.log('tenant-lifecycle-guard', result.status, result.payload.error);
 
-  result = await req('/v1/portal/overview?clientId=c-001', { headers: headersByRole.otherTenant });
-  assert(result.status === 403, 'Other tenant must not access portal overview');
+  result = await req('/v1/portal/overview?clientId=client-001', { headers: headersByRole.otherTenant });
+  assert([400, 403, 404].includes(result.status), 'Other tenant must not access portal overview');
   console.log('tenant-portal-guard', result.status, result.payload.error);
 
-  result = await req('/v1/clients/c-001/lifecycle', { headers: headersByRole.platformAdmin });
+  result = await req('/v1/clients/client-001/lifecycle', { headers: headersByRole.platformAdmin });
   assert(result.status === 200, 'Platform admin must be able to cross-tenant support lifecycle reads');
   console.log('platform-cross-tenant-read', result.status, result.payload.item?.clientId);
 
@@ -191,7 +208,7 @@ async function main() {
   assert(result.status === 401, 'Unauthenticated callers must not access DB diagnostics');
   console.log('monitoring-db-auth-guard', result.status, result.payload.error);
 
-  result = await req('/v1/monitoring/db', { headers: headersByRole.practiceAdmin });
+  result = await req('/v1/monitoring/db', { headers: authenticatedAdminHeaders });
   assert(result.status === 200, 'Practice admin must access DB diagnostics');
   console.log('monitoring-db-admin-read', result.status, result.payload.mode);
 

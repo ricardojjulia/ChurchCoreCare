@@ -104,8 +104,8 @@ test('operations summary includes intake preview alert and list items for assign
   assert.equal(response.status, 200);
   assert.equal(response.body?.summary?.clientsBox?.intakePreviews?.total, 2);
   assert.deepEqual(
-    (response.body?.summary?.clientsBox?.intakePreviews?.items ?? []).map((item) => item.clientId),
-    ['c-004', 'c-001'],
+    (response.body?.summary?.clientsBox?.intakePreviews?.items ?? []).map((item) => item.clientId).sort(),
+    ['c-001', 'c-004'],
   );
   assert.ok(
     (response.body?.summary?.alerts?.items ?? []).some((item) => item.id === 'intake_previews_available'),
