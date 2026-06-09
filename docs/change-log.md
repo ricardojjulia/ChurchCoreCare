@@ -2,6 +2,44 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## June 9, 2026 — Security hardening
+
+### fix: enable RLS on all public tables and fix function search_path
+
+**Date:** 2026-06-09
+**Affected area:** Supabase database security posture, all public schema tables
+
+Resolved all Supabase Security Advisor findings:
+
+- **WARN `function_search_path_mutable`** — `public.set_updated_at` trigger
+  function now uses `SET search_path = ''`, preventing search_path injection
+  via function execution context.
+
+- **ERROR `rls_disabled_in_public`** — Row Level Security (RLS) enabled on all
+  95 tables in the `public` schema. No policies are added: the Node.js API
+  connects as the `postgres` superuser which bypasses RLS, so application
+  behavior is unchanged. The absence of policies intentionally denies any direct
+  PostgREST/anonymous access at the database layer.
+
+Migration: `supabase/migrations/20260609000000_security_rls_and_function_search_path.sql`
+
+### fix: add explicit deny-all RLS policies to clear advisor INFO findings
+
+**Date:** 2026-06-09
+**Affected area:** Supabase Security Advisor — INFO findings
+
+Added `RESTRICTIVE FOR ALL USING (false) WITH CHECK (false)` policies to all
+95 public tables, clearing the `rls_enabled_no_policy` INFO findings. The
+policies make the deny-all intent explicit in SQL rather than relying on
+implicit PostgreSQL behavior (RLS with no policy = deny). Application behavior
+is unchanged; the `postgres` superuser bypasses RLS.
+
+Supabase Security Advisor now reports **No issues found** at all levels.
+
+Migration: `supabase/migrations/20260609000001_security_rls_deny_all_policies.sql`
+
+---
+
 ## June 8, 2026 — SaaS runtime workspace recovery
 
 ### feat: document the demo and build governed Puerto Rican Spanish

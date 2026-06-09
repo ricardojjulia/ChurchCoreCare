@@ -33,6 +33,15 @@ export const SUPPORTED_LOCALES = Object.freeze([
     region: 'mx',
   },
   {
+    code: 'es-PR',
+    label: 'Spanish (Puerto Rico)',
+    nativeName: 'Español (Puerto Rico)',
+    rtl: false,
+    currencyCode: 'USD',
+    currencySymbol: '$',
+    region: 'pr',
+  },
+  {
     code: 'fr-FR',
     label: 'French (France)',
     nativeName: 'Français',

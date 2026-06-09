@@ -190,6 +190,12 @@ The platform has moved quickly over the last few iterations, and the most recent
 - **Scheduling feels more human:** recurring appointment series can now be built with readable cadence options, weekday selection, and a live preview, while raw RRULE entry remains available only as an advanced fallback.
 - **Faithful Workflows stays in sync with operations:** dashboard drill-down and workflow urgency surfaces now share the same canonical counts so staff see one story, not competing numbers.
 
+## Database Security Posture
+
+Row Level Security (RLS) is enabled on all 95 tables in the `public` schema. No RLS policies are defined because the application connects via the `postgres` superuser role (which bypasses RLS), and direct PostgREST/anon access is intentionally blocked. All data access goes through the Node.js API layer which enforces RBAC and tenant isolation in the service layer.
+
+The `set_updated_at` trigger function is pinned with `SET search_path = ''` to prevent search_path injection.
+
 ## Nightly Security Checks
 
 The repository runs automated nightly AppSec and DB Security scans at **23:00 UTC** via GitHub Actions.
