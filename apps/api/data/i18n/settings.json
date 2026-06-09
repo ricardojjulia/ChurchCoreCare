@@ -26,5 +26,12 @@
     "fallbackMode": "copy",
     "useGlossary": true,
     "glossary": {}
+  },
+  "es-PR": {
+    "sourceLocale": "en-US",
+    "tone": "pastoral",
+    "fallbackMode": "copy",
+    "useGlossary": true,
+    "glossary": {}
   }
 }

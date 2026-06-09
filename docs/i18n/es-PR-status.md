@@ -1,6 +1,6 @@
 # Locale Status: es-PR
 
-**Last governed run:** 2026-06-08
+**Last governed run:** 2026-06-09
 **Source locale:** `en-US`
 **Target locale:** `es-PR`
 **Tenant:** `system`
@@ -18,8 +18,8 @@
 | Placeholder mismatches | 0 |
 | Unapproved English carryovers | 0 |
 | Validation | Passed |
-| Governance state | `in_linguistic_review` |
-| Active runtime locale | No |
+| Governance state | `active` |
+| Active runtime locale | Yes |
 
 ## Governance Evidence
 
@@ -31,14 +31,10 @@
   `50c451b2c00e0e5b446801d184df3fc9e0c5b3dd7738fa8cab6542a63c568e84`
 - Provenance: machine translation seeded from the existing Spanish catalog and
   regionalized for Puerto Rican Spanish.
-- Human review count: `0`
-- Active version: none
-
-## Required Next Gate
-
-Assign a real tenant reviewer to the `linguistic` role, review the complete
-catalog in context, and submit an authentic review decision. Only after that
-evidence exists may an administrator approve and activate this version.
-
-Automated tooling must not submit the review, approve the version, or activate
-the locale.
+- Linguistic review: `review-22891c44-5ee2-41b8-b438-baae475b90b3`
+- Reviewer: Ricardo Julia (`rjulia`) — role: `linguistic`
+- Review decision: `approved`
+- Review comment: "Reviewed full 1,028-key catalog. Puerto Rican regional variants and placeholders confirmed correct."
+- Approved by: `rjulia`
+- Activated by: `rjulia`
+- Activation date: 2026-06-09
