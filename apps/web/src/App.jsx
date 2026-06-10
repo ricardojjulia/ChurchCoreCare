@@ -7,11 +7,13 @@ import TopBar from './components/TopBar';
 import TrialBanner from './components/TrialBanner.jsx';
 import TrialExpiredPage from './components/TrialExpiredPage.jsx';
 import SignupPage from './components/SignupPage.jsx';
+import PlatformDashboard from './components/PlatformAdmin/PlatformDashboard.jsx';
+import PracticeContextBanner from './components/PlatformAdmin/PracticeContextBanner.jsx';
 import { useTrialStatus } from './lib/useTrialStatus.js';
 import Metrics from './components/Metrics';
 import WorkspaceGrid from './components/WorkspaceGrid';
 import { csrfHeaders } from './lib/csrf.js';
-import { fetchClients, fetchOperationsSummaryScoped, fetchAppointments } from './lib/clientApi.js';
+import { fetchClients, fetchOperationsSummaryScoped, fetchAppointments, setPlatformTargetTenant } from './lib/clientApi.js';
 import { useI18n } from './lib/i18nContext.jsx';
 import { buildCounselorWorkspaceData } from './lib/counselorWorkspace.js';
 import { isAdminRole, isClientRole, isCounselorRole } from './lib/roles.js';
@@ -170,6 +172,12 @@ export default function App() {
     initialPortalRequest: null,
   });
   const userRole = currentUser?.role ?? null;
+  const isPlatformAdmin = userRole === 'platform_admin';
+  const [activePractice, setActivePractice] = useState(null);
+
+  useEffect(() => {
+    setPlatformTargetTenant(activePractice?.tenantId ?? null);
+  }, [activePractice]);
   const trialStatus = useTrialStatus(isAuthenticated && isAdminRole(userRole));
   const selectedClientId = selectedClientRequest?.clientId ?? null;
   const counselorWorkspaceData = buildCounselorWorkspaceData(operationsSummaryData.summary, clientsData.items, currentUser);
@@ -524,12 +532,18 @@ export default function App() {
       <AppShell.Header>
         <Stack gap={0}>
           <TrialBanner trialStatus={trialStatus} />
+          {isPlatformAdmin && activePractice && (
+            <PracticeContextBanner
+              practice={activePractice}
+              onExit={() => setActivePractice(null)}
+            />
+          )}
           <TopBar
             opened={navOpened}
             onMenuToggle={toggleNav}
             onSignOut={handleSignOut}
             currentUser={currentUser}
-            currentView={currentView}
+            currentView={isPlatformAdmin && !activePractice ? 'platform' : currentView}
           />
         </Stack>
       </AppShell.Header>
@@ -546,6 +560,11 @@ export default function App() {
       </AppShell.Navbar>
 
       <AppShell.Main style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        {isPlatformAdmin && !activePractice ? (
+          <Suspense fallback={surfaceLoadingFallback}>
+            <PlatformDashboard onEnterPractice={(practice) => { setActivePractice(practice); setCurrentView('dashboard'); }} />
+          </Suspense>
+        ) : (
         <Suspense fallback={surfaceLoadingFallback}>
           <ClientPickerModal
             isOpen={clientPickerOpen}
@@ -723,6 +742,7 @@ export default function App() {
             </>
           )}
         </Suspense>
+        )}
       </AppShell.Main>
 
       <Modal
