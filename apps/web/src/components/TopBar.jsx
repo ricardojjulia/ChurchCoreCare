@@ -27,6 +27,7 @@ function resolveTopBarCopy(currentView, isClient, t) {
     groups: 'groups',
     'time-tracking': 'timeTracking',
     analytics: 'analytics',
+    platform: 'platform',
   };
 
   const key = viewKeyMap[currentView];

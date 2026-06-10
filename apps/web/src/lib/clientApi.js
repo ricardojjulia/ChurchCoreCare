@@ -1,7 +1,22 @@
 import { csrfHeaders } from './csrf.js';
 
+// Platform admin tenant context — set by App.jsx when a practice is selected.
+// When non-null, all API calls include x-target-tenant so the backend scopes
+// queries to the selected practice instead of the platform admin's own tenant.
+let _platformTargetTenant = null;
+
+export function setPlatformTargetTenant(tenantId) {
+  _platformTargetTenant = tenantId ?? null;
+}
+
+function platformHeaders() {
+  if (!_platformTargetTenant) return {};
+  return { 'x-target-tenant': _platformTargetTenant };
+}
+
 async function apiFetch(url, options = {}) {
-  const response = await fetch(url, options);
+  const mergedHeaders = { ...platformHeaders(), ...(options.headers ?? {}) };
+  const response = await fetch(url, { ...options, headers: Object.keys(mergedHeaders).length ? mergedHeaders : undefined });
   if (!response.ok) {
     let message = `Request failed: ${response.status}`;
     try {

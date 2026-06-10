@@ -175,6 +175,7 @@ import {
   listImpersonationSessions, createImpersonationSession, endImpersonationSession,
   listDataExportJobs, createDataExportJob, updateDataExportJob,
   getRetentionPolicy, upsertRetentionPolicy,
+  listAllPractices,
 } from './db/queries/platform.js';
 import {
   normalizeTenantProvisioningStatus,
@@ -2068,6 +2069,11 @@ export async function handleApiRequest(request, response) {
 
     if (requestUrl.pathname === '/v1/platform/overview') {
       await handlePlatformOverview(request, response, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/platform/practices') {
+      await handlePlatformPractices(request, response, session);
       return;
     }
 
@@ -12789,6 +12795,36 @@ async function handleAuditObservations(request, response, session) {
   writeJson(response, 200, { observations });
 }
 
+async function handlePlatformPractices(request, response, session) {
+  if (request.method !== 'GET') {
+    writeJson(response, 405, { error: 'Method not allowed' });
+    return;
+  }
+  if (requirePlatformAdmin(request, response, session)) return;
+
+  if (process.env.DB_NAME) {
+    const practices = await listAllPractices();
+    await emitAudit(request, 'platform.practices.read', 'platform_practices', 'collection', session);
+    writeJson(response, 200, { practices });
+    return;
+  }
+
+  // Dev fallback — return tenantSlugRegistry as stub list
+  const stubs = [...tenantSlugRegistry].map((id) => ({
+    tenantId: id,
+    tenantName: id.charAt(0).toUpperCase() + id.slice(1),
+    planType: 'standard',
+    practiceName: id.charAt(0).toUpperCase() + id.slice(1) + ' Counseling',
+    practiceType: 'solo',
+    staffCount: 0,
+    clientCount: 0,
+    activeClientCount: 0,
+    activeStaffCount: 0,
+  }));
+  await emitAudit(request, 'platform.practices.read', 'platform_practices', 'collection', session);
+  writeJson(response, 200, { practices: stubs });
+}
+
 async function handlePlatformOverview(request, response, session) {
   if (request.method !== 'GET') {
     writeJson(response, 405, { error: 'Method not allowed' });
@@ -16770,8 +16806,18 @@ function buildPlatformOverview(request) {
   };
 }
 
+const TARGET_TENANT_RE = /^[a-z0-9_-]{1,64}$/;
+
 function callerTenant(request, session) {
-  if (session) return session.tenant_id;
+  if (session) {
+    // platform_admin may operate in any practice by sending x-target-tenant.
+    // The header is validated against a strict format; only platform_admin can use it.
+    if (session.role === 'platform_admin') {
+      const header = (request.headers['x-target-tenant'] ?? '').trim();
+      if (header && TARGET_TENANT_RE.test(header)) return header;
+    }
+    return session.tenant_id;
+  }
   return (request.headers['x-tenant-id'] || 'system').trim();
 }
 

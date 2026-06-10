@@ -2,6 +2,47 @@ import pool from '../pool.js';
 import { randomUUID } from 'node:crypto';
 import { decrypt, encrypt } from '../../lib/encrypt.js';
 
+// ── Platform admin: all-practice listing ─────────────────────────────────────
+
+export async function listAllPractices() {
+  const [rows] = await pool.query(
+    `SELECT
+       t.id            AS tenant_id,
+       t.name          AS tenant_name,
+       t.plan_type,
+       t.created_at,
+       p.id            AS practice_id,
+       p.name          AS practice_name,
+       p.practice_type,
+       p.timezone,
+       (SELECT COUNT(*) FROM staff_members sm WHERE sm.tenant_id = t.id) AS staff_count,
+       (SELECT COUNT(*) FROM clients c WHERE c.tenant_id = t.id)         AS client_count,
+       (SELECT COUNT(*) FROM clients c WHERE c.tenant_id = t.id AND c.status = 'active') AS active_client_count,
+       (SELECT COUNT(*) FROM staff_accounts sa
+          JOIN staff_members sm2 ON sm2.id = sa.staff_member_id
+          WHERE sa.tenant_id = t.id
+            AND sa.locked_until IS NULL
+            AND sa.failed_attempts < 10)                                  AS active_staff_count
+     FROM tenants t
+     LEFT JOIN practices p ON p.tenant_id = t.id
+     ORDER BY t.created_at DESC`,
+  );
+  return rows.map((row) => ({
+    tenantId: row.tenant_id,
+    tenantName: row.tenant_name,
+    planType: row.plan_type,
+    createdAt: row.created_at,
+    practiceId: row.practice_id,
+    practiceName: row.practice_name ?? row.tenant_name,
+    practiceType: row.practice_type,
+    timezone: row.timezone,
+    staffCount: Number(row.staff_count ?? 0),
+    clientCount: Number(row.client_count ?? 0),
+    activeClientCount: Number(row.active_client_count ?? 0),
+    activeStaffCount: Number(row.active_staff_count ?? 0),
+  }));
+}
+
 function toSqlTimestamp(value) {
   if (!value) return null;
   const date = value instanceof Date ? value : new Date(value);

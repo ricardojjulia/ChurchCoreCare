@@ -2,6 +2,34 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## June 10, 2026 — Platform admin practice management
+
+### feat: platform admin practice picker and cross-tenant management
+
+**Date:** 2026-06-10
+**Affected area:** API platform routes, frontend platform admin, auth callerTenant
+
+Multi-practice management for the `platform_admin` role:
+
+- **`GET /v1/platform/practices`** — new API endpoint returning all tenants with
+  client/staff counts. Platform admin only; audited as `platform.practices.read`.
+- **`callerTenant()` extension** — platform admin may pass `x-target-tenant` header
+  to scope any API request to a specific practice. Validated against strict
+  `[a-z0-9_-]{1,64}` format; only honoured when `session.role === 'platform_admin'`.
+- **`PlatformDashboard.jsx`** — practice-picker shown when platform admin is logged in
+  with no active practice selected. Practice cards show active/total client and staff
+  counts, plan type, and timezone.
+- **`PracticeContextBanner.jsx`** — indigo banner rendered above the TopBar when
+  platform admin is operating inside a practice. Shows practice name and "All Practices"
+  exit button.
+- **`clientApi.js`** — `setPlatformTargetTenant(tenantId)` module export; all `apiFetch`
+  calls automatically include `x-target-tenant` when a practice is active.
+
+Email-to-practice routing note: the `login()` function already derives `tenant_id`
+from `staff_accounts.email_lookup_hash` — no URL subdomain or practice code needed.
+
+---
+
 ## June 10, 2026 — UI/UX redesign: collapsible nav, ministry language
 
 ### feat: collapsible grouped navigation and ministry-language renames
