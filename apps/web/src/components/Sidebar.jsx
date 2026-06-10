@@ -203,7 +203,7 @@ function NavSection({ group, isOpen, onToggle, currentView, onNavigate, t }) {
         }
       </Box>
 
-      <Collapse in={isOpen}>
+      <Collapse expanded={isOpen}>
         <Stack gap={2} pl={8} pt={2} pb={4}>
           {group.items.map((item) =>
             item.href ? (
