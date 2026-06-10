@@ -60,16 +60,13 @@ export default function ClinicalChartPage({
       >
         <Group justify="space-between" align="flex-start" wrap="wrap" gap="xl">
           <div>
-            <Text size="xs" tt="uppercase" fw={700} c="indigo" style={{ letterSpacing: '0.12em', marginBottom: 6 }}>
-              Clinical Workspace
-            </Text>
             <Title order={2}>{t('topbar.clinical.title')}</Title>
             <Text c="dimmed" size="sm" mt={4}>
               {t('topbar.clinical.subtitle')}
             </Text>
           </div>
           <Select
-            label="Client"
+            label={t('nav.clients')}
             placeholder={t('chart.selectClientPrompt')}
             data={clientOptions}
             value={selectedClientId}

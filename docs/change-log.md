@@ -2,6 +2,74 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## June 10, 2026 — UI/UX redesign: collapsible nav, ministry language
+
+### feat: collapsible grouped navigation and ministry-language renames
+
+**Date:** 2026-06-10
+**Affected area:** Navigation, i18n catalog, Clinical Chart, TopBar, Sidebar
+
+**Navigation redesign:**
+
+- Sidebar now uses collapsible section groups (Care Team, Clients, Practice,
+  Ministry Tools, Portal) with state persisted in `localStorage`
+- Active view's section auto-expands on page load
+- Counselor view gets My Clients + My Schedule sections
+
+**Ministry-language renames (i18n key VALUES updated, not keys):**
+
+- "Clinical Chart" → "Care Notes" (`nav.clinical`, `topbar.clinical.*`)
+- "Faithful Workflows" → "Shepherd AI" (`nav.faithWorkflows`, `workflow.title/subtitle`)
+- "Workspace Studio" → "Care Practice Setup" (`nav.workspaceStudio`, `studio.title`)
+- "Therapy Groups" → "Care Groups" (`nav.groups`)
+- "Staff" → "Staff & Access" (`nav.users`)
+- "Treatment Plan" → "Care Plan" across chart tabs, plan labels, and care flow metrics
+- "Discharge Note" → "Completion Note"
+- "Clinical Cautions" → "Care Cautions" (Shepherd AI category)
+- "Clinical Relevance" → "Care Relevance" (Shepherd AI drawer)
+- Removed "clinical judgment" language from AI safety banners
+
+**TopBar fixes:**
+
+- Added missing topbar keys for `groups`, `time-tracking`, `analytics` views
+  (previously fell back to dashboard title)
+- Added 13 new i18n keys (section labels + new topbar entries)
+
+**Component fixes:**
+
+- `ClinicalChartPage.jsx`: removed hardcoded "Clinical Workspace" kicker text
+  and hardcoded "Client" label on the client picker Select
+
+---
+
+## June 9, 2026 — i18n audit tooling
+
+### feat: page-by-page i18n coverage audit and key-generator
+
+**Date:** 2026-06-09
+**Affected area:** tests/e2e, ops, i18n translation pipeline
+
+Added two tools to identify and triage English text still showing on non-English
+locales:
+
+- **`tests/e2e/i18n-audit.spec.mjs`** — Playwright scan that visits all 15 admin
+  pages plus the client portal with `es-PR` locale active. Collects visible text,
+  matches against the en-US `baseMessages` catalog to find un-translated keys, and
+  flags multi-word English phrases with no catalog key (hardcoded strings). Writes
+  a JSON report to `tests/e2e/reports/i18n-audit.json`.
+
+- **`ops/i18n-add-missing-keys.mjs`** — Reads the audit report, generates
+  dot-namespaced key names for hardcoded strings, patches `packages/i18n/src/index.js`
+  with new skeleton entries, and adds blank values to `apps/api/data/i18n/es-PR.json`
+  for the translator to fill in.
+
+- **`tests/e2e/reports/`** added to `.gitignore` — audit output is ephemeral.
+
+Workflow: run audit → run key-generator → translator fills blanks in es-PR.json →
+rebuild governance catalog → re-audit to verify coverage improved.
+
+---
+
 ## June 9, 2026 — Security hardening
 
 ### fix: enable RLS on all public tables and fix function search_path

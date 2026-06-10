@@ -14,6 +14,7 @@ coverage/
 .claude/settings.local.json
 test-results/*
 !test-results/.last-run.json
+tests/e2e/reports/
 backups/
 
 # Python

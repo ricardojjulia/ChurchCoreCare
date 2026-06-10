@@ -24,6 +24,9 @@ function resolveTopBarCopy(currentView, isClient, t) {
     offerings: 'offerings',
     portal: 'portal',
     faith: 'faith',
+    groups: 'groups',
+    'time-tracking': 'timeTracking',
+    analytics: 'analytics',
   };
 
   const key = viewKeyMap[currentView];
