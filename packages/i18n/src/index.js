@@ -212,7 +212,7 @@ export const baseMessages = Object.freeze({
   'metrics.currentSession': 'Current Session',
   'metrics.yearlyAppointments': 'Appointments to Date (Yearly)',
   'metrics.yearlyMeta': 'Jan 1 to today',
-  'metrics.faithfulWorkflows': 'Faithful Workflows',
+  'metrics.faithfulWorkflows': 'Shepherd AI',
   'metrics.faithfulCritical': 'Critical',
   'metrics.faithfulModerate': 'Moderate',
   'metrics.faithfulRoutine': 'Routine',
