@@ -2,6 +2,52 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## June 11, 2026 — v7.1.0 release: bug fixes and docs
+
+### fix: time tracking returns Unauthenticated for valid sessions (#123)
+
+**Date:** 2026-06-11
+**Affected area:** `apps/api/src/index.js` — time-entries, licensure-goals, supervisor-notes handlers
+
+The session object from `resolveSession()` uses snake_case properties (`tenant_id`,
+`staff_account_id`), but the time-tracking and supervisor-notes handlers were
+referencing camelCase (`tenantId`, `userId`). Both properties were always `undefined`,
+so the `!session?.tenantId` guard fired on every authenticated request, returning
+`401 Unauthenticated` regardless of login state. 52 property references corrected.
+
+---
+
+### fix: sidebar sections do not expand on click — Mantine v9 Collapse prop (#121)
+
+**Date:** 2026-06-11
+**Affected area:** `apps/web/src/components/Sidebar.jsx`
+
+Mantine v9 renamed the `Collapse` open-state prop from `in` to `expanded`. The sidebar
+was passing `in={isOpen}` which was silently ignored, keeping all collapsible sections
+permanently closed regardless of click. Changed to `expanded={isOpen}`.
+
+---
+
+### fix: Shepherd AI label missing in dashboard summary card (#122)
+
+**Date:** 2026-06-11
+**Affected area:** `packages/i18n/src/index.js`, `apps/api/data/i18n/es-MX.json`
+
+The `metrics.faithfulWorkflows` key was missed in the ministry-language rename pass.
+The top-right dashboard card continued to display "Faithful Workflows" instead of
+"Shepherd AI". Updated key value in English source and Spanish seed.
+
+---
+
+### release: v7.1.0 — ministry-language redesign, platform admin, i18n audit tooling
+
+**Date:** 2026-06-11
+**Packages bumped:** all apps 7.0.0 → 7.1.0, `@churchcore/i18n` and `@churchcore/domain` 6.2.0 → 7.1.0
+
+See `docs/v7.1.0-RELEASE-SUMMARY.md` for the full narrative.
+
+---
+
 ## June 10, 2026 — Platform admin practice management
 
 ### feat: platform admin practice picker and cross-tenant management

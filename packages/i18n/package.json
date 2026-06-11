@@ -1,6 +1,6 @@
 {
   "name": "@churchcore/i18n",
-  "version": "6.2.0",
+  "version": "7.1.0",
   "private": true,
   "type": "module",
   "main": "src/index.js",

@@ -115,18 +115,20 @@ synthetic Elena portal account for client self-service boundaries.
 
 ## Core Capabilities
 
-- **Faithful Workflows:** counselor-facing recommendation workspace powered by 27 deterministic clinical rules across 8 care categories, with explainable rationale, trend analysis, three interchangeable canvas views (Classic List, Radial Hub, Priority Matrix), and shared operational urgency cues that keep banner counts and visible client severity aligned
-- **Clinical Chart:** session notes, internal notes, treatment plans, progress tracking, and homework
+- **Shepherd AI:** counselor-facing AI-assisted recommendation workspace powered by 27 deterministic care rules across 8 ministry categories, with explainable rationale, trend analysis, three interchangeable canvas views (Classic List, Radial Hub, Priority Matrix), and shared operational urgency cues that keep banner counts and visible client severity aligned
+- **Care Notes:** session notes, internal notes, care plans, progress tracking, and homework — with scripture reference fields and spiritual practice checkboxes integrated throughout
 - **Operations Dashboard:** live daily operations summary with counselor workload, note-gap compliance watch, portal request tracking, configurable operational alerts, and 7-day trend context
-- **Workspace Studio:** full-featured practice administration hub with tabs for Practice profile, Locations CRUD, Staff roster, Lifecycle caseload board, Appointments (service codes), Documents, Offerings, and Portal workflows
+- **Care Practice Setup:** full-featured practice administration hub with tabs for Practice profile, Locations CRUD, Staff roster, Lifecycle caseload board, Appointments (service codes), Documents, Offerings, and Portal workflows
+- **Collapsible grouped navigation:** sidebar sections (Care Team, Clients, Practice, Ministry Tools, Portal) with localStorage persistence, auto-expand on active view, and role-specific layouts for admin, counselor, and operations staff
+- **Multi-practice platform admin:** `platform_admin` role provides a practice picker showing all tenants with active client and staff counts, and can operate inside any practice via cross-tenant header routing
 - **Scheduling and operations workflows:** appointments, waitlists, reminders, utilization visibility, and a guided recurring-series builder so staff can create repeat schedules without typing raw RRULE syntax
 - **Client portal workflows:** onboarding, forms, documents, and client self-service surfaces
-- **Monitoring and runtime health:** built-in monitoring and operations pages with local health and database visibility
-- **Security and audit foundations:** role-aware access controls and structured audit event patterns
+- **Licensure time tracking:** counselors and interns log hours by category; supervisors verify entries; CSV export is PHI-safe
+- **Security and audit foundations:** role-aware access controls, RLS on all 95 database tables, and structured audit event patterns
 
 ## LATEST LOOK
 
-The latest look feels less like a generic admin console and more like a living counseling workspace. The home experience opens with calm, high-signal surfaces: a dashboard that tells staff what needs attention now, a Faithful Workflows space that turns raw status into visible care priorities, and scheduling screens that feel built for real week-to-week ministry instead of back-office data entry.
+The latest look feels less like a generic admin console and more like a living counseling workspace. The home experience opens with calm, high-signal surfaces: a dashboard that tells staff what needs attention now, a Shepherd AI space that turns raw status into visible care priorities, and scheduling screens that feel built for real week-to-week ministry instead of back-office data entry.
 
 ![Latest look screenshot 1](./ScreenShots/Screenshot%202026-04-05%20at%208.42.26%E2%80%AFPM.png)
 ![Latest look screenshot 2](./ScreenShots/Screenshot%202026-04-05%20at%208.42.36%E2%80%AFPM.png)
@@ -140,7 +142,7 @@ Client and counselor records now read like story-rich working spaces rather than
 ![Latest look screenshot 7](./ScreenShots/Screenshot%202026-04-05%20at%208.43.14%E2%80%AFPM.png)
 ![Latest look screenshot 8](./ScreenShots/Screenshot%202026-04-05%20at%208.43.17%E2%80%AFPM.png)
 
-Workspace Studio gives the platform its control-room energy. Practice settings, locations, staff, lifecycle management, documents, offerings, appointments, and portal administration all sit inside a single administration hub that feels intentional instead of crowded. It looks like the kind of system that can run an actual counseling practice on Monday morning, not just survive a demo.
+Care Practice Setup gives the platform its control-room energy. Practice settings, locations, staff, lifecycle management, documents, offerings, appointments, and portal administration all sit inside a single administration hub that feels intentional instead of crowded. It looks like the kind of system that can run an actual counseling practice on Monday morning, not just survive a demo.
 
 ![Latest look screenshot 9](./ScreenShots/Screenshot%202026-04-05%20at%208.43.27%E2%80%AFPM.png)
 ![Latest look screenshot 10](./ScreenShots/Screenshot%202026-04-05%20at%208.43.39%E2%80%AFPM.png)
@@ -154,6 +156,14 @@ Behind that presentation, the recent work has made the platform easier to trust 
 ## Freshly Shipped
 
 The platform has moved quickly over the last few iterations, and the most recent work is aimed at making ChurchCore Care easier to explore, easier to operate, and easier to present with confidence.
+
+- **v7.1.0 — Ministry-language UI redesign (June 2026):** The navigation, page headings, and dashboard labels now speak the language of a Christian counseling practice rather than generic clinical software. "Clinical Chart" is now **Care Notes**, "Faithful Workflows" is now **Shepherd AI**, "Workspace Studio" is now **Care Practice Setup**, "Therapy Groups" is **Care Groups**, and "Treatment Plan" is **Care Plan** throughout. None of the underlying i18n keys changed, so all existing translations remain valid.
+
+- **v7.1.0 — Collapsible grouped sidebar navigation:** The sidebar is reorganized into role-specific collapsible sections — **Care Team**, **Clients**, **Practice**, **Ministry Tools**, and **Portal** for admins; **My Clients** and **My Schedule** for counselors. Sections remember their open/closed state across page reloads via `localStorage`, and the section containing the active view auto-expands on navigation.
+
+- **v7.1.0 — Platform admin multi-practice management:** A `platform_admin` account now lands on a practice-picker dashboard showing all tenants with active/total client and staff counts, plan type, and timezone. Entering a practice injects an `x-target-tenant` header into every API call so the admin can view and manage any practice's data without logging in as that practice's staff. A contextual banner shows which practice is active.
+
+- **v7.1.0 — i18n audit tooling:** Two new tools help identify and triage untranslated English text. `tests/e2e/i18n-audit.spec.mjs` walks all 15 admin pages and the client portal in `es-PR` locale, collecting visible text and flagging hardcoded strings. `ops/i18n-add-missing-keys.mjs` reads the audit report, suggests dot-namespaced keys, and patches both the base messages and the Spanish seed file for translator pickup.
 
 - **Integrated telehealth via JaaS/Jitsi (Phase 1):** Remote appointments now have a live **Join Video Session** button. Clicking it calls `POST /v1/appointments/:id/video-session`, which generates a short-lived RS256 JWT and returns the JaaS room credentials. The Jitsi External API is loaded on demand and the meeting is embedded directly in the scheduling page via `VideoSessionModal`. A `session.video_started` audit event is written to the ledger on every join. JaaS room names are stable opaque tokens stored in `appointments.video_room_id` — no PHI is embedded in the room name or JWT claims. Required env vars: `JITSI_APP_ID`, `JITSI_API_KEY_ID`, `JITSI_PRIVATE_KEY_BASE64`, `JITSI_DOMAIN=8x8.vc`.
 
@@ -188,7 +198,7 @@ The platform has moved quickly over the last few iterations, and the most recent
 - **Demo data is now reproducible in SQL:** `pnpm demo:sql:generate`, `pnpm demo:sql:apply`, and `pnpm demo:sql:refresh` create and load the canonical dataset under `ops/demo-dataset/generated/`, which makes local demos and reset workflows much more predictable.
 - **The README now shows the real product shape:** the new `LATEST LOOK` section and embedded screenshot grids turn the repository front door into an actual product tour instead of a bare technical landing page.
 - **Scheduling feels more human:** recurring appointment series can now be built with readable cadence options, weekday selection, and a live preview, while raw RRULE entry remains available only as an advanced fallback.
-- **Faithful Workflows stays in sync with operations:** dashboard drill-down and workflow urgency surfaces now share the same canonical counts so staff see one story, not competing numbers.
+- **Shepherd AI stays in sync with operations:** dashboard drill-down and workflow urgency surfaces now share the same canonical counts so staff see one story, not competing numbers.
 
 ## Database Security Posture
 
@@ -338,14 +348,14 @@ Billing API routes (authenticated):
 
 All `DateInput` components (Mantine v8) across the application accept dates in `MM/DD/YYYY` format for manual entry and display. The calendar popover closes automatically when a day is selected. Date values are stored internally as `YYYY-MM-DD` strings. Affected forms: intake/form runner, client demographics, legal/admin, insurance, diagnoses, employment, certifications, and licenses.
 
-## Workspace Studio
+## Care Practice Setup
 
-Workspace Studio is the practice administration hub, accessible from the main navigation. It provides a tabbed interface covering all practice management surfaces:
+Care Practice Setup is the practice administration hub, accessible from the main navigation under **Practice → Care Practice Setup**. It provides a tabbed interface covering all practice management surfaces:
 
-- **Practice** — edit the practice profile through shared Workspace Studio surface primitives: name, type (solo/group/multi-location), timezone, faith tradition, contact information, and telehealth configuration.
-- **Locations** — add, edit, and delete scheduling locations through the shared Studio section layout. Each location tracks name, address, capacity, and telehealth/remote-enabled flag.
-- **Staff** — read-only staff roster showing counselor cards (role, license type/number, supervision status, bio) and admin accounts. Links to the full Staff Management page for account creation and password resets.
-- **Lifecycle** — caseload management board using shared Studio stat and section surfaces. Clickable status summary cards (Active, Waitlist, Inactive, Discharged) filter the client list. Referral source breakdown. Per-client status transitions with a discharge modal capturing reason and notes.
+- **Practice** — edit the practice profile: name, type (solo/group/multi-location), timezone, faith tradition, contact information, and telehealth configuration.
+- **Locations** — add, edit, and delete scheduling locations. Each location tracks name, address, capacity, and telehealth/remote-enabled flag.
+- **Staff** — read-only staff roster showing counselor cards (role, license type/number, supervision status, bio) and admin accounts. Links to the full Staff & Access page for account creation and password resets.
+- **Lifecycle** — caseload management board. Clickable status summary cards (Active, Waitlist, Inactive, Discharged) filter the client list. Referral source breakdown. Per-client status transitions with a discharge modal capturing reason and notes.
 - **Appointments** — service code configuration (CPT/billing codes). Manage codes with category, default session duration, and active/inactive status.
 - **Documents** — assign forms to clients and review submission history. Supports direct navigation from a client record with the client pre-selected.
 - **Offerings** — track client service offerings and financial arrangements.
