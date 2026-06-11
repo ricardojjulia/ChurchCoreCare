@@ -9,6 +9,7 @@ import TrialExpiredPage from './components/TrialExpiredPage.jsx';
 import SignupPage from './components/SignupPage.jsx';
 import PlatformDashboard from './components/PlatformAdmin/PlatformDashboard.jsx';
 import PracticeContextBanner from './components/PlatformAdmin/PracticeContextBanner.jsx';
+import DemoSurfaceErrorBoundary from './components/DemoSurfaceErrorBoundary.jsx';
 import { useTrialStatus } from './lib/useTrialStatus.js';
 import Metrics from './components/Metrics';
 import WorkspaceGrid from './components/WorkspaceGrid';
@@ -18,6 +19,7 @@ import { useI18n } from './lib/i18nContext.jsx';
 import { buildCounselorWorkspaceData } from './lib/counselorWorkspace.js';
 import { isAdminRole, isClientRole, isCounselorRole } from './lib/roles.js';
 import { useIdleTimeout } from './lib/useIdleTimeout.js';
+import { useDemoSession } from './lib/demoFeedbackContext.jsx';
 import './App.css';
 
 const CounselorHomePage = lazy(() => import('./components/CounselorHomePage.jsx'));
@@ -138,6 +140,7 @@ function summarizeAppointmentMetrics(items) {
 
 export default function App() {
   const { t } = useI18n();
+  const { recordRoute } = useDemoSession();
   const [navOpened, { toggle: toggleNav, close: closeNav }] = useDisclosure(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
@@ -178,6 +181,10 @@ export default function App() {
   useEffect(() => {
     setPlatformTargetTenant(activePractice?.tenantId ?? null);
   }, [activePractice]);
+
+  useEffect(() => {
+    recordRoute(currentView);
+  }, [currentView, recordRoute]);
   const trialStatus = useTrialStatus(isAuthenticated && isAdminRole(userRole));
   const selectedClientId = selectedClientRequest?.clientId ?? null;
   const counselorWorkspaceData = buildCounselorWorkspaceData(operationsSummaryData.summary, clientsData.items, currentUser);
@@ -560,6 +567,10 @@ export default function App() {
       </AppShell.Navbar>
 
       <AppShell.Main style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        <DemoSurfaceErrorBoundary
+          route={isPlatformAdmin && !activePractice ? 'platform' : currentView}
+          resetKey={`${activePractice?.tenantId ?? 'none'}:${currentView}`}
+        >
         {isPlatformAdmin && !activePractice ? (
           <Suspense fallback={surfaceLoadingFallback}>
             <PlatformDashboard onEnterPractice={(practice) => { setActivePractice(practice); setCurrentView('dashboard'); }} />
@@ -743,6 +754,7 @@ export default function App() {
           )}
         </Suspense>
         )}
+        </DemoSurfaceErrorBoundary>
       </AppShell.Main>
 
       <Modal

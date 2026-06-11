@@ -22,6 +22,6 @@
     "dev": "vite --port 5174",
     "build": "vite build",
     "lint": "node -e \"console.log('No lint configured for @churchcore/platform yet')\"",
-    "test": "node -e \"console.log('No tests configured for @churchcore/platform yet')\""
+    "test": "node --test test/*.test.mjs"
   }
 }

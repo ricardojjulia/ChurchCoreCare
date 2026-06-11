@@ -30,6 +30,7 @@ The Monitoring page provides a live snapshot of:
 | **Request performance** | Response times for key API routes |
 | **Error rate** | Rate of application errors and their severity levels |
 | **Active sessions** | Approximate concurrent session count |
+| **Surface registry** | Count of registered views, pages, tabs, workflows, modals, and drawers |
 
 ---
 
@@ -53,6 +54,7 @@ ChurchCore Care keeps monitoring inside the application:
 
 - health signals remain available through the built-in monitoring surfaces
 - database monitoring remains available to authorized admin roles
+- the shared surface registry confirms that visible workflows participate in the monitoring baseline
 - startup and normal use do not depend on external tracing or metrics infrastructure
 
 If you are using the product normally, no OTEL or external observability configuration is required.
@@ -66,10 +68,27 @@ ChurchCore Care monitoring is designed with strict privacy safeguards:
 - **No PHI is emitted** — monitoring must not include client names, emails, IDs, diagnoses, or other identifiable health information
 - **No free-text values** in monitoring labels — only structured, low-cardinality operational signals
 - **Audit logs are separate** — raw audit events are never exported through monitoring flows
+- **Feedback reports are separate** — notes, error messages, identities, session IDs, and breadcrumbs never appear in monitoring output
 
 ---
 
-## 11.6 Reading the Health Panel
+## 11.6 Demo Feedback Triage
+
+When demo mode is enabled, users can open the fixed **Feedback** button from any
+application view to report a bug, error, unexpected result, or improvement idea.
+The form warns users not to enter PHI.
+
+Platform administrators review these reports at `/control/demo-feedback`. The
+queue supports open, completed, and all views plus category, identity, and date
+filters. Selecting a report opens its route context, duplicate count,
+breadcrumbs, safe error message, note, and triage controls.
+
+Unhandled React render errors are reported asynchronously and display a local
+retry surface without removing the application navigation shell.
+
+---
+
+## 11.7 Reading the Health Panel
 
 The Monitoring page health panel uses color indicators:
 
@@ -82,7 +101,7 @@ The Monitoring page health panel uses color indicators:
 
 ---
 
-## 11.7 Configurable Operational Alerts
+## 11.8 Configurable Operational Alerts
 
 Practice admins can configure threshold-based alerts visible in the Operations Dashboard:
 

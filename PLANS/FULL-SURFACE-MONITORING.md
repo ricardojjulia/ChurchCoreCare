@@ -2,7 +2,7 @@
 
 **Status:** Current baseline  
 **Prepared:** March 28, 2026  
-**Updated:** April 21, 2026  
+**Updated:** June 11, 2026
 **Stack:** React 18, Mantine 8, standalone web pages, Node.js API, Node.js web server
 **Reference codebase state:** `main`
 
@@ -36,6 +36,7 @@ Included in this plan:
 - documented surface inventory for regression review and consistency testing
 - local operational visibility that does not require external collectors
 - audit-intelligence surface monitoring obligations
+- a shared, privacy-safe surface registry exposed through the local monitoring page
 
 Explicitly out of scope:
 
@@ -161,6 +162,8 @@ Required boundary rules:
 - `signup` — trial signup form (SignupPage); public; must show slug availability, validation errors, and success confirmation
 - `trial_expired` — conversion gate (TrialExpiredPage); shown when `subscriptionStatus = trial_expired`
 - `trial_banner` — top-of-app warning strip; visible when `daysRemaining <= 7`
+- `control.demo_feedback` — platform-admin feedback review queue at `/control/demo-feedback`
+- `control.demo_feedback.detail` — selected feedback report drawer and triage workflow
 
 ### Modal and workflow surfaces
 
@@ -173,6 +176,7 @@ Required boundary rules:
 - Audit event detail drawer or panel
 - Audit filter workflow
 - Audit export workflow
+- `modal.demo_feedback` — global demo feedback category and note workflow
 
 Placeholder but visible surfaces still count as monitored surfaces. Even when a surface is incomplete, it must still be represented in local QA, consistency checks, and current documentation.
 
@@ -207,6 +211,12 @@ This plan establishes these local monitoring interfaces as the current standard:
 - `GET /health/live`
 - `GET /health/ready`
 - `GET /v1/monitoring/db`
+- `GET /v1/monitoring/surfaces`
+
+`GET /v1/monitoring/surfaces` returns only the shared surface inventory and
+aggregate counts by surface kind. It must not contain feedback text, error
+messages, account identity, session IDs, fingerprints, breadcrumbs, or raw
+feedback records.
 
 Do not add OTEL ingestion or export interfaces without updating this plan first.
 
@@ -216,6 +226,7 @@ Do not add OTEL ingestion or export interfaces without updating this plan first.
 - Confirm placeholder surfaces are still represented in QA and documentation
 - Confirm visible loading, empty, denied, and error states remain coherent
 - Confirm monitoring pages render local health and database-monitoring details
+- Confirm the monitoring page renders the shared surface-registry summary
 - Confirm local monitoring still works with no OTEL / OTLP environment configuration
 - Confirm no PHI or high-cardinality identifiers appear in monitoring-related output
 

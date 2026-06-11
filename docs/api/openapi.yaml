@@ -52,6 +52,8 @@ tags:
     description: Practice reporting overview
   - name: Platform
     description: Platform-level administration (platform_admin only)
+  - name: Demo Feedback
+    description: Demo-mode report submission and platform-admin triage
   - name: Reference
     description: Lookup / reference data (DSM-5-TR, appointment types)
   - name: i18n
@@ -4153,6 +4155,137 @@ paths:
 
   # ── Platform ─────────────────────────────────────────────────────────────────
 
+  /v1/demo-feedback:
+    post:
+      tags: [Demo Feedback]
+      summary: Submit bounded demo feedback
+      operationId: submitDemoFeedback
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DemoFeedbackSubmission'
+      responses:
+        '202':
+          description: Feedback accepted or atomically deduplicated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, hitCount]
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  hitCount:
+                    type: integer
+                    minimum: 1
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          description: Demo feedback is disabled on the server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Per-session submission limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/platform/demo-feedback:
+    get:
+      tags: [Demo Feedback, Platform]
+      summary: List demo feedback for platform triage
+      operationId: listDemoFeedback
+      parameters:
+        - in: query
+          name: view
+          schema:
+            type: string
+            enum: [open, done, all]
+            default: open
+        - in: query
+          name: category
+          schema:
+            $ref: '#/components/schemas/DemoFeedbackCategory'
+        - in: query
+          name: identity
+          schema:
+            type: string
+            maxLength: 320
+        - in: query
+          name: from
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: to
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Ordered feedback report list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DemoFeedbackReport'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /v1/platform/demo-feedback/{reportId}:
+    patch:
+      tags: [Demo Feedback, Platform]
+      summary: Update demo feedback triage state
+      operationId: updateDemoFeedback
+      parameters:
+        - in: path
+          name: reportId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [processed]
+              properties:
+                processed:
+                  type: boolean
+                action:
+                  oneOf:
+                    - $ref: '#/components/schemas/DemoFeedbackAction'
+                    - type: 'null'
+      responses:
+        '200':
+          description: Updated feedback report
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [item]
+                properties:
+                  item:
+                    $ref: '#/components/schemas/DemoFeedbackReport'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /v1/platform/overview:
     get:
       tags: [Platform]
@@ -4538,6 +4671,20 @@ paths:
 
   # ── Monitoring ───────────────────────────────────────────────────────────────
 
+  /v1/monitoring/surfaces:
+    get:
+      tags: [Monitoring]
+      summary: Privacy-safe shared surface registry
+      operationId: monitoringSurfaces
+      security: []
+      responses:
+        '200':
+          description: Surface inventory and aggregate counts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SurfaceRegistryResponse'
+
   /v1/monitoring/db:
     get:
       tags: [Monitoring]
@@ -4653,6 +4800,145 @@ components:
           type: array
           items:
             type: object
+
+    DemoFeedbackCategory:
+      type: string
+      enum: [BUG, ERROR, UNEXPECTED_RESULT, IMPROVEMENT]
+
+    DemoFeedbackAction:
+      type: string
+      enum:
+        - code_fixed
+        - update_applied
+        - suggestion_not_implemented
+        - suggestion_implemented
+        - bug_fixed
+        - error_fixed
+        - received_and_closed
+
+    DemoFeedbackSubmission:
+      type: object
+      additionalProperties: false
+      required:
+        - sessionId
+        - route
+        - category
+        - breadcrumbs
+        - demoVersion
+        - sessionDurationSeconds
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        route:
+          type: string
+          minLength: 1
+          maxLength: 500
+        category:
+          $ref: '#/components/schemas/DemoFeedbackCategory'
+        errorMessage:
+          type: [string, 'null']
+          maxLength: 4000
+        note:
+          type: [string, 'null']
+          maxLength: 2000
+        breadcrumbs:
+          type: array
+          maxItems: 5
+          items:
+            type: string
+            maxLength: 500
+        demoVersion:
+          type: string
+          maxLength: 100
+        sessionDurationSeconds:
+          type: integer
+          minimum: 0
+          maximum: 2592000
+
+    DemoFeedbackReport:
+      type: object
+      required:
+        - id
+        - sessionId
+        - route
+        - category
+        - breadcrumbs
+        - demoVersion
+        - hitCount
+        - metadata
+        - processed
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        sessionId:
+          type: string
+          format: uuid
+        route:
+          type: string
+        category:
+          $ref: '#/components/schemas/DemoFeedbackCategory'
+        errorMessage:
+          type: [string, 'null']
+        note:
+          type: [string, 'null']
+        breadcrumbs:
+          type: array
+          items:
+            type: string
+        userEmail:
+          type: [string, 'null']
+          format: email
+        userRole:
+          type: [string, 'null']
+        demoVersion:
+          type: string
+        sessionDurationSeconds:
+          type: [integer, 'null']
+          minimum: 0
+        hitCount:
+          type: integer
+          minimum: 1
+        metadata:
+          type: object
+        processed:
+          type: boolean
+        action:
+          oneOf:
+            - $ref: '#/components/schemas/DemoFeedbackAction'
+            - type: 'null'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    SurfaceRegistryResponse:
+      type: object
+      required: [total, byKind, surfaces]
+      properties:
+        total:
+          type: integer
+          minimum: 0
+        byKind:
+          type: object
+          additionalProperties:
+            type: integer
+            minimum: 0
+        surfaces:
+          type: array
+          items:
+            type: object
+            required: [id, kind]
+            properties:
+              id:
+                type: string
+              kind:
+                type: string
 
     # ── Auth ────────────────────────────────────────────────────────────────────
 

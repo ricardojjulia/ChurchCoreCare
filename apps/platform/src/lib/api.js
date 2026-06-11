@@ -69,4 +69,19 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(policy),
     }),
+
+  listDemoFeedback: (filters = {}) => {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(filters)) {
+      if (value) params.set(key, value);
+    }
+    const query = params.toString();
+    return request(`/v1/platform/demo-feedback${query ? `?${query}` : ''}`);
+  },
+
+  updateDemoFeedback: (id, patch) =>
+    request(`/v1/platform/demo-feedback/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    }),
 };

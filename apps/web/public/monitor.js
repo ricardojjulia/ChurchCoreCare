@@ -271,6 +271,20 @@ function updateVitals(vitals) {
   }).join('');
 }
 
+function updateSurfaceRegistry(summary) {
+  const grid = $('surfaceRegistryGrid');
+  setText('surfaceRegistryCount', `${summary?.total ?? 0} registered`);
+  if (!grid) return;
+  const surfaces = Array.isArray(summary?.surfaces) ? summary.surfaces : [];
+  if (!surfaces.length) {
+    grid.innerHTML = '<span class="empty-state">No registered surfaces available.</span>';
+    return;
+  }
+  grid.innerHTML = surfaces.map((surface) => `
+    <span class="badge badge-get" title="${escapeHtml(surface.kind)}">${escapeHtml(surface.id)}</span>
+  `).join('');
+}
+
 
 function updateHealthChecks(health) {
   const checks = Object.entries(health?.checks ?? {});
@@ -457,6 +471,7 @@ async function doRefresh() {
   try {
     const requests = [
       fetch('/api/health', { credentials: 'include' }).then((r) => r.json()),
+      fetch('/api/v1/monitoring/surfaces', { credentials: 'include' }).then((r) => r.json()),
     ];
 
     if (authStatus.canViewAdminMonitoring) {
@@ -466,10 +481,12 @@ async function doRefresh() {
     }
 
     const settled = await Promise.allSettled(requests);
-    const [apiHealth, dbStatsResp] = settled;
+    const [apiHealth, surfaceRegistryResp, dbStatsResp] = settled;
 
     const health = apiHealth.status === 'fulfilled' ? apiHealth.value : null;
+    const surfaceRegistry = surfaceRegistryResp.status === 'fulfilled' ? surfaceRegistryResp.value : null;
     const dbStats = authStatus.canViewAdminMonitoring && dbStatsResp?.status === 'fulfilled' ? dbStatsResp.value : null;
+    updateSurfaceRegistry(surfaceRegistry);
 
     // Health chip
     if (health?.service) {
@@ -534,4 +551,8 @@ $('refreshBtn').addEventListener('click', async () => {
 initDrillToggle();
 initColorSchemeToggle();
 loadAuthStatus()
-  .then(() => { resetCountdown(); scheduleRefresh(); });
+  .then(async () => {
+    await doRefresh();
+    resetCountdown();
+    scheduleRefresh();
+  });

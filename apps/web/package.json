@@ -33,6 +33,6 @@
     "dev": "vite --host",
     "start": "pnpm run build && node server.js",
     "lint": "node -e \"console.log('No lint rules configured for @churchcore/web yet')\"",
-    "test": "node -e \"console.log('No tests configured for @churchcore/web yet')\""
+    "test": "node --test test/*.test.mjs"
   }
 }
