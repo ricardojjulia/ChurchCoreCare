@@ -2,6 +2,25 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## June 11, 2026 — post-release
+
+### fix: ministry-language renames invisible in production — en-US bypasses governance DB (#126)
+
+**Date:** 2026-06-11
+**Affected area:** `apps/api/src/index.js` — `/v1/i18n/catalog` endpoint
+
+The catalog endpoint was routing `en-US` through the Supabase governance tables when
+`DB_NAME` is set. The active en-US version in governance was frozen with old strings
+(`nav.faithWorkflows: "Faithful Workflows"`, `nav.clinical: "Clinical Chart"`, etc.),
+overriding the correct `baseMessages` values on every page load.
+
+Root cause: governance is for translated locales; `en-US` is the source locale and
+`baseMessages` is its single source of truth. Added a `resolveLocaleCode(locale) ===
+DEFAULT_LOCALE` guard so the source locale always bypasses governance and is served
+directly from `i18nStore.getCatalog()`.
+
+---
+
 ## June 11, 2026 — v7.1.0 release: bug fixes and docs
 
 ### fix: time tracking returns Unauthenticated for valid sessions (#123)
