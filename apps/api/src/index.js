@@ -6442,7 +6442,7 @@ async function handleVideoSession(request, response, requestUrl, session) {
             'hidden-from-recorder': false,
             moderator: isModerator,
             name: displayName,
-            id: session?.userId ?? 'anonymous',
+            id: session?.staff_account_id ?? 'anonymous',
             avatar: '',
             email: '',
           },
@@ -6566,7 +6566,7 @@ async function handleAdHocVideoSession(request, response, session) {
             'hidden-from-recorder': false,
             moderator: true,
             name: 'Counselor',
-            id: session?.userId ?? 'anonymous',
+            id: session?.staff_account_id ?? 'anonymous',
             avatar: '',
             email: '',
           },
@@ -17150,7 +17150,7 @@ function extractCosignNoteId(requestUrl) {
 
 async function handleProgressNoteCosignRequest(request, response, requestUrl, session) {
   if (request.method !== 'POST') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
-  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+  if (!session?.tenant_id) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
   if (session.role !== 'intern') { writeJson(response, 403, { error: 'Only interns may submit notes for review' }); return; }
 
   const { clientId, noteId } = extractCosignNoteId(requestUrl);
@@ -17160,15 +17160,15 @@ async function handleProgressNoteCosignRequest(request, response, requestUrl, se
 
   const [rows] = await pool.query(
     'SELECT id, tenant_id, locked, cosign_status FROM progress_notes WHERE id = ? AND client_id = ? AND tenant_id = ?',
-    [noteId, clientId, session.tenantId],
+    [noteId, clientId, session.tenant_id],
   );
   if (!rows[0]) { writeJson(response, 404, { error: 'Note not found' }); return; }
   if (rows[0].locked) { writeJson(response, 409, { error: 'Note is already signed and locked' }); return; }
   if (rows[0].cosign_status === 'pending_review') { writeJson(response, 409, { error: 'Note already pending review' }); return; }
 
-  await updateProgressNote(noteId, clientId, session.tenantId, {
+  await updateProgressNote(noteId, clientId, session.tenant_id, {
     cosignStatus: 'pending_review',
-    cosignRequestedBy: session.userId,
+    cosignRequestedBy: session.staff_account_id,
     cosignRequestedAt: new Date().toISOString(),
   });
   emitAudit(request, 'session_note.submit_review', 'progress_note', noteId, session);
@@ -17177,7 +17177,7 @@ async function handleProgressNoteCosignRequest(request, response, requestUrl, se
 
 async function handleProgressNoteCosign(request, response, requestUrl, session) {
   if (request.method !== 'POST') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
-  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+  if (!session?.tenant_id) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
   if (!['counselor', 'practice_admin', 'practice_owner'].includes(session.role)) {
     writeJson(response, 403, { error: 'Insufficient privileges to cosign' });
     return;
@@ -17190,14 +17190,14 @@ async function handleProgressNoteCosign(request, response, requestUrl, session) 
 
   const [rows] = await pool.query(
     'SELECT id, tenant_id, cosign_status, cosign_requested_by FROM progress_notes WHERE id = ? AND client_id = ? AND tenant_id = ?',
-    [noteId, clientId, session.tenantId],
+    [noteId, clientId, session.tenant_id],
   );
   if (!rows[0]) { writeJson(response, 404, { error: 'Note not found' }); return; }
   if (rows[0].cosign_status !== 'pending_review') { writeJson(response, 409, { error: 'Note is not pending review' }); return; }
 
   // Supervisor role check: counselor must be assigned as supervisor of the intern
   if (session.role === 'counselor') {
-    const isAssigned = await isSupervisorOf(session.tenantId, session.userId, rows[0].cosign_requested_by);
+    const isAssigned = await isSupervisorOf(session.tenant_id, session.staff_account_id, rows[0].cosign_requested_by);
     if (!isAssigned) { writeJson(response, 403, { error: 'Not assigned as supervisor for this intern' }); return; }
   }
 
@@ -17205,9 +17205,9 @@ async function handleProgressNoteCosign(request, response, requestUrl, session) 
   const action = payload.action === 'reject' ? 'rejected' : 'reviewed';
   const comments = sanitizeStr(payload.comments, 2000) ?? null;
 
-  await updateProgressNote(noteId, clientId, session.tenantId, {
+  await updateProgressNote(noteId, clientId, session.tenant_id, {
     cosignStatus: action,
-    cosignedBy: session.userId,
+    cosignedBy: session.staff_account_id,
     cosignedAt: new Date().toISOString(),
     cosignComments: comments,
   });
@@ -17218,12 +17218,12 @@ async function handleProgressNoteCosign(request, response, requestUrl, session) 
 // ─── Supervisor assignments ──────────────────────────────────────────────────
 
 async function handleSupervisorAssignments(request, response, requestUrl, session) {
-  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+  if (!session?.tenant_id) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
 
   if (request.method === 'GET') {
     const params = requestUrl.searchParams;
     if (!process.env.DB_NAME) { writeJson(response, 200, { items: [] }); return; }
-    const items = await listSupervisorAssignments(session.tenantId, {
+    const items = await listSupervisorAssignments(session.tenant_id, {
       supervisorId: params.get('supervisorId') ?? undefined,
       internId: params.get('internId') ?? undefined,
     });
@@ -17246,7 +17246,7 @@ async function handleSupervisorAssignments(request, response, requestUrl, sessio
     }
     if (!process.env.DB_NAME) { writeJson(response, 501, { error: 'DB not configured' }); return; }
     const item = await createSupervisorAssignment({
-      id: genId('sa'), tenantId: session.tenantId, supervisorId, internId, practiceId,
+      id: genId('sa'), tenantId: session.tenant_id, supervisorId, internId, practiceId,
     });
     emitAudit(request, 'supervisor_assignment.created', 'supervisor_assignment', item.id, session);
     writeJson(response, 201, { item });
@@ -17257,7 +17257,7 @@ async function handleSupervisorAssignments(request, response, requestUrl, sessio
 }
 
 async function handleSupervisorAssignmentById(request, response, requestUrl, session) {
-  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+  if (!session?.tenant_id) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
   if (!['practice_admin', 'practice_owner', 'platform_admin'].includes(session.role)) {
     writeJson(response, 403, { error: 'Insufficient privileges' });
     return;
@@ -17266,7 +17266,7 @@ async function handleSupervisorAssignmentById(request, response, requestUrl, ses
 
   const id = requestUrl.pathname.replace('/v1/supervisor-assignments/', '');
   if (!process.env.DB_NAME) { writeJson(response, 501, { error: 'DB not configured' }); return; }
-  const deleted = await deleteSupervisorAssignment(id, session.tenantId);
+  const deleted = await deleteSupervisorAssignment(id, session.tenant_id);
   if (!deleted) { writeJson(response, 404, { error: 'Assignment not found' }); return; }
   emitAudit(request, 'supervisor_assignment.deleted', 'supervisor_assignment', id, session);
   writeJson(response, 204, null);
@@ -17301,33 +17301,33 @@ function csvEscape(value) {
 }
 
 async function canExportTimeEntries(session, userId) {
-  if (!session?.tenantId || !session?.userId || !userId) return false;
-  if (userId === session.userId) return true;
+  if (!session?.tenant_id || !session?.staff_account_id || !userId) return false;
+  if (userId === session.staff_account_id) return true;
   if (!process.env.DB_NAME) return false;
-  return isSupervisorOf(session.tenantId, session.userId, userId);
+  return isSupervisorOf(session.tenant_id, session.staff_account_id, userId);
 }
 
 async function resolveTimeEntryUser(session, requestUrl) {
   // Allows a supervisor or admin to view a specific intern's time entries
   const forUser = requestUrl.searchParams.get('userId');
-  if (!forUser || forUser === session.userId) return session.userId;
+  if (!forUser || forUser === session.staff_account_id) return session.staff_account_id;
   if (['practice_admin', 'practice_owner', 'platform_admin'].includes(session.role)) return forUser;
   if (session.role === 'counselor') {
     if (!process.env.DB_NAME) return null;
-    const ok = await isSupervisorOf(session.tenantId, session.userId, forUser);
+    const ok = await isSupervisorOf(session.tenant_id, session.staff_account_id, forUser);
     return ok ? forUser : null;
   }
   return null;
 }
 
 async function handleTimeEntries(request, response, requestUrl, session) {
-  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+  if (!session?.tenant_id) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
 
   if (request.method === 'GET') {
     const userId = await resolveTimeEntryUser(session, requestUrl);
     if (!userId) { writeJson(response, 403, { error: 'Not authorised to view those time entries' }); return; }
     if (!process.env.DB_NAME) { writeJson(response, 200, { items: [] }); return; }
-    const items = await listTimeEntries(session.tenantId, userId, {
+    const items = await listTimeEntries(session.tenant_id, userId, {
       category: requestUrl.searchParams.get('category') ?? undefined,
       dateFrom: requestUrl.searchParams.get('date_from') ?? undefined,
       dateTo:   requestUrl.searchParams.get('date_to') ?? undefined,
@@ -17349,7 +17349,7 @@ async function handleTimeEntries(request, response, requestUrl, session) {
     if (durationMinutes <= 0) { writeJson(response, 400, { error: 'endTime must be after startTime' }); return; }
     if (!process.env.DB_NAME) { writeJson(response, 501, { error: 'DB not configured' }); return; }
     const item = await createTimeEntry({
-      id: genId('te'), tenantId: session.tenantId, userId: session.userId,
+      id: genId('te'), tenantId: session.tenant_id, userId: session.staff_account_id,
       category, startTime, endTime, durationMinutes,
       description: sanitizeStr(payload.description, 2000) ?? null,
     });
@@ -17362,13 +17362,13 @@ async function handleTimeEntries(request, response, requestUrl, session) {
 }
 
 async function handleTimeEntriesSummary(request, response, requestUrl, session) {
-  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+  if (!session?.tenant_id) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
   if (request.method !== 'GET') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
 
   const userId = await resolveTimeEntryUser(session, requestUrl);
   if (!userId) { writeJson(response, 403, { error: 'Not authorised' }); return; }
   if (!process.env.DB_NAME) { writeJson(response, 200, { summary: [] }); return; }
-  const summary = await getTimeEntrySummary(session.tenantId, userId, {
+  const summary = await getTimeEntrySummary(session.tenant_id, userId, {
     dateFrom: requestUrl.searchParams.get('date_from') ?? undefined,
     dateTo:   requestUrl.searchParams.get('date_to') ?? undefined,
     countForGoals: requestUrl.searchParams.get('count_for_goals') === '1',
@@ -17377,12 +17377,12 @@ async function handleTimeEntriesSummary(request, response, requestUrl, session) 
 }
 
 async function handlePendingVerificationTimeEntries(request, response, requestUrl, session) {
-  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+  if (!session?.tenant_id) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
   if (request.method !== 'GET') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
   if (!process.env.DB_NAME) { writeJson(response, 200, { items: [] }); return; }
 
   const requestedInternId = sanitizeStr(requestUrl.searchParams.get('userId'), 64);
-  const assignments = await listSupervisorAssignments(session.tenantId, { supervisorId: session.userId });
+  const assignments = await listSupervisorAssignments(session.tenant_id, { supervisorId: session.staff_account_id });
   const assignedInternIds = [...new Set(assignments.map((item) => item.internId).filter(Boolean))];
 
   if (requestedInternId && !assignedInternIds.includes(requestedInternId)) {
@@ -17391,7 +17391,7 @@ async function handlePendingVerificationTimeEntries(request, response, requestUr
   }
 
   const items = await listTimeEntriesForUsers(
-    session.tenantId,
+    session.tenant_id,
     requestedInternId ? [requestedInternId] : assignedInternIds,
     {
       dateFrom: requestUrl.searchParams.get('date_from') ?? undefined,
@@ -17404,7 +17404,7 @@ async function handlePendingVerificationTimeEntries(request, response, requestUr
 
 // PHI-safe CSV export — strips descriptions and never emits client identifiers.
 async function handleTimeEntriesExport(request, response, requestUrl, session) {
-  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+  if (!session?.tenant_id) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
   if (request.method !== 'GET') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
 
   const userId = await resolveTimeEntryUser(session, requestUrl);
@@ -17415,14 +17415,14 @@ async function handleTimeEntriesExport(request, response, requestUrl, session) {
     return;
   }
 
-  const entries = await listTimeEntries(session.tenantId, userId, {
+  const entries = await listTimeEntries(session.tenant_id, userId, {
     category: requestUrl.searchParams.get('category') ?? undefined,
     dateFrom: requestUrl.searchParams.get('date_from') ?? undefined,
     dateTo:   requestUrl.searchParams.get('date_to') ?? undefined,
     limit:    5000,
   });
 
-  const staffItems = await listStaff(session.tenantId);
+  const staffItems = await listStaff(session.tenant_id);
   const staffNamesById = new Map(staffItems.map((item) => [item.id, formatStaffDisplayName(item)]));
   const csvRows = [[
     'Date',
@@ -17465,12 +17465,12 @@ async function handleTimeEntriesExport(request, response, requestUrl, session) {
 }
 
 async function handleVerifyTimeEntry(request, response, requestUrl, session) {
-  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+  if (!session?.tenant_id) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
   if (request.method !== 'POST') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
   if (!process.env.DB_NAME) { writeJson(response, 501, { error: 'DB not configured' }); return; }
 
   const id = requestUrl.pathname.replace('/v1/time-entries/', '').replace('/verify', '');
-  const entry = await getTimeEntry(id, session.tenantId);
+  const entry = await getTimeEntry(id, session.tenant_id);
   if (!entry) { writeJson(response, 404, { error: 'Not found' }); return; }
   if (!SUPERVISION_TIME_ENTRY_CATEGORIES.has(entry.category)) {
     writeJson(response, 409, { error: 'Only supervision entries can be verified' });
@@ -17478,32 +17478,32 @@ async function handleVerifyTimeEntry(request, response, requestUrl, session) {
   }
   if (entry.verifiedAt) { writeJson(response, 409, { error: 'Time entry already verified' }); return; }
   if (entry.isLocked) { writeJson(response, 409, { error: 'Locked time entry cannot be verified' }); return; }
-  if (entry.userId === session.userId) {
+  if (entry.userId === session.staff_account_id) {
     writeJson(response, 403, { error: 'You cannot verify your own time entry' });
     return;
   }
-  const assigned = await isSupervisorOf(session.tenantId, session.userId, entry.userId);
+  const assigned = await isSupervisorOf(session.tenant_id, session.staff_account_id, entry.userId);
   if (!assigned) {
     writeJson(response, 403, { error: 'Not authorised to verify this time entry' });
     return;
   }
 
   const verifiedAt = new Date().toISOString();
-  await verifyTimeEntry(id, session.tenantId, session.userId, verifiedAt);
-  const updated = await getTimeEntry(id, session.tenantId);
+  await verifyTimeEntry(id, session.tenant_id, session.staff_account_id, verifiedAt);
+  const updated = await getTimeEntry(id, session.tenant_id);
   emitAudit(request, 'time_entry.verified', 'time_entry', id, session);
   writeJson(response, 200, { item: updated });
 }
 
 async function handleTimeEntryById(request, response, requestUrl, session) {
-  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+  if (!session?.tenant_id) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
   const id = requestUrl.pathname.replace('/v1/time-entries/', '');
 
   if (request.method === 'PATCH') {
     if (!process.env.DB_NAME) { writeJson(response, 501, { error: 'DB not configured' }); return; }
-    const entry = await getTimeEntry(id, session.tenantId);
+    const entry = await getTimeEntry(id, session.tenant_id);
     if (!entry) { writeJson(response, 404, { error: 'Not found' }); return; }
-    if (entry.userId !== session.userId) { writeJson(response, 403, { error: 'Forbidden' }); return; }
+    if (entry.userId !== session.staff_account_id) { writeJson(response, 403, { error: 'Forbidden' }); return; }
     if (entry.isLocked) { writeJson(response, 409, { error: 'Time entry is locked' }); return; }
 
     const payload = await readJsonBody(request);
@@ -17518,8 +17518,8 @@ async function handleTimeEntryById(request, response, requestUrl, session) {
       fields.durationMinutes = Math.round((e - s) / 60000);
       if (fields.durationMinutes <= 0) { writeJson(response, 400, { error: 'endTime must be after startTime' }); return; }
     }
-    await updateTimeEntry(id, session.tenantId, fields);
-    const updated = await getTimeEntry(id, session.tenantId);
+    await updateTimeEntry(id, session.tenant_id, fields);
+    const updated = await getTimeEntry(id, session.tenant_id);
     emitAudit(request, 'time_entry.updated', 'time_entry', id, session);
     writeJson(response, 200, { item: updated });
     return;
@@ -17527,13 +17527,13 @@ async function handleTimeEntryById(request, response, requestUrl, session) {
 
   if (request.method === 'DELETE') {
     if (!process.env.DB_NAME) { writeJson(response, 501, { error: 'DB not configured' }); return; }
-    const entry = await getTimeEntry(id, session.tenantId);
+    const entry = await getTimeEntry(id, session.tenant_id);
     if (!entry) { writeJson(response, 404, { error: 'Not found' }); return; }
-    if (entry.userId !== session.userId && !['practice_admin', 'practice_owner', 'platform_admin'].includes(session.role)) {
+    if (entry.userId !== session.staff_account_id && !['practice_admin', 'practice_owner', 'platform_admin'].includes(session.role)) {
       writeJson(response, 403, { error: 'Forbidden' }); return;
     }
     if (entry.isLocked) { writeJson(response, 409, { error: 'Locked time entry cannot be deleted' }); return; }
-    await deleteTimeEntry(id, session.tenantId);
+    await deleteTimeEntry(id, session.tenant_id);
     emitAudit(request, 'time_entry.deleted', 'time_entry', id, session);
     writeJson(response, 204, null);
     return;
@@ -17544,7 +17544,7 @@ async function handleTimeEntryById(request, response, requestUrl, session) {
 
 async function handleAppointmentSyncTime(request, response, requestUrl, session) {
   if (request.method !== 'POST') { writeJson(response, 405, { error: 'Method not allowed' }); return; }
-  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+  if (!session?.tenant_id) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
 
   const appointmentId = requestUrl.pathname
     .replace('/v1/appointments/', '').replace('/sync-time', '');
@@ -17553,7 +17553,7 @@ async function handleAppointmentSyncTime(request, response, requestUrl, session)
 
   const [apptRows] = await pool.query(
     'SELECT id, tenant_id, staff_id, start_time, end_time FROM appointments WHERE id = ? AND tenant_id = ?',
-    [appointmentId, session.tenantId],
+    [appointmentId, session.tenant_id],
   );
   if (!apptRows[0]) { writeJson(response, 404, { error: 'Appointment not found' }); return; }
   const appt = apptRows[0];
@@ -17562,7 +17562,7 @@ async function handleAppointmentSyncTime(request, response, requestUrl, session)
     : 0;
 
   const { created, entry } = await syncTimeEntryFromAppointment({
-    id: genId('te'), tenantId: session.tenantId, userId: appt.staff_id,
+    id: genId('te'), tenantId: session.tenant_id, userId: appt.staff_id,
     appointmentId: appt.id, startTime: appt.start_time, endTime: appt.end_time, durationMinutes,
   });
   if (created) emitAudit(request, 'time_entry.synced', 'time_entry', entry.id, session);
@@ -17572,13 +17572,13 @@ async function handleAppointmentSyncTime(request, response, requestUrl, session)
 // ─── Licensure goals ─────────────────────────────────────────────────────────
 
 async function handleLicensureGoals(request, response, requestUrl, session) {
-  if (!session?.tenantId) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
+  if (!session?.tenant_id) { writeJson(response, 401, { error: 'Unauthenticated' }); return; }
 
   if (request.method === 'GET') {
     const userId = await resolveTimeEntryUser(session, requestUrl);
     if (!userId) { writeJson(response, 403, { error: 'Not authorised' }); return; }
     if (!process.env.DB_NAME) { writeJson(response, 200, { items: [] }); return; }
-    const items = await listLicensureGoals(session.tenantId, userId);
+    const items = await listLicensureGoals(session.tenant_id, userId);
     writeJson(response, 200, { items });
     return;
   }
@@ -17594,7 +17594,7 @@ async function handleLicensureGoals(request, response, requestUrl, session) {
     }
     if (!process.env.DB_NAME) { writeJson(response, 501, { error: 'DB not configured' }); return; }
     const item = await createLicensureGoal({
-      id: genId('lg'), tenantId: session.tenantId, userId: session.userId,
+      id: genId('lg'), tenantId: session.tenant_id, userId: session.staff_account_id,
       label, targetMinutes, effectiveFrom,
       effectiveTo: sanitizeStr(payload.effectiveTo, 20) ?? null,
       categoryFilter: Array.isArray(payload.categoryFilter) ? payload.categoryFilter : null,
