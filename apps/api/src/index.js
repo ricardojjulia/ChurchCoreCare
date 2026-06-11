@@ -38,6 +38,7 @@ import {
   treatmentPlanStatuses,
 } from '../../../packages/domain/src/index.js';
 import { createI18nStore } from './lib/i18n-store.js';
+import { DEFAULT_LOCALE, resolveLocaleCode } from '../../../packages/i18n/src/index.js';
 import { atTimeOnCurrentDayInTimezone } from './timezone.js';
 import { featureFlags } from './lib/feature-flags.js';
 import { buildIntakePreview } from './lib/intake-preview.js';
@@ -2310,7 +2311,8 @@ export async function handleApiRequest(request, response) {
         return;
       }
       const locale = requestUrl.searchParams.get('locale') ?? 'en-US';
-      if (process.env.DB_NAME) {
+      const isSourceLocale = resolveLocaleCode(locale) === DEFAULT_LOCALE;
+      if (process.env.DB_NAME && !isSourceLocale) {
         try {
           const governance = createLocalizationGovernance(request, session);
           const governed = await governance.getRuntimeCatalog(locale);
