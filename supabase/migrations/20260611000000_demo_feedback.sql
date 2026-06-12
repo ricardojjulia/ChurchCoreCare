@@ -184,12 +184,28 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON TABLE public.demo_feedback_reports FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON TABLE public.demo_feedback_rate_limits FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON TABLE public.demo_feedback_reports FROM PUBLIC;
+REVOKE ALL ON TABLE public.demo_feedback_rate_limits FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.submit_demo_feedback(
   CHAR(64), CHAR(64), UUID, VARCHAR(500), VARCHAR(32), TEXT, TEXT, JSONB,
   TEXT, VARCHAR(64), VARCHAR(100), INTEGER, JSONB
-) FROM PUBLIC, anon, authenticated;
+) FROM PUBLIC;
+
+DO $role_revoke$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'anon') THEN
+    EXECUTE 'REVOKE ALL ON TABLE public.demo_feedback_reports FROM anon';
+    EXECUTE 'REVOKE ALL ON TABLE public.demo_feedback_rate_limits FROM anon';
+    EXECUTE 'REVOKE ALL ON FUNCTION public.submit_demo_feedback(CHAR(64), CHAR(64), UUID, VARCHAR(500), VARCHAR(32), TEXT, TEXT, JSONB, TEXT, VARCHAR(64), VARCHAR(100), INTEGER, JSONB) FROM anon';
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'authenticated') THEN
+    EXECUTE 'REVOKE ALL ON TABLE public.demo_feedback_reports FROM authenticated';
+    EXECUTE 'REVOKE ALL ON TABLE public.demo_feedback_rate_limits FROM authenticated';
+    EXECUTE 'REVOKE ALL ON FUNCTION public.submit_demo_feedback(CHAR(64), CHAR(64), UUID, VARCHAR(500), VARCHAR(32), TEXT, TEXT, JSONB, TEXT, VARCHAR(64), VARCHAR(100), INTEGER, JSONB) FROM authenticated';
+  END IF;
+END;
+$role_revoke$;
 
 GRANT SELECT, INSERT, UPDATE ON TABLE public.demo_feedback_reports TO postgres;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.demo_feedback_rate_limits TO postgres;

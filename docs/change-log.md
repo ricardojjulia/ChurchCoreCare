@@ -2,6 +2,20 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## June 12, 2026 — post-release
+
+### fix: demo feedback migration supports plain PostgreSQL validation
+
+**Date:** 2026-06-12
+**Affected area:** Supabase migration, authentication smoke test
+
+Made revocation of the Supabase-specific `anon` and `authenticated` roles
+conditional on those roles existing. Production Supabase retains the same
+browser-role restrictions, while plain PostgreSQL CI fixtures can apply the
+migration without failing on missing roles.
+
+---
+
 ## June 11, 2026 — post-release
 
 ### feat: demo feedback and platform error triage

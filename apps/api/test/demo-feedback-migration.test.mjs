@@ -23,5 +23,7 @@ test('demo feedback migration provides atomic control-plane storage', async () =
   assert.match(sql, /ENABLE ROW LEVEL SECURITY/i);
   assert.match(sql, /CREATE POLICY deny_all_demo_feedback_reports/i);
   assert.match(sql, /REVOKE ALL ON FUNCTION public\.submit_demo_feedback/i);
+  assert.match(sql, /FROM pg_catalog\.pg_roles WHERE rolname = 'anon'/i);
+  assert.match(sql, /FROM pg_catalog\.pg_roles WHERE rolname = 'authenticated'/i);
   assert.match(sql, /GRANT EXECUTE ON FUNCTION public\.submit_demo_feedback[^;]+ TO postgres/i);
 });

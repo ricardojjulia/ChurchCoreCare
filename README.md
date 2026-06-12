@@ -169,7 +169,9 @@ The platform has moved quickly over the last few iterations, and the most recent
   normalized fingerprints, and writes through the SaaS Supabase control plane.
   PostgreSQL atomically deduplicates reports, reopens repeated issues, and
   enforces 20 accepted submissions per session per minute. Platform
-  administrators review the queue at `/control/demo-feedback`.
+  administrators review the queue at `/control/demo-feedback`. The migration
+  preserves Supabase browser-role revocations while remaining compatible with
+  plain PostgreSQL validation environments where those roles are absent.
 
 - **v7.1.0 — Ministry-language UI redesign (June 2026):** The navigation, page headings, and dashboard labels now speak the language of a Christian counseling practice rather than generic clinical software. "Clinical Chart" is now **Care Notes**, "Faithful Workflows" is now **Shepherd AI**, "Workspace Studio" is now **Care Practice Setup**, "Therapy Groups" is **Care Groups**, and "Treatment Plan" is **Care Plan** throughout. None of the underlying i18n keys changed, so all existing translations remain valid.
 
