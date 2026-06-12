@@ -204,12 +204,11 @@ BEGIN
     EXECUTE 'REVOKE ALL ON TABLE public.demo_feedback_rate_limits FROM authenticated';
     EXECUTE 'REVOKE ALL ON FUNCTION public.submit_demo_feedback(CHAR(64), CHAR(64), UUID, VARCHAR(500), VARCHAR(32), TEXT, TEXT, JSONB, TEXT, VARCHAR(64), VARCHAR(100), INTEGER, JSONB) FROM authenticated';
   END IF;
+
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'postgres') THEN
+    EXECUTE 'GRANT SELECT, INSERT, UPDATE ON TABLE public.demo_feedback_reports TO postgres';
+    EXECUTE 'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.demo_feedback_rate_limits TO postgres';
+    EXECUTE 'GRANT EXECUTE ON FUNCTION public.submit_demo_feedback(CHAR(64), CHAR(64), UUID, VARCHAR(500), VARCHAR(32), TEXT, TEXT, JSONB, TEXT, VARCHAR(64), VARCHAR(100), INTEGER, JSONB) TO postgres';
+  END IF;
 END;
 $role_revoke$;
-
-GRANT SELECT, INSERT, UPDATE ON TABLE public.demo_feedback_reports TO postgres;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.demo_feedback_rate_limits TO postgres;
-GRANT EXECUTE ON FUNCTION public.submit_demo_feedback(
-  CHAR(64), CHAR(64), UUID, VARCHAR(500), VARCHAR(32), TEXT, TEXT, JSONB,
-  TEXT, VARCHAR(64), VARCHAR(100), INTEGER, JSONB
-) TO postgres;

@@ -9,10 +9,11 @@
 **Date:** 2026-06-12
 **Affected area:** Supabase migration, authentication smoke test
 
-Made revocation of the Supabase-specific `anon` and `authenticated` roles
-conditional on those roles existing. Production Supabase retains the same
-browser-role restrictions, while plain PostgreSQL CI fixtures can apply the
-migration without failing on missing roles.
+Made revocation of the Supabase-specific `anon` and `authenticated` roles, plus
+grants to the Supabase `postgres` service role, conditional on those roles
+existing. Production Supabase retains the same browser-role restrictions and
+service access, while plain PostgreSQL CI fixtures can apply the migration
+without failing on missing roles.
 
 ---
 
