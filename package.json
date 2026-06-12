@@ -37,6 +37,7 @@
     "security:nightly": "node ops/nightly-security-runner.mjs",
     "security:nightly:dry": "node ops/nightly-security-runner.mjs --dry-run",
     "test:e2e": "playwright test tests/e2e/high-value-journeys.spec.mjs",
+    "test:e2e:demo-feedback": "playwright test tests/e2e/demo-feedback.spec.mjs",
     "test:load": "bash tests/load/run.sh",
     "test:load:full": "bash tests/load/run.sh full",
     "test:load:auth": "bash tests/load/run.sh auth",

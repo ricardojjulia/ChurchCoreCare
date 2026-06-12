@@ -24,6 +24,10 @@ From the moment a new client submits a care request to the session note signed a
 | Portal account | `elena.martinez@example.test` |
 | Data boundary | Generated people, schedules, clinical records, billing records, and audit activity only |
 
+Demo-mode users can report bugs, errors, unexpected results, and improvement
+ideas from the global feedback button. Platform administrators review and
+resolve reports at `/control/demo-feedback`.
+
 Passwords remain in protected `.env`-driven demo tooling and are not published
 in this README. The canonical operator workflow is:
 
@@ -125,6 +129,7 @@ synthetic Elena portal account for client self-service boundaries.
 - **Client portal workflows:** onboarding, forms, documents, and client self-service surfaces
 - **Licensure time tracking:** counselors and interns log hours by category; supervisors verify entries; CSV export is PHI-safe
 - **Security and audit foundations:** role-aware access controls, RLS on all 95 database tables, and structured audit event patterns
+- **Demo feedback triage:** non-blocking React error capture, server-derived identity, normalized deduplication, durable per-session throttling, and a platform-admin review queue backed by the SaaS Supabase control plane
 
 ## LATEST LOOK
 
@@ -156,6 +161,18 @@ Behind that presentation, the recent work has made the platform easier to trust 
 ## Freshly Shipped
 
 The platform has moved quickly over the last few iterations, and the most recent work is aimed at making ChurchCore Care easier to explore, easier to operate, and easier to present with confidence.
+
+- **Demo feedback and error triage (June 2026):** Demo users can submit bounded
+  contextual reports from any application view, while unhandled React render
+  errors are captured asynchronously without removing the navigation shell.
+  The API derives trusted identity, encrypts sensitive report content, computes
+  normalized fingerprints, and writes through the SaaS Supabase control plane.
+  PostgreSQL atomically deduplicates reports, reopens repeated issues, and
+  enforces 20 accepted submissions per session per minute. Platform
+  administrators review the queue at `/control/demo-feedback`. The migration
+  preserves Supabase browser-role revocations and service-role grants while
+  remaining compatible with plain PostgreSQL validation environments where
+  those roles are absent.
 
 - **v7.1.0 — Ministry-language UI redesign (June 2026):** The navigation, page headings, and dashboard labels now speak the language of a Christian counseling practice rather than generic clinical software. "Clinical Chart" is now **Care Notes**, "Faithful Workflows" is now **Shepherd AI**, "Workspace Studio" is now **Care Practice Setup**, "Therapy Groups" is **Care Groups**, and "Treatment Plan" is **Care Plan** throughout. None of the underlying i18n keys changed, so all existing translations remain valid.
 

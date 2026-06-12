@@ -36,6 +36,7 @@ import {
   staffRoles,
   supervisionStatuses,
   treatmentPlanStatuses,
+  getSurfaceSummary,
 } from '../../../packages/domain/src/index.js';
 import { createI18nStore } from './lib/i18n-store.js';
 import { DEFAULT_LOCALE, resolveLocaleCode } from '../../../packages/i18n/src/index.js';
@@ -73,7 +74,9 @@ import {
 } from './db/queries/groups.js';
 import { buildGroupClaims, getExistingSessionClaims } from './lib/group-billing.js';
 import pool, { verifyConnection, runWithTenantContext, closeAllPools } from './db/pool.js';
-import { getKnownTenantSlugs } from './db/pools.js';
+import { getKnownTenantSlugs, getPoolForTenant } from './db/pools.js';
+import { createDemoFeedbackService } from './lib/demo-feedback.js';
+import { createDemoFeedbackHttpHandlers } from './lib/demo-feedback-http.js';
 import {
   resolveTenantContext,
   denyUnknownTenantHost,
@@ -211,6 +214,32 @@ import {
   listLicensureGoals, createLicensureGoal,
   listSupervisorAssignments, createSupervisorAssignment, deleteSupervisorAssignment, isSupervisorOf,
 } from './db/queries/timeTracking.js';
+
+const demoFeedbackService = createDemoFeedbackService({
+  tenantPool: pool,
+  systemPool: {
+    query(...args) {
+      return getPoolForTenant('system').query(...args);
+    },
+  },
+  encrypt,
+  decrypt,
+});
+
+function demoFeedbackHandlers(request, session) {
+  return createDemoFeedbackHttpHandlers({
+    service: demoFeedbackService,
+    demoEnabled: process.env.DEMO_ENVIRONMENT === 'true',
+    audit: (action, result, reasonCode) => emitAudit(
+      request,
+      action,
+      'demo_feedback_report',
+      'collection',
+      session,
+      { result, reasonCode },
+    ),
+  });
+}
 
 const port = Number(process.env.PORT || 3001);
 const currentFilePath = fileURLToPath(import.meta.url);
@@ -1553,6 +1582,16 @@ export async function handleApiRequest(request, response) {
       return;
     }
 
+    if (requestUrl.pathname === '/v1/demo-feedback') {
+      await demoFeedbackHandlers(request, session).submit(request, response, session);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/monitoring/surfaces' && request.method === 'GET') {
+      writeJson(response, 200, getSurfaceSummary());
+      return;
+    }
+
     if (requestUrl.pathname === '/v1/auth/portal-password-reset-request' && request.method === 'POST') {
       await handlePortalPasswordResetRequest(request, response);
       return;
@@ -2065,6 +2104,17 @@ export async function handleApiRequest(request, response) {
 
     if (requestUrl.pathname === '/v1/platform/signup') {
       await handlePlatformSignup(request, response);
+      return;
+    }
+
+    if (requestUrl.pathname === '/v1/platform/demo-feedback') {
+      await demoFeedbackHandlers(request, session).list(request, response, requestUrl, session);
+      return;
+    }
+
+    if (requestUrl.pathname.startsWith('/v1/platform/demo-feedback/')) {
+      const reportId = requestUrl.pathname.split('/').pop();
+      await demoFeedbackHandlers(request, session).update(request, response, reportId, session);
       return;
     }
 
@@ -17620,6 +17670,8 @@ function resolveRoute(pathname) {
   if (pathname === '/v1/auth/change-password') return '/v1/auth/change-password';
   if (pathname === '/v1/auth/portal-password-reset-request') return '/v1/auth/portal-password-reset-request';
   if (pathname === '/v1/auth/portal-password-reset') return '/v1/auth/portal-password-reset';
+  if (pathname === '/v1/demo-feedback') return '/v1/demo-feedback';
+  if (pathname === '/v1/monitoring/surfaces') return '/v1/monitoring/surfaces';
   if (pathname === '/v1/appointment-types') return '/v1/appointment-types';
   if (pathname.startsWith('/v1/clients/') && pathname.endsWith('/lifecycle')) return '/v1/clients/:id/lifecycle';
   if (pathname.startsWith('/v1/clients/') && pathname.endsWith('/consents')) return '/v1/clients/:id/consents';
@@ -17662,6 +17714,8 @@ function resolveRoute(pathname) {
   if (pathname === '/v1/billing/portal') return '/v1/billing/portal';
   if (pathname === '/v1/platform/check-slug') return '/v1/platform/check-slug';
   if (pathname === '/v1/platform/signup') return '/v1/platform/signup';
+  if (pathname === '/v1/platform/demo-feedback') return '/v1/platform/demo-feedback';
+  if (pathname.startsWith('/v1/platform/demo-feedback/')) return '/v1/platform/demo-feedback/:id';
   if (pathname === '/webhooks/stripe') return '/webhooks/stripe';
   if (pathname === '/v1/billing/service-codes') return '/v1/billing/service-codes';
   if (pathname === '/v1/billing/fee-schedules') return '/v1/billing/fee-schedules';

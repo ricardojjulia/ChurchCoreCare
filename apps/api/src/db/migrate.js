@@ -42,6 +42,7 @@ try {
   console.log('Running incremental migrations…');
 
   await applyLocalizationGovernanceSchema(connection);
+  await applyDemoFeedbackSchema(connection);
 
   // Column migrations — add new columns to existing tables when the schema
   // has already been created. Each check is idempotent via INFORMATION_SCHEMA.
@@ -76,6 +77,17 @@ async function applyLocalizationGovernanceSchema(conn) {
   const sql = await readFile(migrationFile, 'utf8');
   await conn.query(sql);
   console.log('Localization governance schema ready.');
+}
+
+async function applyDemoFeedbackSchema(conn) {
+  const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
+  const migrationFile = path.resolve(
+    moduleDirectory,
+    '../../../../supabase/migrations/20260611000000_demo_feedback.sql',
+  );
+  const sql = await readFile(migrationFile, 'utf8');
+  await conn.query(sql);
+  console.log('Demo feedback schema ready.');
 }
 
 function shouldSeedDevPortalData() {

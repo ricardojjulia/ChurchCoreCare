@@ -2,7 +2,41 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## June 12, 2026 — post-release
+
+### fix: demo feedback migration supports plain PostgreSQL validation
+
+**Date:** 2026-06-12
+**Affected area:** Supabase migration, authentication smoke test
+
+Made revocation of the Supabase-specific `anon` and `authenticated` roles, plus
+grants to the Supabase `postgres` service role, conditional on those roles
+existing. Production Supabase retains the same browser-role restrictions and
+service access, while plain PostgreSQL CI fixtures can apply the migration
+without failing on missing roles.
+
+---
+
 ## June 11, 2026 — post-release
+
+### feat: demo feedback and platform error triage
+
+**Date:** 2026-06-11
+**Affected area:** Demo web shell, API, Supabase control plane, platform admin,
+monitoring registry
+
+Added a demo-only global feedback workflow for bugs, errors, unexpected results,
+and improvement ideas. Unhandled React render errors now submit safe contextual
+reports asynchronously while preserving the navigation shell. The API validates
+bounded input, derives authenticated identity server-side, encrypts report
+content, computes normalized fingerprints, and writes through the SaaS Supabase
+control plane. PostgreSQL atomically deduplicates repeated reports, reopens
+processed issues, and enforces 20 accepted submissions per session per minute.
+Platform administrators can filter, inspect, and resolve reports at
+`/control/demo-feedback`. The new modal, review page, and detail drawer are
+registered in the privacy-safe monitoring surface inventory.
+
+---
 
 ### fix: ministry-language renames invisible in production — en-US bypasses governance DB (#126)
 

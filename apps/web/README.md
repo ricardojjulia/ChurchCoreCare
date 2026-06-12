@@ -59,6 +59,8 @@ Default URL: `http://localhost:3000`
 - Offerings workspace and Workspace Studio suggested-giving settings, including correction of incorrect offering entries
 - same-origin `/api/*` proxy for live dashboard hydration from the API service
 - monitoring surfaces for API liveness, readiness, and database health data
+- a demo-only global feedback button for bugs, errors, unexpected results, and improvement ideas
+- a surface-level React error boundary that reports safe error context without blocking the navigation shell
 - branded monitoring page at `/monitor.html` aligned to the same indigo/light workspace palette as the main app
 - branded Operations Studio page at `/operations.html` aligned to the same indigo/light workspace palette as the main app
 - interactive API docs served through the same-origin proxy at `/api/docs`
@@ -70,6 +72,8 @@ Default URL: `http://localhost:3000`
 
 - Health probes are available through `/api/health`, `/api/health/live`, and `/api/health/ready`
 - Monitoring surfaces rely on local health and database-monitoring endpoints instead of browser telemetry beacons or OTEL export
+- The monitoring page loads `/api/v1/monitoring/surfaces` to show the privacy-safe shared surface inventory
+- Demo feedback content and identity remain separate from monitoring; no report text, session ID, fingerprint, or breadcrumb is exposed through monitoring endpoints
 - Dashboard metric cards consume `/api/v1/appointments` for session and future-appointment counts
 - Counselor Home consumes the same appointment and operations-summary feeds as the legacy dashboard, but presents them through a counselor-first working surface
 - Counselor task workflows derive counselor-assigned note gaps, outstanding assignments, and unscheduled follow-up clients from the shared operations-summary and client feeds

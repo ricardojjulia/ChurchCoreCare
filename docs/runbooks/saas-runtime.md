@@ -62,6 +62,7 @@ DB_SSL_REJECT_UNAUTHORIZED=false
 DB_POOL_MAX=1
 DEMO_ENVIRONMENT=true
 VITE_DEMO_ENVIRONMENT=true
+VITE_DEMO_VERSION=7.1.0
 SEED_DEV_PORTAL_DATA=false
 TENANT_ALLOWED_SLUGS=system
 PUBLIC_PORTAL_TENANT_ID=system
@@ -90,6 +91,13 @@ Expected local endpoints:
 check, migrations, web build, API startup, web startup, and worker startup.
 The local React build is written to ignored `apps/web/.runtime/` assets so a
 normal start or restart does not modify tracked deployment bundle files.
+
+Demo feedback requires both server and browser gates. Keep
+`DEMO_ENVIRONMENT=true` and `VITE_DEMO_ENVIRONMENT=true` aligned, and set
+`VITE_DEMO_VERSION` to the deployed demo version used by staff triage. The
+`20260611000000_demo_feedback.sql` migration must be applied before enabling
+the feedback UI. Standard `pnpm start` applies pending migrations to the
+configured SaaS Supabase database.
 
 ## Verification Commands
 

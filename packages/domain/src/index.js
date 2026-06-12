@@ -1,3 +1,10 @@
+export {
+  SURFACE_DEFINITIONS,
+  getSurfaceDefinition,
+  getSurfaceSummary,
+  isKnownSurfaceId,
+} from './surfaces.js';
+
 export const staffRoles = Object.freeze([
   'platform_admin',
   'practice_owner',

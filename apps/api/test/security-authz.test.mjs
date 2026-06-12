@@ -167,6 +167,20 @@ test('enforceRbac: /v1/portal/public-requests POST is public', () => {
   assert.equal(enforceRbac(req, res, '/v1/portal/public-requests'), false);
 });
 
+test('enforceRbac: demo feedback submission POST is public', () => {
+  const req = mockRequest({ role: '', method: 'POST' });
+  const res = mockResponse();
+  assert.equal(enforceRbac(req, res, '/v1/demo-feedback'), false);
+});
+
+test('enforceRbac: platform demo feedback review still requires authentication', () => {
+  const req = mockRequest({ role: '', method: 'GET' });
+  const res = mockResponse();
+  const rejected = enforceRbac(req, res, '/v1/platform/demo-feedback');
+  assert.equal(rejected, true);
+  assert.equal(res.statusCode, 401);
+});
+
 // ─── enforceTenantScope — cross-tenant access attempt ────────────────────────
 
 test('enforceTenantScope: caller tenant-a accessing tenant-b resource → 403', () => {

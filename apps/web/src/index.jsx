@@ -5,8 +5,10 @@ import { Notifications } from '@mantine/notifications';
 import { DatesProvider } from '@mantine/dates';
 import App from './App';
 import DemoEnvironmentBanner from './components/DemoEnvironmentBanner.jsx';
+import DemoFeedbackButton from './components/DemoFeedbackButton.jsx';
 import { theme } from './theme';
 import { I18nProvider, useI18n } from './lib/i18nContext.jsx';
+import { DemoSessionProvider } from './lib/demoFeedbackContext.jsx';
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
 import '@mantine/dates/styles.css';
@@ -24,6 +26,7 @@ function AppRuntime() {
       <DatesProvider settings={{ firstDayOfWeek: 0, locale }}>
         <App />
       </DatesProvider>
+      <DemoFeedbackButton />
     </>
   );
 }
@@ -32,7 +35,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <MantineProvider theme={theme} colorSchemeManager={colorSchemeManager} defaultColorScheme="auto">
       <I18nProvider>
-        <AppRuntime />
+        <DemoSessionProvider>
+          <AppRuntime />
+        </DemoSessionProvider>
       </I18nProvider>
     </MantineProvider>
   </React.StrictMode>

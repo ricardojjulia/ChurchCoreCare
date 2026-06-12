@@ -3,7 +3,7 @@
 **Status:** Canonical baseline
 **Prepared:** March 28, 2026
 **Initiative:** AegisTrail Security & Audit Fabric
-**Stack:** Node.js API, React/standalone web, MySQL
+**Stack:** Node.js API, React/standalone web, Supabase PostgreSQL
 
 ## Purpose
 
@@ -202,6 +202,35 @@ Minimum policy:
 - View summaries/events: practice admin, practice owner, platform admin.
 - Export or high-risk audit operations: role gate plus re-auth confirmation path.
 - Client role must never access audit intelligence routes.
+
+## Demo Feedback Security Boundary
+
+Demo feedback is an operational triage system, not a monitoring or compliance
+ledger.
+
+- The submission route is available only when `DEMO_ENVIRONMENT=true`; the
+  browser flag alone is never authoritative.
+- Browser payloads contain bounded route context, category, safe error message,
+  optional note, recent route breadcrumbs, demo version, and elapsed session
+  duration. Browser-provided identity and fingerprint values are ignored.
+- Authenticated identity is derived from the verified server session. Anonymous
+  submissions store no identity.
+- Email, note, and error-message content are encrypted at rest using the
+  application encryption boundary.
+- Reports are stored in the Supabase control-plane database and written only by
+  the server's privileged database role. Browser database roles have no direct
+  insert, read, or update access.
+- A normalized server-side SHA-256 fingerprint atomically deduplicates reports.
+  Duplicate reports increment the hit count and reopen previously processed
+  records.
+- Durable PostgreSQL rate limiting allows 20 accepted submissions per browser
+  session per 60-second window. Session IDs are hashed before use as limiter
+  keys. This per-session control is not complete bot protection because a
+  browser can rotate its generated session ID.
+- Only `platform_admin` sessions may read reports or update triage fields.
+- Staff list and mutation operations are audited with canonical result values.
+  Submission content, identity, session IDs, fingerprints, and breadcrumbs must
+  not be written to audit metadata, operational logs, or monitoring output.
 
 ## Validation Requirements
 
