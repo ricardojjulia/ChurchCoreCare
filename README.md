@@ -88,6 +88,10 @@ The official local workspace path for current SaaS work is
 - Merges to `main` deploy automatically through the GitHub-linked Vercel
   project. The historical GCP/Cloud Run workflow is manual-only and does not
   run during normal SaaS delivery.
+- Deployments use Node.js 22.x to prevent an unreviewed major runtime upgrade.
+- Keep `pnpm-lock.yaml` synchronized with every workspace manifest change;
+  Vercel installs with `pnpm install --frozen-lockfile` and rejects lockfile
+  drift.
 - The hosted demo is synthetic data only. Do not enter real PHI.
 
 See [`docs/runbooks/saas-runtime.md`](docs/runbooks/saas-runtime.md) for the
