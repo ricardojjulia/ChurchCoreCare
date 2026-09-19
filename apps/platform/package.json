@@ -16,7 +16,7 @@
     "postcss": "^8.5.23",
     "postcss-preset-mantine": "^1.18.0",
     "postcss-simple-vars": "^7.0.1",
-    "vite": "^8.0.10"
+    "vite": "^8.0.16"
   },
   "scripts": {
     "dev": "vite --port 5174",
