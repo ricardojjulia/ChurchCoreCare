@@ -2,6 +2,20 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## September 19, 2026 — post-release
+
+### fix: stabilize Vercel dependency and Node runtime resolution
+
+**Date:** 2026-09-19
+**Affected area:** Workspace dependency lockfile, Node runtime, Vercel production builds
+
+Refreshed `pnpm-lock.yaml` to match the Vite ranges declared by workspace
+manifests, including `apps/mobile`. Pinned the deployment runtime to Node 22.x
+to prevent unreviewed major-version changes. This restores the frozen lockfile
+install used by Vercel deployments.
+
+---
+
 ## June 12, 2026 — post-release
 
 ### fix: demo feedback migration supports plain PostgreSQL validation
